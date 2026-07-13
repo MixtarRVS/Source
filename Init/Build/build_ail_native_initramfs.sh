@@ -55,6 +55,7 @@ wifi_source_dir="${MIXTAR_WIFI_SOURCE:-$out_dir/wifi-source/root}"
 system_name="${MIXTAR_SYSTEM_NAME:-MixtarRVS}"
 default_user="${MIXTAR_DEFAULT_USER:-Administrator}"
 admin_user="${MIXTAR_ADMIN_USER:-Administrator}"
+authorized_keys_source="${MIXTAR_AUTHORIZED_KEYS:-}"
 pid1_profile="${MIXTAR_AIL_PID1_PROFILE:-musl-static}"
 case "$pid1_profile" in
   musl-static)
@@ -715,6 +716,7 @@ build_networking_mvp() {
   rm -rf "$ssh_service_root"
   mkdir -p "$ssh_service_root/etc" "$ssh_service_root/System/Networking/SSH" \
     "$ssh_service_root/System/Configuration/SSH" "$ssh_service_root/System/Runtime/Networking/SSH" \
+    "$ssh_service_root/System/Init" "$ssh_service_root/System/Logs" \
     "$ssh_service_root/System/Devices" "$ssh_service_root/System/Process" \
     "$ssh_service_root/System/Hardware" "$ssh_service_root/System/Shells" \
     "$ssh_service_root/System/Userland" "$ssh_service_root/Users" \
@@ -797,7 +799,6 @@ PubkeyAuthentication yes
 PermitRootLogin no
 StrictModes no
 AuthorizedKeysFile /System/Configuration/SSH/authorized_keys/%u
-ChrootDirectory /Native
 SetEnv PATH=/System/Shells:/System/Userland
 PidFile /System/Runtime/Networking/SSH/sshd.pid
 HostKey /System/Configuration/SSH/HostKeys/ssh_host_ed25519_key
@@ -810,16 +811,20 @@ SSHDCONFIG
     cp "$openssh_stage_dir/System/Configuration/SSH/moduli" "$ssh_config_dir/moduli"
   fi
 
-  test_key="$out_dir/mixtar-ssh-test-key"
-  if [[ ! -f "$test_key" ]]; then
-    ssh-keygen -q -t ed25519 -N '' -f "$test_key" -C "mixtarrvs-generated-access"
-  fi
   : > "$ssh_config_dir/authorized_keys/$default_user"
-  if [[ -f "$test_key.pub" ]]; then
-    cat "$test_key.pub" >> "$ssh_config_dir/authorized_keys/$default_user"
+  if [[ -n "$authorized_keys_source" ]]; then
+    [[ -f "$authorized_keys_source" ]] || {
+      printf 'ail-native-build: authorized keys file is missing: %s\n' "$authorized_keys_source" >&2
+      exit 1
+    }
+    cat "$authorized_keys_source" >> "$ssh_config_dir/authorized_keys/$default_user"
   fi
-  if [[ -f "$out_dir/openssh-source/authorized_keys/$default_user" ]]; then
-    cat "$out_dir/openssh-source/authorized_keys/$default_user" >> "$ssh_config_dir/authorized_keys/$default_user"
+  if [[ "${MIXTAR_GENERATE_TEST_SSH_KEY:-0}" = "1" ]]; then
+    test_key="$out_dir/mixtar-ssh-test-key"
+    if [[ ! -f "$test_key" ]]; then
+      ssh-keygen -q -t ed25519 -N '' -f "$test_key" -C "mixtarrvs-generated-access"
+    fi
+    cat "$test_key.pub" >> "$ssh_config_dir/authorized_keys/$default_user"
   fi
   chmod 0600 "$ssh_config_dir/authorized_keys/$default_user"
 
@@ -909,8 +914,10 @@ int main(void) {
     const char *root = "/System/Networking/SSH/Root";
     attach_log();
     fprintf(stderr, "mixtar-sshd-service: preparing root\n");
-    bind_dir("/System/Configuration/SSH", "/System/Networking/SSH/Root/System/Configuration/SSH");
-    bind_dir("/System/Runtime/Networking/SSH", "/System/Networking/SSH/Root/System/Runtime/Networking/SSH");
+    bind_dir("/System/Configuration", "/System/Networking/SSH/Root/System/Configuration");
+    bind_dir("/System/Runtime", "/System/Networking/SSH/Root/System/Runtime");
+    bind_dir("/System/Init", "/System/Networking/SSH/Root/System/Init");
+    bind_dir("/System/Logs", "/System/Networking/SSH/Root/System/Logs");
     bind_dir("/System/Devices", "/System/Networking/SSH/Root/System/Devices");
     bind_dir("/System/Devices", "/System/Networking/SSH/Root/dev");
     bind_dir("/System/Process", "/System/Networking/SSH/Root/System/Process");

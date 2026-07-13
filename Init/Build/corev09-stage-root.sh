@@ -94,6 +94,7 @@ install -m 0755 "$native_root/System/Networking/start-networking" \
     "$root/System/Networking/start-networking"
 
 python3 - "$root" <<'PY'
+import os
 import pathlib
 import sqlite3
 import sys
@@ -332,6 +333,51 @@ try:
         if default_user_row is None or not default_user_row[0]:
             raise SystemExit("MixtarRVS.config has no non-root default user")
         default_user = default_user_row[0]
+
+    ssh_etc = root / "System/Networking/SSH/Root/etc"
+    ssh_shell = "/System/Shells/zsh.apx/Program/zsh"
+    (ssh_etc / "passwd").write_text(
+        "root:x:0:0:root:/Users/" + default_user + ":" + ssh_shell + "\n"
+        "sshd:x:22:22:sshd:/System/Runtime/Networking/SSH/empty:"
+        "/System/Userland/false\n"
+        + default_user + ":x:1000:1000:" + default_user + ":/Users/"
+        + default_user + ":" + ssh_shell + "\n",
+        encoding="utf-8",
+    )
+    (ssh_etc / "group").write_text(
+        "root:x:0:\nsshd:x:22:\n" + default_user + ":x:1000:\n",
+        encoding="utf-8",
+    )
+    (ssh_etc / "shadow").write_text(
+        "root:!:1:0:99999:7:::\n"
+        + default_user + ":x:1:0:99999:7:::\n",
+        encoding="utf-8",
+    )
+    (ssh_etc / "passwd").chmod(0o644)
+    (ssh_etc / "group").chmod(0o644)
+    (ssh_etc / "shadow").chmod(0o600)
+
+    authorized_dir = root / "System/Configuration/SSH/authorized_keys"
+    authorized_dir.mkdir(parents=True, exist_ok=True)
+    for old_key in authorized_dir.iterdir():
+        if old_key.is_file() or old_key.is_symlink():
+            old_key.unlink()
+    authorized_source = os.environ.get("MIXTAR_AUTHORIZED_KEYS", "")
+    if authorized_source:
+        authorized_source_path = pathlib.Path(authorized_source)
+        if not authorized_source_path.is_file():
+            raise SystemExit(
+                f"MIXTAR_AUTHORIZED_KEYS is not a file: {authorized_source}"
+            )
+        authorized_text = authorized_source_path.read_text(encoding="utf-8")
+        if not any(
+            line.strip() and not line.lstrip().startswith("#")
+            for line in authorized_text.splitlines()
+        ):
+            raise SystemExit("MIXTAR_AUTHORIZED_KEYS contains no public keys")
+        authorized_target = authorized_dir / default_user
+        authorized_target.write_text(authorized_text, encoding="utf-8")
+        authorized_target.chmod(0o600)
 
     meta_values = {
         "default.user": default_user,

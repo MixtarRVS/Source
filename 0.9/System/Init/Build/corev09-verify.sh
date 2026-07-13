@@ -678,6 +678,58 @@ if strings "$sshd_service" 2>/dev/null |
 else
     pass 'SSH compatibility root has no obsolete terminal mapping'
 fi
+if strings "$sshd_service" 2>/dev/null |
+   grep -F '/System/Networking/SSH/Root/System/Configuration' >/dev/null 2>&1 &&
+   strings "$sshd_service" 2>/dev/null |
+   grep -F '/System/Networking/SSH/Root/System/Runtime' >/dev/null 2>&1 &&
+   strings "$sshd_service" 2>/dev/null |
+   grep -F '/System/Networking/SSH/Root/System/Init' >/dev/null 2>&1 &&
+   strings "$sshd_service" 2>/dev/null |
+   grep -F '/System/Networking/SSH/Root/System/Logs' >/dev/null 2>&1; then
+    pass 'SSH private root exposes native control-plane paths'
+else
+    fail 'SSH private root lacks native control-plane paths'
+fi
+if python3 - \
+    "$root/System/Configuration/MixtarRVS.config" \
+    "$root/System/Networking/SSH/Root/etc/passwd" \
+    "$root/System/Networking/SSH/Root/etc/group" \
+    "$root/System/Networking/SSH/Root/etc/shadow" \
+    "$root/System/Configuration/SSH/sshd_config" <<'PY'
+import pathlib
+import sqlite3
+import sys
+
+config_path, passwd_path, group_path, shadow_path, sshd_path = map(
+    pathlib.Path, sys.argv[1:]
+)
+db = sqlite3.connect(config_path)
+row = db.execute("SELECT value FROM meta WHERE key='default.user'").fetchone()
+db.close()
+if row is None or not row[0]:
+    raise SystemExit("missing default.user")
+user = row[0]
+shell = "/System/Shells/zsh.apx/Program/zsh"
+passwd = passwd_path.read_text(encoding="utf-8").splitlines()
+group = group_path.read_text(encoding="utf-8").splitlines()
+shadow = shadow_path.read_text(encoding="utf-8").splitlines()
+sshd = sshd_path.read_text(encoding="utf-8")
+expected_user = f"{user}:x:1000:1000:{user}:/Users/{user}:{shell}"
+if expected_user not in passwd:
+    raise SystemExit(f"private passwd lacks configured user {user}")
+if f"{user}:x:1000:" not in group:
+    raise SystemExit(f"private group lacks configured user {user}")
+if not any(line.startswith(f"{user}:") for line in shadow):
+    raise SystemExit(f"private shadow lacks configured user {user}")
+if "ChrootDirectory /Native" in sshd:
+    raise SystemExit("redundant per-session /Native chroot remains enabled")
+print(f"user={user}")
+PY
+then
+    pass 'SSH private account follows MixtarRVS.config without redundant chroot'
+else
+    fail 'SSH private account/configuration is inconsistent'
+fi
 
 if [ "$failures" -eq 0 ]; then
     printf '%s\n' 'MIXTARRVS_COREV09_VERIFY=PASS'
