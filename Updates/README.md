@@ -13,6 +13,10 @@ This directory implements the MixtarRVS 0.9 source-native update engine.
     updates_grml.ail
       downloads the official grml-etc-core source and its signed dsc manifest
 
+    updates_openbsd_build.ail
+      builds a verified OpenBSD-first userland candidate through the local
+      AILang Bridge plan without modifying or activating /System/Userland
+
     Schema/Updates.schema.sql
       database structure
 
@@ -75,5 +79,6 @@ Compiler toolchain policy for 0.9:
     updates-grml check-grml [Updates.config] [work-directory]
     updates-grml fetch-grml [Updates.config] [work-directory]
     updates-grml verify-grml [Updates.config] [work-directory]
+    updates-openbsd-build build [Updates.config] [work-directory]
 
 `updates check` is now an explicit policy gate; it maps to `updates audit`.

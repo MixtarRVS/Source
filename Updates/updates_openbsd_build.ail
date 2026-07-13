@@ -1,0 +1,235 @@
+const string OPENBSD_BUILD_CONFIG = "/System/Configuration/Updates.config"
+const string OPENBSD_BUILD_WORK = "/Temporary/Updates/Work/Build/OpenBSD"
+const int OPENBSD_BUILD_OK = 0
+const int OPENBSD_BUILD_USAGE = 64
+const int OPENBSD_BUILD_ERROR = 65
+const int MI_SQLITE_ROW = 100
+const int MI_SQLITE_DONE = 101
+
+void build_line(prefix: string, value: string):
+    line = prefix + value
+    print line
+    dealloc(line)
+end
+
+int build_fail(message: string):
+    build_line("updates-openbsd-build: ", message)
+    return OPENBSD_BUILD_ERROR
+end
+
+@effect(sqlite)
+string query_text(db: int, sql: string):
+    stmt = sql_prepare(db, sql)
+    if stmt == 0 then
+        return "" + ""
+    end
+    if sql_step(stmt) != MI_SQLITE_ROW then
+        sql_finalize(stmt)
+        return "" + ""
+    end
+    value = "" + sql_column_text(stmt, 0)
+    sql_finalize(stmt)
+    return value
+end
+
+@effect(sqlite)
+int query_count(db: int, sql: string):
+    stmt = sql_prepare(db, sql)
+    if stmt == 0 then
+        return -1
+    end
+    if sql_step(stmt) != MI_SQLITE_ROW then
+        sql_finalize(stmt)
+        return -1
+    end
+    value = sql_column_int(stmt, 0)
+    sql_finalize(stmt)
+    return value
+end
+
+int path_below(path: string, prefix: string):
+    if index_of(path, prefix) == 0 then
+        return 1
+    end
+    return 0
+end
+
+@effect(process)
+int run_recipe(
+    executor: string,
+    config: string,
+    shell: string,
+    recipe_path: string,
+    openbsd_source: string,
+    mixtar_source: string,
+    ncurses_source: string,
+    work: string,
+    plan_path: string,
+    fts_patch: string,
+    expected_count: string,
+    archive: string,
+    make_tool: string,
+    patch_tool: string,
+    cp_tool: string,
+    mkdir_tool: string,
+    rm_tool: string,
+    find_tool: string,
+    wc_tool: string,
+    zlib_prefix: string
+):
+    args = str_array_new(23)
+    args = str_array_push(args, executor)
+    args = str_array_push(args, "run")
+    args = str_array_push(args, config)
+    args = str_array_push(args, shell)
+    args = str_array_push(args, recipe_path)
+    args = str_array_push(args, openbsd_source)
+    args = str_array_push(args, mixtar_source)
+    args = str_array_push(args, ncurses_source)
+    args = str_array_push(args, work)
+    args = str_array_push(args, plan_path)
+    args = str_array_push(args, fts_patch)
+    args = str_array_push(args, expected_count)
+    args = str_array_push(args, archive)
+    args = str_array_push(args, make_tool)
+    args = str_array_push(args, patch_tool)
+    args = str_array_push(args, cp_tool)
+    args = str_array_push(args, mkdir_tool)
+    args = str_array_push(args, rm_tool)
+    args = str_array_push(args, find_tool)
+    args = str_array_push(args, wc_tool)
+    args = str_array_push(args, zlib_prefix)
+    rc = process_run_argv(args)
+    dealloc_str_array(args)
+    return rc
+end
+
+@effect(sqlite)
+int mark_build_passed(db: int, stage: string, version: string):
+    left = "verified OpenBSD " + version
+    detail = left + " built through the local AILang Bridge plan into " + stage
+    dealloc(left)
+    stmt = sql_prepare(
+        db,
+        "UPDATE observation SET status='build-passed',detail=? " +
+        "WHERE component_id='openbsd-userland' AND status='verified-source'"
+    )
+    if stmt == 0 then
+        dealloc(detail)
+        return OPENBSD_BUILD_ERROR
+    end
+    sql_bind_text(stmt, 1, detail)
+    rc = sql_step(stmt)
+    sql_finalize(stmt)
+    dealloc(detail)
+    if rc != MI_SQLITE_DONE then
+        return OPENBSD_BUILD_ERROR
+    end
+    return OPENBSD_BUILD_OK
+end
+
+@effect(sqlite, process)
+int build_openbsd(db: int, config: string, work: string):
+    openbsd_state = query_text(db, "SELECT status FROM observation WHERE component_id='openbsd-userland'")
+    openbsd_source = query_text(db, "SELECT source_path FROM observation WHERE component_id='openbsd-userland'")
+    openbsd_version = query_text(db, "SELECT available_version FROM observation WHERE component_id='openbsd-userland'")
+    mixtar_state = query_text(db, "SELECT status FROM observation WHERE component_id='mixtarrvs'")
+    mixtar_source = query_text(db, "SELECT source_path FROM observation WHERE component_id='mixtarrvs'")
+    ncurses_state = query_text(db, "SELECT status FROM observation WHERE component_id='ncurses'")
+    ncurses_source = query_text(db, "SELECT source_path FROM observation WHERE component_id='ncurses'")
+    target = query_text(db, "SELECT install_target FROM component WHERE id='openbsd-userland' AND enabled=1")
+    recipe = query_text(db, "SELECT recipe FROM component WHERE id='openbsd-userland' AND enabled=1")
+    executor = query_text(db, "SELECT value FROM setting WHERE key='tool.build_executor'")
+    shell = query_text(db, "SELECT value FROM setting WHERE key='build.sandbox.compat_shell'")
+    recipe_path = query_text(db, "SELECT value FROM setting WHERE key='component.openbsd-userland.build_recipe'")
+    plan_path = query_text(db, "SELECT value FROM setting WHERE key='component.openbsd-userland.build_plan'")
+    fts_patch = query_text(db, "SELECT value FROM setting WHERE key='component.openbsd-userland.fts_patch'")
+    expected_count = query_text(db, "SELECT value FROM setting WHERE key='component.openbsd-userland.expected_tool_count'")
+    archive = query_text(db, "SELECT value FROM setting WHERE key='tool.archive'")
+    make_tool = query_text(db, "SELECT value FROM setting WHERE key='tool.make'")
+    patch_tool = query_text(db, "SELECT value FROM setting WHERE key='tool.patch'")
+    cp_tool = query_text(db, "SELECT value FROM setting WHERE key='tool.cp'")
+    mkdir_tool = query_text(db, "SELECT value FROM setting WHERE key='tool.mkdir'")
+    rm_tool = query_text(db, "SELECT value FROM setting WHERE key='tool.rm'")
+    find_tool = query_text(db, "SELECT value FROM setting WHERE key='tool.find'")
+    wc_tool = query_text(db, "SELECT value FROM setting WHERE key='tool.wc'")
+    zlib_prefix = query_text(db, "SELECT value FROM setting WHERE key='library.zlib'")
+    dependencies = query_count(
+        db,
+        "SELECT COUNT(*) FROM component_dependency WHERE " +
+        "component_id='openbsd-userland' AND dependency_id IN ('ncurses','mixtarrvs')"
+    )
+
+    valid = 1
+    if openbsd_state != "verified-source" or mixtar_state != "verified-source" or ncurses_state != "verified-source" then
+        valid = 0
+    end
+    if target != "/System/Userland" or recipe != "openbsd-release-ailang-bridge" or dependencies != 2 then
+        valid = 0
+    end
+    if path_below(work, "/Temporary/Updates/Work/") == 0 or path_below(openbsd_source, "/Temporary/Updates/") == 0 or path_below(mixtar_source, "/Temporary/Updates/") == 0 or path_below(ncurses_source, "/Temporary/Updates/") == 0 then
+        valid = 0
+    end
+    if path_below(recipe_path, "/System/Configuration/Updates/Recipes/") == 0 or path_below(plan_path, "/System/Configuration/Updates/Recipes/") == 0 or path_below(fts_patch, "/System/Configuration/Updates/Recipes/") == 0 then
+        valid = 0
+    end
+    if strlen(executor) == 0 or strlen(shell) == 0 or strlen(expected_count) == 0 or strlen(archive) == 0 or strlen(make_tool) == 0 or strlen(patch_tool) == 0 or strlen(cp_tool) == 0 or strlen(mkdir_tool) == 0 or strlen(rm_tool) == 0 or strlen(find_tool) == 0 or strlen(wc_tool) == 0 or path_below(zlib_prefix, "/System/Libraries/") == 0 then
+        valid = 0
+    end
+    if valid == 0 then
+        dealloc(openbsd_state, openbsd_source, openbsd_version, mixtar_state, mixtar_source, ncurses_state, ncurses_source, target, recipe, executor, shell, recipe_path, plan_path, fts_patch, expected_count, archive, make_tool, patch_tool, cp_tool, mkdir_tool, rm_tool, find_tool, wc_tool, zlib_prefix)
+        return build_fail("verified source, dependency, recipe or tool policy is incomplete")
+    end
+
+    rc = run_recipe(executor, config, shell, recipe_path, openbsd_source, mixtar_source, ncurses_source, work, plan_path, fts_patch, expected_count, archive, make_tool, patch_tool, cp_tool, mkdir_tool, rm_tool, find_tool, wc_tool, zlib_prefix)
+    if rc != 0 then
+        dealloc(openbsd_state, openbsd_source, openbsd_version, mixtar_state, mixtar_source, ncurses_state, ncurses_source, target, recipe, executor, shell, recipe_path, plan_path, fts_patch, expected_count, archive, make_tool, patch_tool, cp_tool, mkdir_tool, rm_tool, find_tool, wc_tool, zlib_prefix)
+        return build_fail("isolated OpenBSD userland recipe failed")
+    end
+    stage = work + "/stage/System/Userland"
+    rc = mark_build_passed(db, stage, openbsd_version)
+    if rc == OPENBSD_BUILD_OK then
+        print "OpenBSD-first source-native userland build: PASS"
+        build_line("candidate: ", stage)
+    end
+    dealloc(openbsd_state, openbsd_source, openbsd_version, mixtar_state, mixtar_source, ncurses_state, ncurses_source, target, recipe, executor, shell, recipe_path, plan_path, fts_patch, expected_count, archive, make_tool, patch_tool, cp_tool, mkdir_tool, rm_tool, find_tool, wc_tool, zlib_prefix, stage)
+    return rc
+end
+
+void usage():
+    print "usage: updates-openbsd-build build [Updates.config] [work-directory]"
+end
+
+@effect(sqlite, process)
+def main(): int
+    if argc() < 2 or argc() > 4 then
+        usage()
+        return OPENBSD_BUILD_USAGE
+    end
+    command = "" + argv(1)
+    if command != "build" then
+        usage()
+        dealloc(command)
+        return OPENBSD_BUILD_USAGE
+    end
+    config = "" + OPENBSD_BUILD_CONFIG
+    work = "" + OPENBSD_BUILD_WORK
+    if argc() >= 3 then
+        dealloc(config)
+        config = "" + argv(2)
+    end
+    if argc() == 4 then
+        dealloc(work)
+        work = "" + argv(3)
+    end
+    db = sql_open(config)
+    if db == 0 then
+        dealloc(command, config, work)
+        return build_fail("cannot open Updates.config")
+    end
+    sql_exec(db, "PRAGMA foreign_keys=ON")
+    rc = build_openbsd(db, config, work)
+    sql_close(db)
+    dealloc(command, config, work)
+    return rc
+end

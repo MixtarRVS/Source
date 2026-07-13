@@ -1065,6 +1065,20 @@ SET local_path = '/System/Configuration/Updates/Trust/MixtarRVS-release-keyring.
     local_sha256 = '3d3af3e0d56b4e662159dfbf32ea6424fb881e9e9fc66750a4a23c37672e33a2'
 WHERE id = 'mixtarrvs-release';
 
+BEGIN IMMEDIATE;
+
+INSERT OR REPLACE INTO setting(key, value) VALUES
+('component.openbsd-userland.build_recipe', '/System/Configuration/Updates/Recipes/build_openbsd_userland_musl.sh'),
+('component.openbsd-userland.build_plan', '/System/Configuration/Updates/Recipes/OpenBSD-userland.plan'),
+('component.openbsd-userland.fts_patch', '/System/Configuration/Updates/Recipes/OpenBSD-fts-musl.patch'),
+('component.openbsd-userland.expected_tool_count', '155');
+
+INSERT OR REPLACE INTO component_dependency(component_id, dependency_id) VALUES
+('openbsd-userland', 'ncurses'),
+('openbsd-userland', 'mixtarrvs');
+
+COMMIT;
+
 INSERT OR REPLACE INTO trust_signer(trust_anchor_id, fingerprint, enabled)
 VALUES (
     'mixtarrvs-release',

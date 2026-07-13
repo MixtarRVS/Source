@@ -121,6 +121,7 @@ updates-kernel-stage|updates_kernel_stage|updates_kernel_stage.ail
 updates-mixtar|updates_mixtar|updates_mixtar.ail
 updates-ncurses|updates_ncurses|updates_ncurses.ail
 updates-openbsd|updates_openbsd|updates_openbsd.ail
+updates-openbsd-build|updates_openbsd_build|updates_openbsd_build.ail
 updates-signature-verify|updates_signature_verify|updates_signature_verify.ail
 updates-zsh-build|updates_zsh_build|updates_zsh_build.ail
 mixtar-build-executor|updates_build_executor|updates_build_executor.ail
@@ -137,8 +138,8 @@ install -m 0755 \
 rm -rf -- "$sha256_work"
 
 count=$(find "$temporary_dir" -maxdepth 1 -type f -perm -0100 | wc -l)
-[ "$count" -eq 15 ] || {
-    echo "build-updaters: expected 15 executables, found $count" >&2
+[ "$count" -eq 16 ] || {
+    echo "build-updaters: expected 16 executables, found $count" >&2
     exit 70
 }
 

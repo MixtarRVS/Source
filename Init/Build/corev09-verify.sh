@@ -517,15 +517,23 @@ check_static_runtime() {
         /System/Userland/updates-kernel-source \
         /System/Userland/updates-mixtar \
         /System/Userland/updates-ncurses \
-        /System/Userland/updates-openbsd \
-        /System/Userland/updates-signature-verify; do
+/System/Userland/updates-openbsd \
+/System/Userland/updates-openbsd-build \
+/System/Userland/updates-signature-verify; do
         if [ ! -x "$root$relative" ]; then
             fail "runtime executable missing: $relative"
             continue
         fi
         description=$(file "$root$relative")
         if printf '%s\n' "$description" | grep -q 'statically linked'; then pass "static runtime $relative"; else fail "runtime is not static: $relative"; fi
-    done
+done
+
+db_equal "SELECT value FROM setting WHERE key='component.openbsd-userland.build_recipe'" /System/Configuration/Updates/Recipes/build_openbsd_userland_musl.sh 'OpenBSD userland build recipe is local policy'
+db_equal "SELECT value FROM setting WHERE key='component.openbsd-userland.build_plan'" /System/Configuration/Updates/Recipes/OpenBSD-userland.plan 'OpenBSD userland Bridge plan is local policy'
+db_equal "SELECT value FROM setting WHERE key='component.openbsd-userland.fts_patch'" /System/Configuration/Updates/Recipes/OpenBSD-fts-musl.patch 'OpenBSD FTS adaptation is local policy'
+db_equal "SELECT value FROM setting WHERE key='component.openbsd-userland.expected_tool_count'" 155 'OpenBSD userland candidate requires all native Mixtar tools'
+require_file /System/Configuration/Updates/Recipes/OpenBSD-userland.plan 'OpenBSD userland generated Bridge plan'
+require_file /System/Configuration/Updates/Recipes/OpenBSD-fts-musl.patch 'OpenBSD workspace-only FTS patch'
     curl_version=$("$root/System/Userland/curl" --version 2>/dev/null | head -n 1 || true)
     if printf '%s\n' "$curl_version" | grep -q 'c-ares/1.34.8'; then pass 'curl uses native c-ares resolver'; else fail 'curl is missing native c-ares resolver'; fi
 }

@@ -293,6 +293,7 @@ install -m 0644 "$initramfs_input" \
     "$root/System/Runtime/Build/MixtarRVS-initramfs.cpio"
 
 python3 - "$root" <<'PY'
+import os
 import pathlib
 import shlex
 import sqlite3
@@ -710,10 +711,8 @@ fi
 if [ -f "$root/System/Configuration/SSH/sshd_config" ]; then
     sed -i 's#/System/Shells/zsh#/System/Shells/zsh.apx/Program/zsh#g' \
         "$root/System/Configuration/SSH/sshd_config"
-fi
-if [ -f "$root/System/Networking/SSH/Root/etc/passwd" ]; then
-    sed -i 's#/System/Shells/zsh#/System/Shells/zsh.apx/Program/zsh#g' \
-        "$root/System/Networking/SSH/Root/etc/passwd"
+    sed -i '\|^[[:space:]]*ChrootDirectory[[:space:]]\+/Native[[:space:]]*$|d' \
+        "$root/System/Configuration/SSH/sshd_config"
 fi
 networking_service="$root/System/Networking/start-networking"
 if [ -f "$networking_service" ]; then
