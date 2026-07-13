@@ -4,20 +4,51 @@ set -euo pipefail
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repo_root="$(cd "$script_dir/../../.." && pwd)"
 
-out_dir="$repo_root/System/Rootfs/Generated"
+out_dir="${MIXTAR_GENERATED_DIR:-$repo_root/Server/Rootfs/Generated}"
 rootfs_dir="$out_dir/ail-native-initramfs-root"
 image="$out_dir/mixtar-ail-native-initramfs.cpio.gz"
-ail_init_src="$repo_root/System/Rootfs/initramfs/mixtar_init.ail"
-ail_init_verify_src="$repo_root/System/Rootfs/initramfs/mixtar_init_verify.ail"
-console_setup_src="$repo_root/System/Rootfs/initramfs/mixtar_console_setup.c"
-ailang_root="${AILANG_ROOT:-$repo_root/../AILang}"
+boot_image="$out_dir/mixtar-boot-initramfs.cpio"
+ail_init_src="$repo_root/Server/Rootfs/initramfs/mixtar_init.ail"
+ail_boot_src="$repo_root/Server/Rootfs/initramfs/mixtar_boot.ail"
+ail_init_verify_src="$repo_root/Server/Rootfs/initramfs/mixtar_init_verify.ail"
+console_setup_src="$repo_root/Server/Rootfs/initramfs/mixtar_console_setup.c"
+ailang_root="${AILANG_ROOT:-$repo_root/../AILang-Pure}"
 generated_c="$out_dir/mixtar_init_native_ail.c"
+generated_boot_c="$out_dir/mixtar_boot_native_ail.c"
 verifier_bin="$out_dir/mixtar_init_verify"
 sqlite_pid1_dir="$out_dir/sqlite-pid1"
 sqlite_pid1_zip="$sqlite_pid1_dir/sqlite-amalgamation.zip"
 sqlite_pid1_url="${MIXTAR_PID1_SQLITE_URL:-https://www.sqlite.org/2024/sqlite-amalgamation-3460100.zip}"
 sqlite_pid1_c="${MIXTAR_PID1_SQLITE_C:-$sqlite_pid1_dir/sqlite3.c}"
 sqlite_pid1_o="$sqlite_pid1_dir/sqlite3-pid1.o"
+
+build_boot_initramfs() (
+  boot_root=$(mktemp -d /tmp/mixtar-boot-initramfs.XXXXXX)
+  case "$boot_root" in
+    /tmp/mixtar-boot-initramfs.*) ;;
+    *) printf 'ail-native-build: unsafe boot root: %s\n' "$boot_root" >&2; exit 1 ;;
+  esac
+  trap 'rm -rf -- "$boot_root"' EXIT HUP INT TERM
+  mkdir -p \
+    "$boot_root/System/Devices" \
+    "$boot_root/System/Hardware" \
+    "$boot_root/System/Init" \
+    "$boot_root/System/Process" \
+    "$boot_root/System/Runtime/Root"
+  install -m 0755 "$rootfs_dir/System/Init/MixtarBoot" \
+    "$boot_root/System/Init/MixtarBoot"
+  find "$boot_root" -exec touch -h -d '@0' {} +
+  (
+    cd "$boot_root"
+    find . -print0 | LC_ALL=C sort -z | \
+      cpio --null -o --format=newc --owner=0:0 --reproducible 2>/dev/null
+  ) > "$boot_image"
+  cpio -it < "$boot_image" 2>/dev/null | \
+    grep -qx 'System/Init/MixtarBoot' || {
+      printf 'ail-native-build: boot initramfs is missing MixtarBoot\n' >&2
+      exit 1
+    }
+)
 openssh_stage_dir="${MIXTAR_OPENSSH_STAGE:-$out_dir/openssh-source-stage}"
 zsh_stage_dir="${MIXTAR_ZSH_STAGE:-$out_dir/zsh-source-stage}"
 wifi_source_dir="${MIXTAR_WIFI_SOURCE:-$out_dir/wifi-source/root}"
@@ -110,32 +141,32 @@ build_init_tools() {
     -pedantic
     -D_GNU_SOURCE
     -D_DEFAULT_SOURCE
-    -I "$repo_root/System/Userland/Bridge/include"
+    -I "$repo_root/Server/Userland/Toolkit/Bridge/include"
     -DMIXTAR_BRIDGE=1
-    -include "$repo_root/System/Userland/Bridge/include/mixtar_bridge_compat.h"
+    -include "$repo_root/Server/Userland/Toolkit/Bridge/include/mixtar_bridge_compat.h"
   )
   "$cc_bin" -static "${tool_common[@]}" \
     -o "$tools_dir/echo" \
-    "$repo_root/System/Userland/FreeBSD/Source/bin/echo/echo.c" \
-    "$repo_root/System/Libraries/LibC/Generated/bsd_compat.c" \
+    "$repo_root/Server/Userland/Toolkit/FreeBSD/freebsd-src/bin/echo/echo.c" \
+    "$repo_root/Server/Runtime/LibC/Generated/bsd_compat.c" \
     >"$tools_log_dir/echo.log" 2>&1
   "$cc_bin" -static "${tool_common[@]}" -DNO_UDOM_SUPPORT -DBOOTSTRAP_CAT \
     -o "$tools_dir/cat" \
-    "$repo_root/System/Userland/FreeBSD/Source/bin/cat/cat.c" \
-    "$repo_root/System/Libraries/LibC/Generated/bsd_compat.c" \
+    "$repo_root/Server/Userland/Toolkit/FreeBSD/freebsd-src/bin/cat/cat.c" \
+    "$repo_root/Server/Runtime/LibC/Generated/bsd_compat.c" \
     >"$tools_log_dir/cat.log" 2>&1
   "$cc_bin" -static "${tool_common[@]}" \
     -o "$tools_dir/pwd" \
-    "$repo_root/System/Userland/OpenBSD/Source/bin/pwd/pwd.c" \
-    "$repo_root/System/Libraries/LibC/Generated/bsd_compat.c" \
+    "$repo_root/Server/Userland/Toolkit/OpenBSD/src/bin/pwd/pwd.c" \
+    "$repo_root/Server/Runtime/LibC/Generated/bsd_compat.c" \
     >"$tools_log_dir/pwd.log" 2>&1
   "$cc_bin" -static "${tool_common[@]}" -Wno-format -Wno-implicit-fallthrough \
     -o "$tools_dir/ls" \
-    "$repo_root/System/Userland/FreeBSD/Source/bin/ls/ls.c" \
-    "$repo_root/System/Userland/FreeBSD/Source/bin/ls/cmp.c" \
-    "$repo_root/System/Userland/FreeBSD/Source/bin/ls/print.c" \
-    "$repo_root/System/Userland/FreeBSD/Source/bin/ls/util.c" \
-    "$repo_root/System/Libraries/LibC/Generated/bsd_compat.c" \
+    "$repo_root/Server/Userland/Toolkit/FreeBSD/freebsd-src/bin/ls/ls.c" \
+    "$repo_root/Server/Userland/Toolkit/FreeBSD/freebsd-src/bin/ls/cmp.c" \
+    "$repo_root/Server/Userland/Toolkit/FreeBSD/freebsd-src/bin/ls/print.c" \
+    "$repo_root/Server/Userland/Toolkit/FreeBSD/freebsd-src/bin/ls/util.c" \
+    "$repo_root/Server/Runtime/LibC/Generated/bsd_compat.c" \
     >"$tools_log_dir/ls.log" 2>&1
   chmod 0755 "$tools_dir/echo" "$tools_dir/cat" "$tools_dir/pwd" "$tools_dir/ls"
 }
@@ -685,7 +716,7 @@ build_networking_mvp() {
   mkdir -p "$ssh_service_root/etc" "$ssh_service_root/System/Networking/SSH" \
     "$ssh_service_root/System/Configuration/SSH" "$ssh_service_root/System/Runtime/Networking/SSH" \
     "$ssh_service_root/System/Devices" "$ssh_service_root/System/Process" \
-    "$ssh_service_root/System/Hardware" "$ssh_service_root/System/Terminal" \
+    "$ssh_service_root/System/Hardware" "$ssh_service_root/System/Shells" \
     "$ssh_service_root/System/Userland" "$ssh_service_root/Users" \
     "$ssh_service_root/Applications" "$ssh_service_root/Temporary" "$ssh_service_root/Volumes" \
     "$ssh_service_root/dev"
@@ -881,9 +912,10 @@ int main(void) {
     bind_dir("/System/Configuration/SSH", "/System/Networking/SSH/Root/System/Configuration/SSH");
     bind_dir("/System/Runtime/Networking/SSH", "/System/Networking/SSH/Root/System/Runtime/Networking/SSH");
     bind_dir("/System/Devices", "/System/Networking/SSH/Root/System/Devices");
+    bind_dir("/System/Devices", "/System/Networking/SSH/Root/dev");
     bind_dir("/System/Process", "/System/Networking/SSH/Root/System/Process");
     bind_dir("/System/Hardware", "/System/Networking/SSH/Root/System/Hardware");
-    bind_dir("/System/Terminal", "/System/Networking/SSH/Root/System/Terminal");
+    bind_dir("/System/Shells", "/System/Networking/SSH/Root/System/Shells");
     bind_dir("/System/Userland", "/System/Networking/SSH/Root/System/Userland");
     bind_dir("/Users", "/System/Networking/SSH/Root/Users");
     bind_dir("/Applications", "/System/Networking/SSH/Root/Applications");
@@ -907,7 +939,6 @@ int main(void) {
     mkdir_one("/var/empty", 0755);
     mkdir_one("/System/Runtime/Networking/SSH/empty", 0755);
     ensure_runtime_file("/System/Devices/null");
-    ensure_runtime_file("/dev/null");
     ensure_runtime_file("/System/Devices/zero");
     ensure_runtime_file("/System/Devices/random");
     ensure_runtime_file("/System/Devices/urandom");
@@ -966,13 +997,12 @@ write_config(
     [
         ("network.backend", "linux-kernel"),
         ("network.stack", "kernel-native"),
-        ("dhcp.default", "0"),
+        ("dhcp.default", "1"),
         ("qemu.eth0.static", "10.0.2.15/24"),
         ("qemu.eth0.gateway", "10.0.2.2"),
         ("wifi.enabled", "1"),
         ("wifi.service", "/System/Networking/WiFi/mixtar-wifi-service"),
-        ("wifi.wlan0.static", "192.168.99.110/24"),
-        ("wifi.wlan0.gateway", "192.168.99.254"),
+        ("wifi.wlan0.address_mode", "dhcp"),
         ("bsd.network.stack.ported", "0"),
         ("service.ssh.enabled", "1"),
         ("service.ssh.start", "/System/Networking/start-networking"),
@@ -997,30 +1027,31 @@ write_config(
 PY
 
 cat > "$rootfs_dir/System/Networking/start-networking" <<'ZSH'
-#!/System/Terminal/ZSH/zsh
+#!/System/Shells/zsh.apx/Program/zsh
 setopt null_glob
 
-PATH=/System/Networking/Core:/System/Userland:/System/Terminal/ZSH:$PATH
+PATH=/System/Networking/Core:/System/Userland:/System/Shells/zsh.apx/Program:$PATH
 export PATH
-LD_LIBRARY_PATH=/System/Networking/Core/Runtime:/System/Terminal/ZSH/Runtime:${LD_LIBRARY_PATH:-}
+LD_LIBRARY_PATH=/System/Networking/Core/Runtime:/System/Shells/zsh.apx/Runtime:${LD_LIBRARY_PATH:-}
 export LD_LIBRARY_PATH
 
 mkdir -p /System/Runtime/Networking
 mkdir -p /System/Runtime/Networking/WiFi
 
 mi_fix_ssh_permissions() {
-  chmod 0755 /System/Configuration/SSH 2>/dev/null || true
-  chmod 0700 /System/Configuration/SSH/HostKeys 2>/dev/null || true
-  chmod 0600 /System/Configuration/SSH/HostKeys/ssh_host_*_key 2>/dev/null || true
-  chmod 0644 /System/Configuration/SSH/HostKeys/ssh_host_*_key.pub 2>/dev/null || true
-  chmod 0644 /System/Configuration/SSH/sshd_config /System/Configuration/SSH/SSH.config /System/Configuration/SSH/moduli 2>/dev/null || true
-  chmod 0755 /System/Configuration/SSH/authorized_keys 2>/dev/null || true
-  chmod 0644 /System/Configuration/SSH/authorized_keys/* 2>/dev/null || true
+  chmod 0755 /System/Configuration/SSH 2>/System/Devices/null || true
+  chmod 0700 /System/Configuration/SSH/HostKeys 2>/System/Devices/null || true
+  chmod 0600 /System/Configuration/SSH/HostKeys/ssh_host_*_key 2>/System/Devices/null || true
+  chmod 0644 /System/Configuration/SSH/HostKeys/ssh_host_*_key.pub 2>/System/Devices/null || true
+  chmod 0644 /System/Configuration/SSH/sshd_config /System/Configuration/SSH/SSH.config /System/Configuration/SSH/moduli 2>/System/Devices/null || true
+  chmod 0755 /System/Configuration/SSH/authorized_keys 2>/System/Devices/null || true
+  chmod 0644 /System/Configuration/SSH/authorized_keys/* 2>/System/Devices/null || true
 }
 
 mi_log() {
   print -r -- "$1"
   print -r -- "$1" >>/System/Runtime/Networking/networking.log
+  print -r -- "$1" >>/System/Logs/networking.log
 }
 
 mi_ip() {
@@ -1031,7 +1062,7 @@ mi_cmdline_has() {
   local needle="$1"
   local cmdline
   if [[ -f /System/Process/cmdline ]]; then
-    cmdline="$(/System/Userland/cat /System/Process/cmdline 2>/dev/null || true)"
+    cmdline="$(/System/Userland/cat /System/Process/cmdline 2>/System/Devices/null || true)"
     [[ "$cmdline" == *"$needle"* ]]
     return $?
   fi
@@ -1062,24 +1093,24 @@ mi_persist_network_diag() {
   {
     print -r -- "tag=$tag"
     print -r -- "cmdline:"
-    /System/Userland/cat /System/Process/cmdline 2>/dev/null || true
+    /System/Userland/cat /System/Process/cmdline 2>/System/Devices/null || true
     print -r -- ""
     print -r -- "net-class:"
-    print -rl -- /System/Hardware/class/net/* 2>/dev/null || true
+    print -rl -- /System/Hardware/class/net/* 2>/System/Devices/null || true
     print -r -- "ip-addr:"
     /System/Networking/Core/ip -br addr 2>&1 || true
     print -r -- "ip-route:"
     /System/Networking/Core/ip route 2>&1 || true
     print -r -- "wireless:"
-    /System/Userland/cat /System/Process/net/wireless 2>/dev/null || true
+    /System/Userland/cat /System/Process/net/wireless 2>/System/Devices/null || true
     print -r -- "modules:"
-    /System/Userland/cat /System/Process/modules 2>/dev/null | grep -E 'iwl|cfg80211|mac80211|e1000e|rfkill' || true
+    /System/Userland/cat /System/Process/modules 2>/System/Devices/null | grep -E 'iwl|cfg80211|mac80211|e1000e|rfkill' || true
   } >"$dir/state.txt"
 
-  cp /System/Runtime/Networking/*.log "$dir/" 2>/dev/null || true
+  cp /System/Runtime/Networking/*.log "$dir/" 2>/System/Devices/null || true
   mkdir -p "$dir/SSH"
-  cp /System/Runtime/Networking/SSH/*.log "$dir/SSH/" 2>/dev/null || true
-  cp /System/Runtime/Networking/WiFi/*.log "$dir/" 2>/dev/null || true
+  cp /System/Runtime/Networking/SSH/*.log "$dir/SSH/" 2>/System/Devices/null || true
+  cp /System/Runtime/Networking/WiFi/*.log "$dir/" 2>/System/Devices/null || true
   if [[ -x /System/Networking/Core/dmesg ]]; then
     /System/Networking/Core/dmesg >"$dir/dmesg.txt" 2>&1 || true
   fi
@@ -1088,16 +1119,11 @@ mi_persist_network_diag() {
 
 mi_diag_autoreturn_loop() {
   local attempt
-  for attempt in {1..24}; do
+  for attempt in {1..60}; do
     mi_persist_network_diag "attempt-$attempt"
     sleep 5
   done
   mi_persist_network_diag "final"
-  if mi_cmdline_has 'mixtar.autoreturn=1'; then
-    mi_log "networking: autoreturn reboot"
-    sync
-    /System/Terminal/ZSH/reboot
-  fi
 }
 
 mi_configure_static() {
@@ -1132,6 +1158,12 @@ mi_configure_static() {
   return 0
 }
 
+mi_network_ready() {
+  /System/Networking/Core/ip -4 -o addr show scope global 2>/dev/null | grep -q . || return 1
+  /System/Networking/Core/ip route show default 2>/dev/null | grep -q '^default ' || return 1
+  return 0
+}
+
 mi_network_config_loop() {
   local attempt
   for attempt in {1..90}; do
@@ -1139,18 +1171,29 @@ mi_network_config_loop() {
       mi_ip link set lo up || true
     fi
 
+    if mi_network_ready; then
+      echo "network ready after ${attempt}s"
+      /System/Networking/Core/ip -br addr || true
+      /System/Networking/Core/ip route || true
+      return 0
+    fi
+
     if [[ -d /System/Hardware/class/net/eth0 ]]; then
       mi_configure_static eth0 10.0.2.15/24 10.0.2.2 || true
     fi
 
     if [[ -d /System/Hardware/class/net/wlan0 ]]; then
-      mi_configure_static wlan0 192.168.99.110/24 192.168.99.254 || true
-    else
-      mi_log "networking: waiting for wlan0 attempt=$attempt"
+      if (( attempt == 1 || attempt % 10 == 0 )); then
+        echo "waiting for iwd DHCP on wlan0 attempt=$attempt"
+      fi
+    elif (( attempt == 1 || attempt % 10 == 0 )); then
+      echo "waiting for a physical network interface attempt=$attempt"
     fi
 
     sleep 1
   done
+  echo "network configuration timed out without an address and default route"
+  return 1
 }
 
 mi_load_kernel_modules() {
@@ -1178,21 +1221,21 @@ mi_load_kernel_modules() {
 mi_log "networking: starting service"
 mi_fix_ssh_permissions
 if mi_cmdline_has 'mixtar.persist_logs=1' || mi_cmdline_has 'mixtar.autoreturn=1'; then
-  mi_diag_autoreturn_loop >/System/Runtime/Networking/persist-loop.log 2>&1 &
+  mi_diag_autoreturn_loop </System/Devices/null >/System/Runtime/Networking/persist-loop.log 2>&1 &
 fi
 mi_load_kernel_modules
 
 if [[ -x /System/Networking/WiFi/mixtar-wifi-service ]]; then
   mi_log "networking: starting WiFi service"
-  /System/Networking/WiFi/mixtar-wifi-service >/System/Runtime/Networking/WiFi/iwd.log 2>&1 || true
+  /System/Networking/WiFi/mixtar-wifi-service >/System/Logs/networking-wifi.log 2>&1 || true
 fi
 
-mi_network_config_loop >/System/Runtime/Networking/network-config-loop.log 2>&1 &
+mi_network_config_loop </System/Devices/null >/System/Logs/network-config-loop.log 2>&1 &
 
 sleep 2
 while true; do
   mi_log "networking: exec sshd"
-  /System/Networking/SSH/mixtar-sshd-service >>/System/Runtime/Networking/sshd-wrapper.log 2>&1
+  /System/Networking/SSH/mixtar-sshd-service >>/System/Logs/sshd-wrapper.log 2>&1
   rc=$?
   mi_log "networking: sshd exited rc=$rc"
   sleep 5
@@ -1256,6 +1299,45 @@ chmod 0755 "$rootfs_dir/System/Init/MixtarRVS"
 if command -v strip >/dev/null 2>&1; then
   strip "$rootfs_dir/System/Init/MixtarRVS" 2>/dev/null || true
 fi
+
+reuse_boot_bin="${MIXTAR_REUSE_BOOT_BIN:-}"
+if [[ -n "$reuse_boot_bin" ]]; then
+  reuse_boot_bin="$(readlink -f "$reuse_boot_bin")"
+  case "$reuse_boot_bin" in
+    "$out_dir"/*) ;;
+    *)
+      printf 'ail-native-build: refusing MixtarBoot reuse outside Generated: %s\n' "$reuse_boot_bin" >&2
+      exit 1
+      ;;
+  esac
+  if [[ ! -f "$reuse_boot_bin" || ! -x "$reuse_boot_bin" ]]; then
+    printf 'ail-native-build: reusable MixtarBoot is not executable: %s\n' "$reuse_boot_bin" >&2
+    exit 1
+  fi
+  install -m 0755 "$reuse_boot_bin" "$rootfs_dir/System/Init/MixtarBoot"
+  printf 'ail-native-build: reused validated MixtarBoot: %s\n' "$reuse_boot_bin"
+else
+  python3 "$ailang_root/ailang.py" "$ail_boot_src" --check
+  python3 "$ailang_root/ailang.py" "$ail_boot_src" --effect-policy
+  python3 "$ailang_root/ailang.py" "$ail_boot_src" --emit-c -o "$generated_boot_c"
+  boot_temp_c="${TMPDIR:-/tmp}/mixtar-boot.$$.c"
+  boot_temp_bin="${TMPDIR:-/tmp}/MixtarBoot.$$.bin"
+  cp "$generated_boot_c" "$boot_temp_c"
+  if ! "$cc_bin" "${cflags[@]}" -o "$boot_temp_bin" "$boot_temp_c" "${ldflags[@]}"; then
+    rm -f -- "$boot_temp_c" "$boot_temp_bin"
+    exit 1
+  fi
+  install -m 0755 "$boot_temp_bin" "$rootfs_dir/System/Init/MixtarBoot"
+  rm -f -- "$boot_temp_c" "$boot_temp_bin"
+fi
+if command -v strip >/dev/null 2>&1; then
+  strip "$rootfs_dir/System/Init/MixtarBoot" 2>/dev/null || true
+fi
+[ -x "$rootfs_dir/System/Init/MixtarBoot" ] || {
+  printf 'ail-native-build: missing MixtarBoot handoff\n' >&2
+  exit 1
+}
+build_boot_initramfs
 
 if [[ ! -f "$console_setup_src" ]]; then
   printf 'ail-native-build: missing ConsoleSetup source: %s\n' "$console_setup_src" >&2
@@ -1462,6 +1544,7 @@ build_networking_mvp
 ) > "$image"
 
 printf 'ail-native-build: wrote %s\n' "$image"
+printf 'ail-native-build: wrote %s\n' "$boot_image"
 printf 'ail-native-build: root %s\n' "$rootfs_dir"
 file "$rootfs_dir/System/Init/MixtarRVS"
 ldd "$rootfs_dir/System/Init/MixtarRVS" 2>&1 || true

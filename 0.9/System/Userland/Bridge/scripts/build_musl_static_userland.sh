@@ -12,7 +12,7 @@ python3 - <<'PY'
 from pathlib import Path
 import re
 
-src = Path("System/Userland/OpenBSD/Source/lib/libc/gen/fts.c")
+src = Path("Server/Userland/Toolkit/OpenBSD/src/lib/libc/gen/fts.c")
 out = Path("out/musl-cc-wrapper/build/fts_musl.c")
 text = src.read_text()
 text = text.replace(
@@ -56,7 +56,7 @@ exec musl-gcc -static -L"$wrap_dir/lib" "$@"
 SH
 chmod +x "$wrap/cc"
 
-python3 System/Userland/Bridge/scripts/mixtarrvs_musl_toolkit.py package all >/dev/null
+python3 Server/Userland/Toolkit/Bridge/scripts/mixtarrvs_musl_toolkit.py package all >/dev/null
 python3 - <<'PY'
 from pathlib import Path
 

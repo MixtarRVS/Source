@@ -66,6 +66,8 @@ const int MI_DEV_CONSOLE = 1281
 const int MI_DEV_PTMX = 1282
 const int TARGET_TEXT = 0
 const int TARGET_SMOKE = 1
+const int TARGET_GRAPHICAL = 2
+const int TARGET_GRAPHICAL_SMOKE = 3
 const int TARGET_EMERGENCY = 4
 const int MI_SIGINT = 2
 const int MI_SIGHUP = 1
@@ -184,10 +186,12 @@ const string MI_COMPAT_ENV_TERM = "TERM=linux"
 const string MI_COMPAT_ENV_LANG = "LANG=C.UTF-8"
 const string MI_COMPAT_ENV_LC_CTYPE = "LC_CTYPE=C.UTF-8"
 const string MI_TOOLS_ENV_PATH = "PATH=/System/Userland"
-const string MI_SESSION_ENV_PATH = "PATH=/System/Shells:/System/Userland"
+const string MI_SESSION_ENV_PATH = "PATH=/System/Shells/zsh.apx/Program:/System/Userland"
+const string MI_SESSION_ENV_ZDOTDIR = "ZDOTDIR=/System/Shells/zsh.apx/Resources/Configuration"
+const string MI_SESSION_ENV_TERMINFO = "TERMINFO=/System/Shells/zsh.apx/Resources/Terminfo"
 const string MI_SESSION_INTERACTIVE_ARG = "-i"
-const string MI_NETWORKING_ENV_PATH = "PATH=/System/Networking/SSH/bin:/System/Networking/SSH/sbin:/System/Networking/Core:/System/Shells:/System/Userland"
-const string MI_NETWORKING_ENV_LD = "LD_LIBRARY_PATH=/System/Networking/SSH/Runtime:/System/Networking/Core/Runtime:/System/Shells/Runtime"
+const string MI_NETWORKING_ENV_PATH = "PATH=/System/Networking/SSH/bin:/System/Networking/SSH/sbin:/System/Networking/Core:/System/Shells/zsh.apx/Program:/System/Userland"
+const string MI_NETWORKING_ENV_LD = "LD_LIBRARY_PATH=/System/Networking/SSH/Runtime:/System/Networking/Core/Runtime:/System/Shells/zsh.apx/Runtime"
 const string MI_USERS_PREFIX = "/Users/"
 const string MI_ENV_HOME_PREFIX = "HOME="
 const string MI_ENV_USER_PREFIX = "USER="
@@ -296,6 +300,8 @@ const int LEN_PID1 = 12
 const int LEN_IMPL = 29
 const int LEN_TARGET_TEXT = 19
 const int LEN_TARGET_SMOKE = 20
+const int LEN_TARGET_GRAPHICAL = 24
+const int LEN_TARGET_GRAPHICAL_SMOKE = 30
 const int LEN_TARGET_EMERGENCY = 24
 const int LEN_VERSION = 12
 const int LEN_STAGE = 22
@@ -307,6 +313,8 @@ const int LEN_TOOLKIT_FAILED = 14
 const int LEN_TOOLKIT_ECHO_OK = 16
 const int LEN_TOOLKIT_ECHO_FAILED = 20
 const int LEN_TOOLKIT_ECHO_TEXT = 29
+const int LEN_MSH_READY = 9
+const int LEN_MSH_DEFERRED = 12
 const int LEN_BOOT_OK = 14
 const int LEN_BOOT_FAILED = 18
 const int LEN_POWEROFF = 36
@@ -318,6 +326,38 @@ const int LEN_CONSOLE_START = 36
 const int LEN_CONSOLE_FORK_FAILED = 24
 const int LEN_CONSOLE_RETURNED = 21
 const int LEN_EMERGENCY = 32
+const int LEN_DESKTOP_UNAVAILABLE = 27
+const int LEN_DESKTOP_FAILED = 29
+const int LEN_DESKTOP_STARTING_LABWC = 23
+const int LEN_DESKTOP_WAYLAND_OK = 19
+const int LEN_DESKTOP_WAYLAND_FAILED = 23
+const int LEN_DESKTOP_PANEL_MISSING = 22
+const int LEN_DESKTOP_PANEL_STARTING = 23
+const int LEN_DESKTOP_PANEL_OK = 17
+const int LEN_DESKTOP_PANEL_FAILED = 21
+const int LEN_DESKTOP_PANEL_STOPPED = 22
+const int LEN_DESKTOP_TERMINAL_MISSING = 25
+const int LEN_DESKTOP_TERMINAL_OK = 20
+const int LEN_DESKTOP_TERMINAL_FAILED = 24
+const int LEN_DESKTOP_TERMINAL_STOPPED = 25
+const int LEN_DESKTOP_DBUS_MISSING = 21
+const int LEN_DESKTOP_DBUS_STARTING = 22
+const int LEN_DESKTOP_DBUS_OK = 16
+const int LEN_DESKTOP_DBUS_FAILED = 20
+const int LEN_DESKTOP_DBUS_STOPPED = 21
+const int LEN_DESKTOP_X11_OK = 21
+const int LEN_DESKTOP_X11_FAILED = 25
+const int LEN_DESKTOP_X11_MISSING = 35
+const int LEN_DESKTOP_XAUTH_OK = 17
+const int LEN_DESKTOP_XAUTH_FAILED = 21
+const int LEN_DESKTOP_XAUTH_MISSING = 28
+const int LEN_DESKTOP_SESSION_READY = 22
+const int LEN_DESKTOP_LABWC_MISSING = 22
+const int LEN_DESKTOP_XWAYLAND_MISSING = 25
+const int LEN_DESKTOP_LABWC_STOPPED = 22
+const int LEN_AILANG_UI_SMOKE_OK = 19
+const int LEN_AILANG_UI_SMOKE_FAILED = 23
+const int LEN_AILANG_UI_SMOKE_MISSING = 24
 record MiTimespec then
     int tv_sec
     int tv_nsec

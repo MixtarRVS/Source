@@ -37,7 +37,7 @@ void toolkit_build_usage():
 end
 
 int toolkit_upstream_integrity(mode: string):
-    prefix = "" + "wsl.exe -d Debian -- bash System/Userland/Bridge/scripts/upstream_integrity.sh "
+    prefix = "" + "wsl.exe -d Debian -- bash Server/Userland/Toolkit/Bridge/scripts/upstream_integrity.sh "
     cmd = prefix + mode
     dealloc(prefix)
     rc = system(cmd)
@@ -46,7 +46,7 @@ int toolkit_upstream_integrity(mode: string):
 end
 
 int toolkit_musl_target(action: string, tool: string):
-    prefix = "" + "python System/Userland/Bridge/scripts/mixtarrvs_musl_toolkit.py "
+    prefix = "" + "python Server/Userland/Toolkit/Bridge/scripts/mixtarrvs_musl_toolkit.py "
     with_action = prefix + action
     dealloc(prefix)
     with_space = with_action + " "
@@ -59,8 +59,8 @@ int toolkit_musl_target(action: string, tool: string):
 end
 
 int toolkit_prepare_libc_generated_dir():
-    if file_exists("System/Libraries/LibC/Generated") == 0 then
-        mkdir("System/Libraries/LibC/Generated")
+    if file_exists("Server/Runtime/LibC/Generated") == 0 then
+        mkdir("Server/Runtime/LibC/Generated")
     end
     return 0
 end
@@ -80,15 +80,15 @@ int toolkit_emit_libc_c(source: string, output: string):
 end
 
 int toolkit_prepare_runtime_sources(tool: string):
-    base_rc = toolkit_emit_libc_c("System/Libraries/LibC/Source/bsd_compat.ail", "System/Libraries/LibC/Generated/bsd_compat.c")
+    base_rc = toolkit_emit_libc_c("Server/Runtime/LibC/Source/bsd_compat.ail", "Server/Runtime/LibC/Generated/bsd_compat.c")
     if base_rc != 0 then
         return base_rc
     end
     if tool == "df" then
-        return toolkit_emit_libc_c("System/Libraries/LibC/Source/df_raw_stubs.ail", "System/Libraries/LibC/Generated/df_raw_stubs.c")
+        return toolkit_emit_libc_c("Server/Runtime/LibC/Source/df_raw_stubs.ail", "Server/Runtime/LibC/Generated/df_raw_stubs.c")
     end
     if tool == "sort" then
-        return toolkit_emit_libc_c("System/Libraries/LibC/Source/md5_end.ail", "System/Libraries/LibC/Generated/md5_end.c")
+        return toolkit_emit_libc_c("Server/Runtime/LibC/Source/md5_end.ail", "Server/Runtime/LibC/Generated/md5_end.c")
     end
     return 0
 end
@@ -116,17 +116,17 @@ int toolkit_status_one(tool: string):
     failures = toolkit_require(src, tool)
     dealloc(src)
     if tool == "cp" then
-        failures = failures + toolkit_require("System/Userland/FreeBSD/Source/bin/cp/utils.c", "cp utils.c")
+        failures = failures + toolkit_require("Server/Userland/Toolkit/FreeBSD/freebsd-src/bin/cp/utils.c", "cp utils.c")
     end
     if tool == "ls" then
-        failures = failures + toolkit_require("System/Userland/FreeBSD/Source/bin/ls/cmp.c", "ls cmp.c")
-        failures = failures + toolkit_require("System/Userland/FreeBSD/Source/bin/ls/print.c", "ls print.c")
-        failures = failures + toolkit_require("System/Userland/FreeBSD/Source/bin/ls/util.c", "ls util.c")
+        failures = failures + toolkit_require("Server/Userland/Toolkit/FreeBSD/freebsd-src/bin/ls/cmp.c", "ls cmp.c")
+        failures = failures + toolkit_require("Server/Userland/Toolkit/FreeBSD/freebsd-src/bin/ls/print.c", "ls print.c")
+        failures = failures + toolkit_require("Server/Userland/Toolkit/FreeBSD/freebsd-src/bin/ls/util.c", "ls util.c")
     end
     if tool == "diff3" then
-        failures = failures + toolkit_require("System/Userland/Bridge/scripts/diff3", "diff3 shell wrapper")
+        failures = failures + toolkit_require("Server/Userland/Toolkit/Bridge/scripts/diff3", "diff3 shell wrapper")
     end
-    failures = failures + toolkit_require("System/Userland/Bridge/include/capsicum_helpers.h", "Bridge include/capsicum_helpers.h")
+    failures = failures + toolkit_require("Server/Userland/Toolkit/Bridge/include/capsicum_helpers.h", "Bridge include/capsicum_helpers.h")
     return failures
 end
 

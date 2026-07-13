@@ -32,7 +32,8 @@ for required in \
     /System/Userland/chmod \
     /System/Userland/cp \
     /System/Userland/mkdir \
-    /System/Userland/rm
+    /System/Userland/rm \
+    /System/Userland/sed
 do
     if [[ ! -x $required ]]; then
         print -u2 -- "build-zsh-musl: missing required tool: $required"
@@ -81,6 +82,11 @@ $gmake install DESTDIR="$ncurses_root" \
 
 ncurses_prefix=$ncurses_root/System/Shells/zsh.apx/Resources/Ncurses
 cd "$zsh_src"
+for source_file in Src/init.c Src/exec.c Src/Zle/zle_main.c Src/Modules/watch.c; do
+    /System/Userland/sed -i \
+        's#/dev/null#/System/Devices/null#g' \
+        "$source_file"
+done
 CC="$CC" AR="$AR" RANLIB="$RANLIB" LD="$LD" \
 CFLAGS='-O3 -fstack-protector-strong -D_FORTIFY_SOURCE=2 -Wall -Wextra' \
 CPPFLAGS="-I$ncurses_prefix/include" \
@@ -98,7 +104,8 @@ CONFIG_SHELL=/bin/sh SHELL=/bin/sh \
     --infodir=/System/Shells/zsh.apx/Resources/Documentation/info \
     --enable-fndir=/System/Shells/zsh.apx/Resources/Functions \
     --disable-dynamic --disable-dynamic-nss --enable-multibyte \
-    --enable-etcdir=/System/Shells --enable-zshenv=/System/Shells/zshenv
+    --enable-etcdir=/System/Shells/zsh.apx/Resources/Configuration \
+    --enable-zshenv=/System/Shells/zsh.apx/Resources/Configuration/.zshenv
 $gmake -j2 SHELL=/bin/sh CONFIG_SHELL=/bin/sh
 $gmake install DESTDIR="$stage"
 

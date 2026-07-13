@@ -25,9 +25,9 @@ end
 
 int echo_bridge_status():
     failures = 0
-    failures = failures + echo_bridge_require("System/Userland/FreeBSD/Source/bin/echo/echo.c", "FreeBSD echo.c mirror")
-    failures = failures + echo_bridge_require("System/Userland/Bridge/include/capsicum_helpers.h", "Capsicum compatibility shim")
-    failures = failures + echo_bridge_require("System/Userland/Manifests/freebsd-src.json", "FreeBSD mirror manifest")
+    failures = failures + echo_bridge_require("Server/Userland/Toolkit/FreeBSD/freebsd-src/bin/echo/echo.c", "FreeBSD echo.c mirror")
+    failures = failures + echo_bridge_require("Server/Userland/Toolkit/Bridge/include/capsicum_helpers.h", "Capsicum compatibility shim")
+    failures = failures + echo_bridge_require("Server/Userland/Manifests/freebsd-src.json", "FreeBSD mirror manifest")
     if failures == 0 then
         print "echo-bridge: ready for strict translated build planning"
         return 0
@@ -38,20 +38,20 @@ end
 
 string echo_bridge_compile_command():
     cmd = "" + "cc -std=c23 -Wall -Wextra -Werror -pedantic -D_GNU_SOURCE -D_DEFAULT_SOURCE "
-    with_include = cmd + "-I System/Userland/Bridge/include"
+    with_include = cmd + "-I Server/Userland/Toolkit/Bridge/include"
     dealloc(cmd)
     with_define = with_include + " -DMIXTAR_BRIDGE=1 "
     dealloc(with_include)
-    with_out = with_define + "-o System/Userland/Generated/targets/linux-x64/bin/echo"
+    with_out = with_define + "-o Server/Userland/Generated/targets/linux-x64/bin/echo"
     dealloc(with_define)
-    full = with_out + " System/Userland/FreeBSD/Source/bin/echo/echo.c"
+    full = with_out + " Server/Userland/Toolkit/FreeBSD/freebsd-src/bin/echo/echo.c"
     dealloc(with_out)
     return full
 end
 
 string echo_bridge_wsl_command():
     compile = echo_bridge_compile_command()
-    prefix = "" + "wsl.exe -d Debian -- bash -lc \"mkdir -p System/Userland/Generated/targets/linux-x64/bin && "
+    prefix = "" + "wsl.exe -d Debian -- bash -lc \"mkdir -p Server/Userland/Generated/targets/linux-x64/bin && "
     body = prefix + compile
     dealloc(prefix)
     full = body + "\""
@@ -79,7 +79,7 @@ string echo_bridge_gap_report():
     dealloc(body7)
     body9 = body8 + "- `_GNU_SOURCE` / `_DEFAULT_SOURCE`: required so strict Linux libc headers expose `IOV_MAX` used by FreeBSD `echo.c`.\n\n"
     dealloc(body8)
-    body10 = body9 + "Generated target:\n\n```text\nSystem/Userland/Generated/targets/linux-x64/bin/echo\n```\n\n"
+    body10 = body9 + "Generated target:\n\n```text\nServer/Userland/Generated/targets/linux-x64/bin/echo\n```\n\n"
     dealloc(body9)
     body11 = body10 + "Strict translated build command:\n\n```sh\n"
     dealloc(body10)
@@ -107,7 +107,7 @@ string echo_bridge_build_plan():
     dealloc(body)
     body3 = body2 + "The wrapper does not contain FreeBSD `echo` logic. It points at the untouched source and the Mixtar Bridge ABI layer.\n\n"
     dealloc(body2)
-    body4 = body3 + "Generated target:\n\n```text\nSystem/Userland/Generated/targets/linux-x64/bin/echo\n```\n\n"
+    body4 = body3 + "Generated target:\n\n```text\nServer/Userland/Generated/targets/linux-x64/bin/echo\n```\n\n"
     dealloc(body3)
     body5 = body4 + "Linux command:\n\n```sh\n"
     dealloc(body4)
@@ -127,26 +127,26 @@ string echo_bridge_build_plan():
 end
 
 int echo_bridge_ensure_dirs():
-    if file_exists("System/Userland/Generated") == 0 then
-        mkdir("System/Userland/Generated")
+    if file_exists("Server/Userland/Generated") == 0 then
+        mkdir("Server/Userland/Generated")
     end
-    if file_exists("System/Userland/Generated/build") == 0 then
-        mkdir("System/Userland/Generated/build")
+    if file_exists("Server/Userland/Generated/build") == 0 then
+        mkdir("Server/Userland/Generated/build")
     end
-    if file_exists("System/Userland/Generated/build/echo") == 0 then
-        mkdir("System/Userland/Generated/build/echo")
+    if file_exists("Server/Userland/Generated/build/echo") == 0 then
+        mkdir("Server/Userland/Generated/build/echo")
     end
-    if file_exists("System/Userland/Generated/reports") == 0 then
-        mkdir("System/Userland/Generated/reports")
+    if file_exists("Server/Userland/Generated/reports") == 0 then
+        mkdir("Server/Userland/Generated/reports")
     end
-    if file_exists("System/Userland/Generated/targets") == 0 then
-        mkdir("System/Userland/Generated/targets")
+    if file_exists("Server/Userland/Generated/targets") == 0 then
+        mkdir("Server/Userland/Generated/targets")
     end
-    if file_exists("System/Userland/Generated/targets/linux-x64") == 0 then
-        mkdir("System/Userland/Generated/targets/linux-x64")
+    if file_exists("Server/Userland/Generated/targets/linux-x64") == 0 then
+        mkdir("Server/Userland/Generated/targets/linux-x64")
     end
-    if file_exists("System/Userland/Generated/targets/linux-x64/bin") == 0 then
-        mkdir("System/Userland/Generated/targets/linux-x64/bin")
+    if file_exists("Server/Userland/Generated/targets/linux-x64/bin") == 0 then
+        mkdir("Server/Userland/Generated/targets/linux-x64/bin")
     end
     return 0
 end
@@ -159,8 +159,8 @@ int echo_bridge_write_plan():
     echo_bridge_ensure_dirs()
     report = echo_bridge_gap_report()
     plan = echo_bridge_build_plan()
-    report_rc = write_file("System/Userland/Generated/reports/echo-gap.md", report)
-    plan_rc = write_file("System/Userland/Generated/build/echo/BUILD_PLAN.md", plan)
+    report_rc = write_file("Server/Userland/Generated/reports/echo-gap.md", report)
+    plan_rc = write_file("Server/Userland/Generated/build/echo/BUILD_PLAN.md", plan)
     dealloc(report, plan)
     if report_rc == 0 then
         print "echo-bridge: failed to write gap report"
@@ -188,8 +188,8 @@ int echo_bridge_build_wsl():
         print "echo-bridge: WSL build failed"
         return rc
     end
-    if file_exists("System/Userland/Generated/targets/linux-x64/bin/echo") == 1 then
-        print "echo-bridge: wrote System/Userland/Generated/targets/linux-x64/bin/echo"
+    if file_exists("Server/Userland/Generated/targets/linux-x64/bin/echo") == 1 then
+        print "echo-bridge: wrote Server/Userland/Generated/targets/linux-x64/bin/echo"
         return 0
     end
     print "echo-bridge: WSL build exited cleanly but output is missing"

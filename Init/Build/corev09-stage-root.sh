@@ -10,6 +10,7 @@ script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 repo_root=$(realpath "$script_dir/../../..")
 root=$(realpath "$1")
 base_root="$repo_root/Server/Rootfs/Generated/corev07-root"
+native_root="${MIXTAR_COREV09_NATIVE_ROOT:-$repo_root/Server/Rootfs/Generated/ail-native-initramfs-root}"
 inputs="${MIXTAR_COREV09_INPUTS:-$repo_root/out/server/corev09-inputs}"
 openbsd_userland="$inputs/OpenBSD/7.9/Userland"
 updaters="$inputs/Updaters"
@@ -17,8 +18,11 @@ compilers="$inputs/Compilers"
 base_libraries="$inputs/Libraries/Base"
 cares="$inputs/Libraries/CAres/1.34.8"
 curl="$inputs/Userland/curl"
+gpgv="$inputs/Userland/gpgv"
 zsh_archive="$inputs/Shells/zsh-5.9.2.apx.tar"
 source_config="$inputs/Configuration/Source.config"
+ca_bundle="$inputs/Configuration/TLS/cacert.pem"
+ca_bundle_sha256="$inputs/Configuration/TLS/cacert.pem.sha256"
 
 fail() {
     echo "corev09-stage: $*" >&2
@@ -41,8 +45,16 @@ for required in \
     "$cares/lib/libcares.a" \
     "$cares/include/ares.h" \
     "$curl" \
+    "$gpgv" \
     "$zsh_archive" \
     "$source_config" \
+    "$ca_bundle" \
+    "$ca_bundle_sha256" \
+    "$updaters/mixtar-sha256" \
+    "$native_root/System/Init/MixtarRVS" \
+    "$native_root/System/Networking/start-networking" \
+    "$native_root/System/Networking/Core/mixtar-devices" \
+    "$native_root/System/Networking/WiFi/mixtar-wifi-service" \
     "$repo_root/Server/Updates/Schema/Updates.schema.sql" \
     "$repo_root/Server/Updates/Schema/Updates.seed.sql" \
     "$repo_root/Server/Updates/Trust/MixtarRVS-release-keyring.gpg"
@@ -61,6 +73,9 @@ copy_tree() {
 mkdir -p \
     "$root/Applications" \
     "$root/System" \
+    "$root/System/Devices" \
+    "$root/System/Hardware" \
+    "$root/System/Process" \
     "$root/Temporary" \
     "$root/Users" \
     "$root/Volumes"
@@ -69,6 +84,14 @@ for system_part in Init Drivers EFI Kernel Logs Networking Resources Runtime Sec
     copy_tree "$base_root/System/$system_part" "$root/System/$system_part"
 done
 copy_tree "$base_root/System/Configuration" "$root/System/Configuration"
+mkdir -p "$root/System/Configuration/TLS"
+install -m 0644 "$ca_bundle" "$root/System/Configuration/TLS/cacert.pem"
+install -m 0644 "$ca_bundle_sha256" \
+    "$root/System/Configuration/TLS/cacert.pem.sha256"
+copy_tree "$native_root/System/Networking" "$root/System/Networking"
+install -m 0755 "$native_root/System/Init/MixtarRVS" "$root/System/Init/MixtarRVS"
+install -m 0755 "$native_root/System/Networking/start-networking" \
+    "$root/System/Networking/start-networking"
 
 rm -rf -- "$root/System/UI"
 find "$root/Applications" -mindepth 1 -maxdepth 1 -exec rm -rf -- {} +
@@ -109,6 +132,7 @@ for tool in lex m4 nm pkgconf rpcgen yacc; do
 done
 copy_tree "$updaters" "$root/System/Userland"
 install -m 0755 "$curl" "$root/System/Userland/curl"
+install -m 0755 "$gpgv" "$root/System/Userland/gpgv"
 
 for helper in admin exit-admin network security system; do
     if [ -f "$base_root/System/Userland/$helper" ]; then
@@ -116,10 +140,17 @@ for helper in admin exit-admin network security system; do
     fi
 done
 for helper in reboot poweroff; do
-    native_helper="$repo_root/Server/Rootfs/Generated/ail-native-initramfs-root/System/Terminal/ZSH/$helper"
+    native_helper="$native_root/System/Terminal/ZSH/$helper"
     [ -x "$native_helper" ] || fail "missing native lifecycle helper: $native_helper"
     install -m 0755 "$native_helper" "$root/System/Userland/$helper"
 done
+
+command -v setcap >/dev/null 2>&1 || fail "setcap is required to stage native ping capability"
+chown -R 0:0 "$root/System/Userland"
+chmod -R go-w "$root/System/Userland"
+[ -x "$root/System/Userland/ping" ] || fail "OpenBSD ping is missing from native userland"
+chmod 0755 "$root/System/Userland/ping"
+setcap cap_net_raw=ep "$root/System/Userland/ping"
 
 rm -rf -- "$root/System/Shells"
 mkdir -p "$root/System/Shells"
@@ -156,7 +187,7 @@ chmod 0644 "$updates_db"
 
 kernel_stage=${MIXTAR_COREV09_KERNEL_STAGE:-"$repo_root/out/server/kernel-stage-0.9"}
 kernel_state_db=${MIXTAR_COREV09_KERNEL_DB:-"$repo_root/out/server/Updates.config.0.9-kernel-build"}
-initramfs_input=${MIXTAR_COREV09_INITRAMFS:-"$repo_root/out/server/kernel-build-inputs-0.9/Runtime/Build/MixtarRVS-initramfs.cpio"}
+initramfs_input=${MIXTAR_COREV09_INITRAMFS:-"$repo_root/Server/Rootfs/Generated/mixtar-boot-initramfs.cpio"}
 
 kernel_stage=$(realpath "$kernel_stage")
 kernel_state_db=$(realpath "$kernel_state_db")
@@ -170,8 +201,8 @@ case "$kernel_state_db" in
     *) fail "kernel state database must remain under out/server" ;;
 esac
 case "$initramfs_input" in
-    "$repo_root"/out/server/*) ;;
-    *) fail "initramfs input must remain under out/server" ;;
+    "$repo_root"/out/server/*|"$repo_root"/Server/Rootfs/Generated/mixtar-boot-initramfs.cpio) ;;
+    *) fail "initramfs input is outside approved Mixtar build locations" ;;
 esac
 
 kernel_versions=$(find "$kernel_stage/System/Kernel/Linux/RT" \
@@ -214,6 +245,7 @@ install -m 0644 "$initramfs_input" \
 
 python3 - "$root" <<'PY'
 import pathlib
+import shlex
 import sqlite3
 import sys
 import time
@@ -278,6 +310,124 @@ try:
         ("/System/Shells/zsh.apx/Program/zsh", default_user),
     )
 
+    zsh_bundle = root / "System/Shells/zsh.apx"
+    zsh_configuration = zsh_bundle / "Resources/Configuration"
+    zsh_configuration.mkdir(parents=True, exist_ok=True)
+    zsh_settings = {
+        "shell.path": "/System/Shells/zsh.apx/Program/zsh",
+        "runtime.path": "/System/Shells/zsh.apx/Runtime",
+        "path": "/System/Shells/zsh.apx/Program:/System/Userland",
+        "terminfo.path": "/System/Shells/zsh.apx/Resources/Terminfo",
+        "zdotdir": "/System/Shells/zsh.apx/Resources/Configuration",
+        "temporary.path": "/Temporary",
+        "temporary.prefix": "/Temporary/zsh",
+        "cache.path": "/Temporary/ZSH",
+        "grml.cache.path": "/Temporary/ZSH",
+        "startup.global": "/System/Shells/zsh.apx/Resources/Configuration/.zshenv",
+        "startup.interactive": "/System/Shells/zsh.apx/Resources/Configuration/.zshrc",
+        "startup.grml": "/System/Shells/zsh.apx/Resources/Configuration/grml.zsh",
+        "history.file": "${HOME}/.zsh_history",
+        "prompt": "%F{green}${USER:-User}@${MIXTAR_SYSTEM_NAME:-MixtarRVS}%f:%F{blue}%~%f> ",
+        "locale": "C.UTF-8",
+        "keyboard.layout": "pl",
+    }
+    for zsh_database in (
+        root / "System/Configuration/ZSH/ZSH.config",
+        zsh_bundle / "zsh.config",
+    ):
+        zsh_database.parent.mkdir(parents=True, exist_ok=True)
+        zsh_db = sqlite3.connect(zsh_database)
+        try:
+            zsh_db.execute(
+                "CREATE TABLE IF NOT EXISTS setting("
+                "key TEXT PRIMARY KEY, value TEXT NOT NULL)"
+            )
+            zsh_db.executemany(
+                "INSERT INTO setting(key, value) VALUES (?, ?) "
+                "ON CONFLICT(key) DO UPDATE SET value=excluded.value",
+                zsh_settings.items(),
+            )
+            zsh_db.commit()
+            if zsh_db.execute("PRAGMA integrity_check").fetchone()[0] != "ok":
+                raise RuntimeError(f"invalid ZSH database: {zsh_database}")
+        finally:
+            zsh_db.close()
+
+    grml_source = zsh_bundle / "Resources/Grml/etc/zsh/zshrc"
+    if not grml_source.is_file():
+        raise SystemExit("verified Grml zshrc is missing from zsh.apx")
+    grml_text = grml_source.read_text(encoding="utf-8", errors="surrogateescape")
+    for old, new in (
+        ("/dev/null", "/System/Devices/null"),
+        ("/usr/share/grml/zsh", "/System/Shells/zsh.apx/Resources/Grml/usr_share_grml/zsh"),
+        ("/etc/grml", "/System/Shells/zsh.apx/Resources/Grml/etc/grml"),
+        ("/etc/zsh", "/System/Shells/zsh.apx/Resources/Grml/etc/zsh"),
+        ("/tmp/", "/Temporary/"),
+    ):
+        grml_text = grml_text.replace(old, new)
+    (zsh_configuration / "grml.zsh").write_text(
+        grml_text,
+        encoding="utf-8",
+        errors="surrogateescape",
+    )
+
+    zshenv_lines = (
+        f'export PATH="{zsh_settings["path"]}"',
+        f'export TERMINFO="{zsh_settings["terminfo.path"]}"',
+        f'export ZDOTDIR="{zsh_settings["zdotdir"]}"',
+        f'export TMPDIR="{zsh_settings["temporary.path"]}"',
+        f'export TMPPREFIX="{zsh_settings["temporary.prefix"]}"',
+        f'export ZSH_CACHE_DIR="{zsh_settings["cache.path"]}"',
+        f'export ZSH_COMPDUMP="{zsh_settings["cache.path"]}/.zcompdump"',
+        f'export GRML_COMP_CACHE_DIR="{zsh_settings["grml.cache.path"]}"',
+        'export TERM="${TERM:-linux}"',
+        'export LANG="${LANG:-C.UTF-8}"',
+        'export LC_CTYPE="${LC_CTYPE:-C.UTF-8}"',
+        'export MIXTAR_SYSTEM_NAME="${MIXTAR_SYSTEM_NAME:-MixtarRVS}"',
+    )
+    (zsh_configuration / ".zshenv").write_text(
+        "\n".join(zshenv_lines) + "\n",
+        encoding="utf-8",
+    )
+    prompt = shlex.quote(zsh_settings["prompt"])
+    zshrc_lines = (
+        'if [[ -n ${MIXTAR_GLOBAL_ZSHRC_LOADED:-} ]]; then return; fi',
+        'typeset -g MIXTAR_GLOBAL_ZSHRC_LOADED=1',
+        '[[ -d $ZSH_CACHE_DIR ]] || mkdir -p -- "$ZSH_CACHE_DIR"',
+        'fpath=(/System/Shells/zsh.apx/Resources/Functions $fpath)',
+        'if [[ -r /System/Shells/zsh.apx/Resources/Configuration/grml.zsh ]]; then',
+        '  source /System/Shells/zsh.apx/Resources/Configuration/grml.zsh',
+        'fi',
+        'autoload -Uz add-zsh-hook colors compinit',
+        'for mixtar_prompt_hook in prompt_grml_precmd prompt_grml-chroot_precmd prompt_grml-large_precmd; do',
+        '  add-zsh-hook -d precmd "$mixtar_prompt_hook" 2>/System/Devices/null',
+        'done',
+        'unset mixtar_prompt_hook',
+        'colors',
+        'compinit -D',
+        'bindkey -e',
+        'KEYTIMEOUT=5',
+        "bindkey '^?' backward-delete-char",
+        "bindkey '^H' backward-delete-char",
+        "bindkey '^[[3~' delete-char",
+        "bindkey '^[[A' up-line-or-history",
+        "bindkey '^[[B' down-line-or-history",
+        "bindkey '^[[C' forward-char",
+        "bindkey '^[[D' backward-char",
+        'setopt PROMPT_SUBST AUTO_CD AUTO_LIST AUTO_MENU COMPLETE_IN_WORD',
+        'setopt HIST_IGNORE_DUPS HIST_REDUCE_BLANKS INC_APPEND_HISTORY',
+        'HISTFILE="${HOME}/.zsh_history"',
+        'HISTSIZE=10000',
+        'SAVEHIST=10000',
+        f'PROMPT={prompt}',
+    )
+    (zsh_configuration / ".zshrc").write_text(
+        "\n".join(zshrc_lines) + "\n",
+        encoding="utf-8",
+    )
+    for generated_startup in zsh_configuration.iterdir():
+        generated_startup.chmod(0o644)
+
     updates_db = sqlite3.connect(
         root / "System/Configuration/Updates.config"
     )
@@ -297,6 +447,11 @@ try:
             "openbsd-userland",
             "build-passed",
             "OpenBSD-first source bridge output staged under /System/Userland",
+        ),
+        (
+            "gpgv-verifier",
+            "build-passed",
+            "source-built static musl OpenPGP verifier staged under /System/Userland",
         ),
     )
     for component_id, status, detail in completed_components:
@@ -465,6 +620,16 @@ fi
 if [ -f "$root/System/Networking/SSH/Root/etc/passwd" ]; then
     sed -i 's#/System/Shells/zsh#/System/Shells/zsh.apx/Program/zsh#g' \
         "$root/System/Networking/SSH/Root/etc/passwd"
+fi
+networking_service="$root/System/Networking/start-networking"
+if [ -f "$networking_service" ]; then
+    sed -i \
+        -e 's#/System/Terminal/ZSH/zsh#/System/Shells/zsh.apx/Program/zsh#g' \
+        -e 's#/System/Terminal/ZSH/Runtime#/System/Shells/zsh.apx/Runtime#g' \
+        -e 's#/System/Terminal/ZSH#/System/Shells/zsh.apx/Program#g' \
+        -e '1s|^#!/System/Shells/zsh$|#!/System/Shells/zsh.apx/Program/zsh|' \
+        "$networking_service"
+    chmod 0755 "$networking_service"
 fi
 
 find "$root/System/Userland" "$root/System/Tools" -type f \( \

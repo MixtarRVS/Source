@@ -19,6 +19,7 @@ fi
 zig=$1
 source_root=$2
 work=$3
+build_timeout=${MIXTAR_SHA256_BUILD_TIMEOUT:-90}
 
 for path in "$zig" "$source_root" "$work"; do
     case "$path" in
@@ -61,7 +62,7 @@ output_root="$work/stage/System/Userland"
 output="$output_root/mixtar-sha256"
 cache="$work/zig-cache"
 mkdir -p "$output_root" "$cache"
-ZIG_GLOBAL_CACHE_DIR="$cache" timeout 20 "$zig" cc \
+ZIG_GLOBAL_CACHE_DIR="$cache" timeout "$build_timeout" "$zig" cc \
     -target x86_64-linux-musl \
     -std=c23 \
     -O3 \

@@ -2,13 +2,13 @@
 // AILang entry point for rerunnable Toolkit coverage reporting.
 
 int toolkit_coverage_report():
-    if file_exists("System/Userland/Generated") == 0 then
-        mkdir("System/Userland/Generated")
+    if file_exists("Server/Userland/Generated") == 0 then
+        mkdir("Server/Userland/Generated")
     end
-    if file_exists("System/Userland/Generated/reports") == 0 then
-        mkdir("System/Userland/Generated/reports")
+    if file_exists("Server/Userland/Generated/reports") == 0 then
+        mkdir("Server/Userland/Generated/reports")
     end
-    cmd = "" + "python System/Userland/Bridge/scripts/toolkit_coverage.py"
+    cmd = "" + "python Server/Userland/Toolkit/Bridge/scripts/toolkit_coverage.py"
     rc = system(cmd)
     dealloc(cmd)
     return rc

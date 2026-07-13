@@ -3,7 +3,7 @@ set -euo pipefail
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repo_root="$(cd "$script_dir/../../.." && pwd)"
-out_dir="$repo_root/System/Rootfs/Generated"
+out_dir="$repo_root/Server/Rootfs/Generated"
 
 version="${MIXTAR_ZSH_VERSION:-5.9.2}"
 url="${MIXTAR_ZSH_URL:-https://www.zsh.org/pub/zsh-$version.tar.xz}"
@@ -11,11 +11,11 @@ work_dir="$out_dir/zsh-source"
 tarball="$work_dir/zsh-$version.tar.xz"
 src_dir="$work_dir/zsh-$version"
 stage_dir="${MIXTAR_ZSH_STAGE:-$out_dir/zsh-source-stage}"
-prefix="/System/Terminal/ZSH"
+prefix="/System/Shells/zsh.apx"
 
 mkdir -p "$work_dir"
 
-verified_archive="${MIXTAR_ZSH_ARCHIVE:-$repo_root/System/Shells/ZSH/$version/Dist/zsh-$version.tar.xz}"
+verified_archive="${MIXTAR_ZSH_ARCHIVE:-$repo_root/Server/Shells/ZSH/$version/Dist/zsh-$version.tar.xz}"
 if [[ -f "$verified_archive" ]]; then
   cp "$verified_archive" "$tarball"
 fi
@@ -68,21 +68,25 @@ fi
 rm -rf "$src_dir" "$stage_dir"
 tar -xJf "$tarball" -C "$work_dir"
 
+for source_file in Src/init.c Src/exec.c Src/Zle/zle_main.c Src/Modules/watch.c; do
+  sed -i 's#/dev/null#/System/Devices/null#g' "$src_dir/$source_file"
+done
+
 (
   cd "$src_dir"
   ./configure \
     --prefix="$prefix" \
-    --bindir="$prefix" \
-    --libdir="$prefix/Modules" \
-    --datadir="$prefix/Share" \
-    --mandir="$prefix/Documentation/man" \
-    --infodir="$prefix/Documentation/info" \
+    --bindir="$prefix/Program" \
+    --libdir="$prefix/Resources/Modules" \
+    --datadir="$prefix/Resources/Share" \
+    --mandir="$prefix/Resources/Documentation/man" \
+    --infodir="$prefix/Resources/Documentation/info" \
     --enable-function-subdirs \
-    --enable-fndir="$prefix/Functions" \
-    --enable-site-fndir="$prefix/Functions/Site" \
-    --enable-scriptdir="$prefix/Scripts" \
-        --enable-etcdir=/System/Shells \
-        --enable-zshenv=/System/Shells/zshenv \
+    --enable-fndir="$prefix/Resources/Functions" \
+    --enable-site-fndir="$prefix/Resources/Functions/Site" \
+    --enable-scriptdir="$prefix/Resources/Scripts" \
+    --enable-etcdir="$prefix/Resources/Configuration" \
+    --enable-zshenv="$prefix/Resources/Configuration/.zshenv" \
     --enable-multibyte
   perl -0pi -e 's/name=zsh\/termcap modfile=Src\/Modules\/termcap\.mdd link=\S+ auto=\S+ load=\S+/name=zsh\/termcap modfile=Src\/Modules\/termcap.mdd link=no auto=no load=no/' config.modules
   make -j"$(nproc)"
@@ -127,9 +131,9 @@ if [[ ! -f "$runtime_dir/ld-linux-x86-64.so.2" ]]; then
   exit 1
 fi
 
-if [[ -d "$stage_dir$prefix/Functions" ]]; then
-  find "$stage_dir$prefix/Functions" -type f -name '*.zwc' -delete
-  find "$stage_dir$prefix/Functions" -type f -exec sed -i 's#/dev/null#/System/Devices/null#g' {} +
+if [[ -d "$stage_dir$prefix/Resources/Functions" ]]; then
+  find "$stage_dir$prefix/Resources/Functions" -type f -name '*.zwc' -delete
+  find "$stage_dir$prefix/Resources/Functions" -type f -exec sed -i 's#/dev/null#/System/Devices/null#g' {} +
 fi
 
 if command -v strip >/dev/null 2>&1; then
@@ -156,7 +160,7 @@ version=$version
 source=$url
 prefix=$prefix
 runtime=$prefix/Runtime
-config=/System/Configuration/Settings/ZSH/ZSH.config
+config=/System/Configuration/ZSH/ZSH.config
 EOF
 
 printf 'zsh-build: staged %s\n' "$stage_dir"

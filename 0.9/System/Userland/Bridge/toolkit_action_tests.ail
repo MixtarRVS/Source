@@ -4,15 +4,15 @@
 import toolkit_core
 
 string toolkit_action_test_path():
-    return "" + "System/Userland/Generated/tests/toolkit-action-wsl.sh"
+    return "" + "Server/Userland/Generated/tests/toolkit-action-wsl.sh"
 end
 
 string toolkit_action_report_path():
-    return "" + "System/Userland/Generated/reports/toolkit-action-wsl.md"
+    return "" + "Server/Userland/Generated/reports/toolkit-action-wsl.md"
 end
 
 string toolkit_action_header():
-    return "" + "#!/usr/bin/env bash\nset +e\nexport LC_ALL=C\ncd /mnt/c/Users/V/source/repos/MixtarRVS || exit 99\nT=\"$PWD/System/Userland/Generated/targets/linux-x64/bin\"\nreport=\"$PWD/System/Userland/Generated/reports/toolkit-action-wsl.md\"\nroot=\"/tmp/mixtar-toolkit-action-$$\"\nfailures=0\nrm -rf \"$root\"\nmkdir -p \"$root\" \"$(dirname \"$report\")\"\ntrap 'rm -rf \"$root\"' EXIT\nprintf '# Toolkit WSL Action Test Report\\n\\n' > \"$report\"\nprintf 'Target dir: `%s`\\n\\n' \"$T\" >> \"$report\"\npass() { printf -- '- PASS %s\\n' \"$1\" >> \"$report\"; }\nfail() { printf -- '- FAIL %s\\n' \"$1\" >> \"$report\"; failures=$((failures + 1)); }\ncheck_file_eq() { label=\"$1\"; actual=\"$2\"; expected=\"$3\"; if cmp -s \"$actual\" \"$expected\"; then pass \"$label\"; else fail \"$label\"; printf '\\n## Diff for %s\\n\\n```diff\\n' \"$label\" >> \"$report\"; diff -u \"$expected\" \"$actual\" >> \"$report\" 2>&1; printf '\\n```\\n' >> \"$report\"; fi; }\ncheck_text_eq() { label=\"$1\"; actual=\"$2\"; expected=\"$3\"; if [ \"$actual\" = \"$expected\" ]; then pass \"$label\"; else fail \"$label expected=$expected actual=$actual\"; fi; }\nneed_tool() { if [ -x \"$T/$1\" ]; then pass \"target exists: $1\"; else fail \"missing target: $1\"; fi; }\n"
+    return "" + "#!/usr/bin/env bash\nset +e\nexport LC_ALL=C\ncd /mnt/c/Users/V/source/repos/MixtarRVS || exit 99\nT=\"$PWD/Server/Userland/Generated/targets/linux-x64/bin\"\nreport=\"$PWD/Server/Userland/Generated/reports/toolkit-action-wsl.md\"\nroot=\"/tmp/mixtar-toolkit-action-$$\"\nfailures=0\nrm -rf \"$root\"\nmkdir -p \"$root\" \"$(dirname \"$report\")\"\ntrap 'rm -rf \"$root\"' EXIT\nprintf '# Toolkit WSL Action Test Report\\n\\n' > \"$report\"\nprintf 'Target dir: `%s`\\n\\n' \"$T\" >> \"$report\"\npass() { printf -- '- PASS %s\\n' \"$1\" >> \"$report\"; }\nfail() { printf -- '- FAIL %s\\n' \"$1\" >> \"$report\"; failures=$((failures + 1)); }\ncheck_file_eq() { label=\"$1\"; actual=\"$2\"; expected=\"$3\"; if cmp -s \"$actual\" \"$expected\"; then pass \"$label\"; else fail \"$label\"; printf '\\n## Diff for %s\\n\\n```diff\\n' \"$label\" >> \"$report\"; diff -u \"$expected\" \"$actual\" >> \"$report\" 2>&1; printf '\\n```\\n' >> \"$report\"; fi; }\ncheck_text_eq() { label=\"$1\"; actual=\"$2\"; expected=\"$3\"; if [ \"$actual\" = \"$expected\" ]; then pass \"$label\"; else fail \"$label expected=$expected actual=$actual\"; fi; }\nneed_tool() { if [ -x \"$T/$1\" ]; then pass \"target exists: $1\"; else fail \"missing target: $1\"; fi; }\n"
 end
 
 string toolkit_action_requirements():

@@ -2,14 +2,14 @@
 // Upstream-derived edge-test generation for translated Toolkit tools.
 
 string toolkit_upstream_target(tool: string):
-    prefix = "" + "System/Userland/Generated/targets/linux-x64/bin/"
+    prefix = "" + "Server/Userland/Generated/targets/linux-x64/bin/"
     out = prefix + tool
     dealloc(prefix)
     return out
 end
 
 string toolkit_upstream_test_path(tool: string):
-    prefix = "" + "System/Userland/Generated/tests/"
+    prefix = "" + "Server/Userland/Generated/tests/"
     mid = prefix + tool
     dealloc(prefix)
     out = mid + "-freebsd-tests.sh"
@@ -18,7 +18,7 @@ string toolkit_upstream_test_path(tool: string):
 end
 
 string toolkit_upstream_test_report_path(tool: string):
-    prefix = "" + "System/Userland/Generated/reports/"
+    prefix = "" + "Server/Userland/Generated/reports/"
     mid = prefix + tool
     dealloc(prefix)
     out = mid + "-freebsd-tests.md"
@@ -38,27 +38,27 @@ end
 string toolkit_upstream_basis(tool: string):
     match tool then
         case "echo":
-            return "" + "System/Userland/FreeBSD/Source/bin/echo/tests/echo_test.sh"
+            return "" + "Server/Userland/Toolkit/FreeBSD/freebsd-src/bin/echo/tests/echo_test.sh"
         case "pwd":
-            if file_exists("System/Userland/OpenBSD/Source/bin/pwd/pwd.c") == 1 then
-                return "" + "System/Userland/OpenBSD/Source/bin/pwd/pwd.c"
+            if file_exists("Server/Userland/Toolkit/OpenBSD/src/bin/pwd/pwd.c") == 1 then
+                return "" + "Server/Userland/Toolkit/OpenBSD/src/bin/pwd/pwd.c"
             end
-            return "" + "System/Userland/FreeBSD/Source/bin/pwd/tests/pwd_test.sh"
+            return "" + "Server/Userland/Toolkit/FreeBSD/freebsd-src/bin/pwd/tests/pwd_test.sh"
         case "mkdir":
-            return "" + "System/Userland/FreeBSD/Source/bin/mkdir/tests/mkdir_test.sh"
+            return "" + "Server/Userland/Toolkit/FreeBSD/freebsd-src/bin/mkdir/tests/mkdir_test.sh"
         case "rmdir":
-            if file_exists("System/Userland/OpenBSD/Source/bin/rmdir/rmdir.c") == 1 then
-                return "" + "System/Userland/OpenBSD/Source/bin/rmdir/rmdir.c"
+            if file_exists("Server/Userland/Toolkit/OpenBSD/src/bin/rmdir/rmdir.c") == 1 then
+                return "" + "Server/Userland/Toolkit/OpenBSD/src/bin/rmdir/rmdir.c"
             end
-            return "" + "System/Userland/FreeBSD/Source/bin/rmdir/tests/rmdir_test.sh"
+            return "" + "Server/Userland/Toolkit/FreeBSD/freebsd-src/bin/rmdir/tests/rmdir_test.sh"
         case "cp":
-            return "" + "System/Userland/FreeBSD/Source/bin/cp/tests/cp_test.sh"
+            return "" + "Server/Userland/Toolkit/FreeBSD/freebsd-src/bin/cp/tests/cp_test.sh"
         case "ls":
-            return "" + "System/Userland/FreeBSD/Source/bin/ls/tests/ls_tests.sh"
+            return "" + "Server/Userland/Toolkit/FreeBSD/freebsd-src/bin/ls/tests/ls_tests.sh"
         case "mv":
-            return "" + "System/Userland/FreeBSD/Source/bin/mv/tests/mv_test.sh"
+            return "" + "Server/Userland/Toolkit/FreeBSD/freebsd-src/bin/mv/tests/mv_test.sh"
         case "rm":
-            return "" + "System/Userland/FreeBSD/Source/bin/rm/tests/rm_test.sh"
+            return "" + "Server/Userland/Toolkit/FreeBSD/freebsd-src/bin/rm/tests/rm_test.sh"
         case "domainname":
             return "" + "no mirrored upstream ATF script"
         case "hostname":
@@ -70,9 +70,9 @@ string toolkit_upstream_basis(tool: string):
         case "sync":
             return "" + "no mirrored upstream ATF script"
         case "chmod":
-            return "" + "System/Userland/FreeBSD/Source/bin/chmod/tests/chmod_test.sh"
+            return "" + "Server/Userland/Toolkit/FreeBSD/freebsd-src/bin/chmod/tests/chmod_test.sh"
         case "test":
-            return "" + "System/Userland/FreeBSD/Source/bin/test/tests/legacy_test.sh"
+            return "" + "Server/Userland/Toolkit/FreeBSD/freebsd-src/bin/test/tests/legacy_test.sh"
         default:
             return "" + "no mirrored upstream ATF script"
     end
@@ -110,7 +110,7 @@ string toolkit_upstream_test_script(tool: string):
     end
 
     if tool == "pwd" then
-        if file_exists("System/Userland/OpenBSD/Source/bin/pwd/pwd.c") == 1 then
+        if file_exists("Server/Userland/Toolkit/OpenBSD/src/bin/pwd/pwd.c") == 1 then
             body11 = body10 + "check_pwd_line() { label=\"$1\"; expected=\"$2\"; if printf '%s\\n' \"$expected\" | cmp -s /tmp/mixtar-upstream.out -; then pass \"$label\"; else fail \"$label output mismatch\"; fi; }\nroot=\"/tmp/mixtar-pwd-upstream-$$\"\nrm -rf \"$root\"\nmkdir -p \"$root/phy/baz\" || exit 98\nln -s phy \"$root/log\" || exit 98\ncd \"$root/log/baz\" || exit 98\nPWD=\"$root/log/baz\" \"$target\" -L >/tmp/mixtar-upstream.out 2>/tmp/mixtar-upstream.err; check_pwd_line 'openbsd pwd logical -L' \"$root/log/baz\"\nPWD=\"$root/log/baz\" \"$target\" -P -L >/tmp/mixtar-upstream.out 2>/tmp/mixtar-upstream.err; check_pwd_line 'openbsd pwd last option wins -P -L' \"$root/log/baz\"\nPWD=\"$root/log/baz\" \"$target\" >/tmp/mixtar-upstream.out 2>/tmp/mixtar-upstream.err; check_pwd_line 'openbsd pwd physical default' \"$root/phy/baz\"\nPWD=\"$root/log/baz\" \"$target\" -P >/tmp/mixtar-upstream.out 2>/tmp/mixtar-upstream.err; check_pwd_line 'openbsd pwd physical -P' \"$root/phy/baz\"\nPWD=\"$root/log/baz\" \"$target\" -L -P >/tmp/mixtar-upstream.out 2>/tmp/mixtar-upstream.err; check_pwd_line 'openbsd pwd last option wins -L -P' \"$root/phy/baz\"\nPWD=\"log/baz\" \"$target\" -L >/tmp/mixtar-upstream.out 2>/tmp/mixtar-upstream.err; check_pwd_line 'openbsd pwd rejects relative PWD' \"$root/phy/baz\"\nPWD=\"$root/log/./baz\" \"$target\" -L >/tmp/mixtar-upstream.out 2>/tmp/mixtar-upstream.err; check_pwd_line 'openbsd pwd rejects dotted PWD' \"$root/phy/baz\"\nPWD=\"$root/log/../log/baz\" \"$target\" -L >/tmp/mixtar-upstream.out 2>/tmp/mixtar-upstream.err; check_pwd_line 'openbsd pwd rejects dotdot PWD' \"$root/phy/baz\"\n\"$target\" extra >/tmp/mixtar-upstream.out 2>/tmp/mixtar-upstream.err; rc=$?; if [ \"$rc\" != 0 ] && grep -qi 'usage:' /tmp/mixtar-upstream.err; then pass 'openbsd pwd rejects extra operand'; else fail \"openbsd pwd extra operand rc=$rc\"; fi\nrm -rf \"$root\"\nprintf -- '\\nAutomation note: derived from OpenBSD pwd source behavior; default is physical, unlike current FreeBSD pwd.\\n' >> \"$report\"\nexit \"$failures\"\n"
             dealloc(body10)
             dealloc(target, report_path, basis)
@@ -130,7 +130,7 @@ string toolkit_upstream_test_script(tool: string):
     end
 
     if tool == "rmdir" then
-        if file_exists("System/Userland/OpenBSD/Source/bin/rmdir/rmdir.c") == 1 then
+        if file_exists("Server/Userland/Toolkit/OpenBSD/src/bin/rmdir/rmdir.c") == 1 then
             body11 = body10 + "check_openbsd_rmdir_usage() { label=\"$1\"; shift; \"$target\" \"$@\" >/tmp/mixtar-upstream.out 2>/tmp/mixtar-upstream.err; rc=$?; if [ \"$rc\" = 1 ] && grep -qi 'usage: rmdir' /tmp/mixtar-upstream.err; then pass \"$label\"; else fail \"$label rc=$rc missing-usage\"; fi; }\ncheck_openbsd_rmdir_usage 'openbsd rmdir -p requires directory operand' -p\ncheck_openbsd_rmdir_usage 'openbsd rmdir rejects unsupported -v' -v\ncheck_openbsd_rmdir_usage 'openbsd rmdir requires directory operand'\nprintf -- '\\nAutomation note: derived from OpenBSD rmdir source behavior; OpenBSD does not support FreeBSD rmdir -v and returns rc=1 for usage.\\n' >> \"$report\"\nexit \"$failures\"\n"
             dealloc(body10)
             dealloc(target, report_path, basis)

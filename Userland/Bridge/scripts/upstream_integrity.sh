@@ -2,10 +2,10 @@
 set -euo pipefail
 
 mode="${1:-verify}"
-manifest="System/Userland/Manifests/upstream-integrity.sha256"
+manifest="Server/Userland/Manifests/upstream-integrity.sha256"
 roots=(
-  "System/Userland/OpenBSD/Source"
-  "System/Userland/FreeBSD/Source"
+  "Server/Userland/Toolkit/OpenBSD/src"
+  "Server/Userland/Toolkit/FreeBSD/freebsd-src"
 )
 
 write_current_manifest() {

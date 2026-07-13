@@ -4,11 +4,11 @@
 import toolkit_core
 
 string toolkit_libc_test_path():
-    return "" + "System/Userland/Generated/tests/toolkit-libc-wsl.sh"
+    return "" + "Server/Userland/Generated/tests/toolkit-libc-wsl.sh"
 end
 
 string toolkit_libc_report_path():
-    return "" + "System/Userland/Generated/reports/toolkit-libc-wsl.md"
+    return "" + "Server/Userland/Generated/reports/toolkit-libc-wsl.md"
 end
 
 int toolkit_libc_run_ailang(source: string, mode: string, output: string):
@@ -44,35 +44,35 @@ int toolkit_libc_check_emit_one(source: string, generated_base: string):
 end
 
 int toolkit_libc_prepare_sources():
-    if file_exists("System/Libraries/LibC/Generated") == 0 then
-        mkdir("System/Libraries/LibC/Generated")
+    if file_exists("Server/Runtime/LibC/Generated") == 0 then
+        mkdir("Server/Runtime/LibC/Generated")
     end
 
-    rc = toolkit_libc_check_emit_one("System/Libraries/LibC/Source/unistd.ail", "System/Libraries/LibC/Generated/unistd")
+    rc = toolkit_libc_check_emit_one("Server/Runtime/LibC/Source/unistd.ail", "Server/Runtime/LibC/Generated/unistd")
     if rc != 0 then
         return rc
     end
-    rc = toolkit_libc_check_emit_one("System/Libraries/LibC/Source/df_raw_stubs.ail", "System/Libraries/LibC/Generated/df_raw_stubs")
+    rc = toolkit_libc_check_emit_one("Server/Runtime/LibC/Source/df_raw_stubs.ail", "Server/Runtime/LibC/Generated/df_raw_stubs")
     if rc != 0 then
         return rc
     end
-    rc = toolkit_libc_check_emit_one("System/Libraries/LibC/Source/md5_end.ail", "System/Libraries/LibC/Generated/md5_end")
+    rc = toolkit_libc_check_emit_one("Server/Runtime/LibC/Source/md5_end.ail", "Server/Runtime/LibC/Generated/md5_end")
     if rc != 0 then
         return rc
     end
-    rc = toolkit_libc_check_emit_one("System/Libraries/LibC/Source/string.ail", "System/Libraries/LibC/Generated/string")
+    rc = toolkit_libc_check_emit_one("Server/Runtime/LibC/Source/string.ail", "Server/Runtime/LibC/Generated/string")
     if rc != 0 then
         return rc
     end
-    rc = toolkit_libc_check_emit_one("System/Libraries/LibC/Source/stdio.ail", "System/Libraries/LibC/Generated/libc_stdio")
+    rc = toolkit_libc_check_emit_one("Server/Runtime/LibC/Source/stdio.ail", "Server/Runtime/LibC/Generated/libc_stdio")
     if rc != 0 then
         return rc
     end
-    return toolkit_libc_check_emit_one("System/Libraries/LibC/Source/bsd_compat.ail", "System/Libraries/LibC/Generated/bsd_compat")
+    return toolkit_libc_check_emit_one("Server/Runtime/LibC/Source/bsd_compat.ail", "Server/Runtime/LibC/Generated/bsd_compat")
 end
 
 string toolkit_libc_test_script():
-    return "" + "#!/usr/bin/env bash\nset -euo pipefail\ncd /mnt/c/Users/V/source/repos/MixtarRVS\nmkdir -p System/Libraries/LibC/Generated System/Userland/Generated/reports\nreport=\"$PWD/System/Userland/Generated/reports/toolkit-libc-wsl.md\"\nprintf '# Toolkit LibC WSL Gate\\n\\n' > \"$report\"\nrun() {\n    label=\"$1\"\n    shift\n    printf -- '- %s... ' \"$label\" >> \"$report\"\n    \"$@\" >> \"$report\" 2>&1\n    printf 'ok\\n' >> \"$report\"\n}\nCOMMON='-std=c23 -Wall -Wextra -Werror -pedantic -include /usr/include/string.h'\nrun 'compile unistd smoke' cc $COMMON -I System/Libraries/LibC/Generated System/Libraries/LibC/Generated/unistd.c System/Libraries/LibC/Tests/unistd_smoke.c -o System/Libraries/LibC/Generated/unistd_smoke\nrun 'run unistd smoke' System/Libraries/LibC/Generated/unistd_smoke\nrun 'compile df raw stubs smoke' cc $COMMON -I System/Libraries/LibC/Generated System/Libraries/LibC/Generated/df_raw_stubs.c System/Libraries/LibC/Tests/df_raw_stubs_smoke.c -o System/Libraries/LibC/Generated/df_raw_stubs_smoke\nrun 'run df raw stubs smoke' System/Libraries/LibC/Generated/df_raw_stubs_smoke\nrun 'compile MD5End smoke' cc $COMMON -D_GNU_SOURCE -D_DEFAULT_SOURCE -DMIXTAR_BRIDGE=1 -I System/Userland/Bridge/include -include System/Userland/Bridge/include/mixtar_bridge_compat.h System/Libraries/LibC/Generated/md5_end.c System/Userland/OpenBSD/Source/lib/libc/hash/md5.c System/Libraries/LibC/Tests/md5_end_smoke.c -o System/Libraries/LibC/Generated/md5_end_smoke\nrun 'run MD5End smoke' System/Libraries/LibC/Generated/md5_end_smoke\nrun 'compile string smoke' cc $COMMON -D_GNU_SOURCE -D_DEFAULT_SOURCE -DMIXTAR_BRIDGE=1 -I System/Userland/Bridge/include -include System/Userland/Bridge/include/mixtar_bridge_compat.h System/Libraries/LibC/Generated/string.c System/Libraries/LibC/Tests/string_smoke.c -o System/Libraries/LibC/Generated/string_smoke\nrun 'run string smoke' System/Libraries/LibC/Generated/string_smoke\nrun 'compile stdio smoke' cc $COMMON -D_GNU_SOURCE -D_DEFAULT_SOURCE System/Libraries/LibC/Generated/libc_stdio.c System/Libraries/LibC/Tests/stdio_smoke.c -o System/Libraries/LibC/Generated/stdio_smoke\nrun 'run stdio smoke' System/Libraries/LibC/Generated/stdio_smoke\nrun 'compile BSD compat smoke' cc $COMMON -D_GNU_SOURCE -D_DEFAULT_SOURCE -DMIXTAR_BRIDGE=1 -I System/Userland/Bridge/include -include System/Userland/Bridge/include/mixtar_bridge_compat.h System/Libraries/LibC/Generated/bsd_compat.c System/Libraries/LibC/Tests/bsd_compat_smoke.c -o System/Libraries/LibC/Generated/bsd_compat_smoke\nrun 'run BSD compat smoke' System/Libraries/LibC/Generated/bsd_compat_smoke\nprintf '\\nResult: PASS\\n' >> \"$report\"\ncat \"$report\"\n"
+    return "" + "#!/usr/bin/env bash\nset -euo pipefail\ncd /mnt/c/Users/V/source/repos/MixtarRVS\nmkdir -p Server/Runtime/LibC/Generated Server/Userland/Generated/reports\nreport=\"$PWD/Server/Userland/Generated/reports/toolkit-libc-wsl.md\"\nprintf '# Toolkit LibC WSL Gate\\n\\n' > \"$report\"\nrun() {\n    label=\"$1\"\n    shift\n    printf -- '- %s... ' \"$label\" >> \"$report\"\n    \"$@\" >> \"$report\" 2>&1\n    printf 'ok\\n' >> \"$report\"\n}\nCOMMON='-std=c23 -Wall -Wextra -Werror -pedantic -include /usr/include/string.h'\nrun 'compile unistd smoke' cc $COMMON -I Server/Runtime/LibC/Generated Server/Runtime/LibC/Generated/unistd.c Server/Runtime/LibC/Tests/unistd_smoke.c -o Server/Runtime/LibC/Generated/unistd_smoke\nrun 'run unistd smoke' Server/Runtime/LibC/Generated/unistd_smoke\nrun 'compile df raw stubs smoke' cc $COMMON -I Server/Runtime/LibC/Generated Server/Runtime/LibC/Generated/df_raw_stubs.c Server/Runtime/LibC/Tests/df_raw_stubs_smoke.c -o Server/Runtime/LibC/Generated/df_raw_stubs_smoke\nrun 'run df raw stubs smoke' Server/Runtime/LibC/Generated/df_raw_stubs_smoke\nrun 'compile MD5End smoke' cc $COMMON -D_GNU_SOURCE -D_DEFAULT_SOURCE -DMIXTAR_BRIDGE=1 -I Server/Userland/Toolkit/Bridge/include -include Server/Userland/Toolkit/Bridge/include/mixtar_bridge_compat.h Server/Runtime/LibC/Generated/md5_end.c Server/Userland/Toolkit/OpenBSD/src/lib/libc/hash/md5.c Server/Runtime/LibC/Tests/md5_end_smoke.c -o Server/Runtime/LibC/Generated/md5_end_smoke\nrun 'run MD5End smoke' Server/Runtime/LibC/Generated/md5_end_smoke\nrun 'compile string smoke' cc $COMMON -D_GNU_SOURCE -D_DEFAULT_SOURCE -DMIXTAR_BRIDGE=1 -I Server/Userland/Toolkit/Bridge/include -include Server/Userland/Toolkit/Bridge/include/mixtar_bridge_compat.h Server/Runtime/LibC/Generated/string.c Server/Runtime/LibC/Tests/string_smoke.c -o Server/Runtime/LibC/Generated/string_smoke\nrun 'run string smoke' Server/Runtime/LibC/Generated/string_smoke\nrun 'compile stdio smoke' cc $COMMON -D_GNU_SOURCE -D_DEFAULT_SOURCE Server/Runtime/LibC/Generated/libc_stdio.c Server/Runtime/LibC/Tests/stdio_smoke.c -o Server/Runtime/LibC/Generated/stdio_smoke\nrun 'run stdio smoke' Server/Runtime/LibC/Generated/stdio_smoke\nrun 'compile BSD compat smoke' cc $COMMON -D_GNU_SOURCE -D_DEFAULT_SOURCE -DMIXTAR_BRIDGE=1 -I Server/Userland/Toolkit/Bridge/include -include Server/Userland/Toolkit/Bridge/include/mixtar_bridge_compat.h Server/Runtime/LibC/Generated/bsd_compat.c Server/Runtime/LibC/Tests/bsd_compat_smoke.c -o Server/Runtime/LibC/Generated/bsd_compat_smoke\nrun 'run BSD compat smoke' Server/Runtime/LibC/Generated/bsd_compat_smoke\nprintf '\\nResult: PASS\\n' >> \"$report\"\ncat \"$report\"\n"
 end
 
 int toolkit_write_libc_test_script():

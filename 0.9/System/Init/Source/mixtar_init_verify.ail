@@ -108,7 +108,7 @@ int verify_scan(path: string):
 end
 
 int main():
-    path = "System/Rootfs/initramfs/mixtar_init.ail"
+    path = "Server/Rootfs/initramfs/mixtar_init.ail"
     if argc() >= 2 then
         path = argv(1)
     end

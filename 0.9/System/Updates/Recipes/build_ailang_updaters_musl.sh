@@ -14,6 +14,10 @@ temporary_dir="$output_dir.tmp.$$"
 python=${PYTHON:-python3}
 compiler=${CC:-musl-gcc}
 build_timeout=${MIXTAR_BUILD_TIMEOUT:-90}
+sha256_recipe="$repo_root/Server/Updates/Recipes/build_sha256_musl.sh"
+sha256_source="$repo_root/Server/Userland/Toolkit/OpenBSD/src"
+sha256_zig=${MIXTAR_ZIG:-"$repo_root/out/server/corev09-inputs/Compilers/Zig/0.16.0/zig"}
+sha256_work="$output_dir.sha256.tmp.$$"
 
 case "$output_dir" in
     "$repo_root"/out/server/*|/Temporary/Updates/Work/*) ;;
@@ -26,13 +30,20 @@ esac
 for required in \
     "$ailang_root/ailang.py" \
     "$sqlite_prefix/include/sqlite3.h" \
-    "$sqlite_prefix/lib/libsqlite3.a"
+    "$sqlite_prefix/lib/libsqlite3.a" \
+    "$sha256_recipe" \
+    "$sha256_source/lib/libc/hash/sha2.c" \
+    "$sha256_source/include/sha2.h"
 do
     [ -f "$required" ] || {
         echo "build-updaters: missing input: $required" >&2
         exit 66
     }
 done
+[ -x "$sha256_zig" ] || {
+    echo "build-updaters: missing Zig toolchain: $sha256_zig" >&2
+    exit 66
+}
 
 command -v "$python" >/dev/null 2>&1 || {
     echo "build-updaters: Python interpreter is unavailable" >&2
@@ -56,6 +67,9 @@ mkdir -p "$temporary_dir"
 cleanup() {
     case "$temporary_dir" in
         "$output_dir".tmp.*) rm -rf -- "$temporary_dir" ;;
+    esac
+    case "$sha256_work" in
+        "$output_dir".sha256.tmp.*) rm -rf -- "$sha256_work" ;;
     esac
 }
 trap cleanup EXIT INT TERM
@@ -112,9 +126,19 @@ updates-zsh-build|updates_zsh_build|updates_zsh_build.ail
 mixtar-build-executor|updates_build_executor|updates_build_executor.ail
 EOF
 
+case "$sha256_work" in
+    "$output_dir".sha256.tmp.*) rm -rf -- "$sha256_work" ;;
+    *) exit 73 ;;
+esac
+"$sha256_recipe" "$sha256_zig" "$sha256_source" "$sha256_work"
+install -m 0755 \
+    "$sha256_work/stage/System/Userland/mixtar-sha256" \
+    "$temporary_dir/mixtar-sha256"
+rm -rf -- "$sha256_work"
+
 count=$(find "$temporary_dir" -maxdepth 1 -type f -perm -0100 | wc -l)
-[ "$count" -eq 14 ] || {
-    echo "build-updaters: expected 14 executables, found $count" >&2
+[ "$count" -eq 15 ] || {
+    echo "build-updaters: expected 15 executables, found $count" >&2
     exit 70
 }
 

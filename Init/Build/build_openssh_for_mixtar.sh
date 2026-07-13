@@ -3,7 +3,7 @@ set -euo pipefail
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repo_root="$(cd "$script_dir/../../.." && pwd)"
-out_dir="$repo_root/System/Rootfs/Generated"
+out_dir="$repo_root/Server/Rootfs/Generated"
 
 version="${MIXTAR_OPENSSH_VERSION:-10.3p1}"
 url="${MIXTAR_OPENSSH_URL:-https://cdn.openbsd.org/pub/OpenBSD/OpenSSH/portable/openssh-$version.tar.gz}"

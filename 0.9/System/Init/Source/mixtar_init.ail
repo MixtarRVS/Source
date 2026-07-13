@@ -1209,6 +1209,8 @@ int mi_spawn_session(root_path: string, session_exec: string, default_user: stri
     ctype_env = MI_ENV_LC_CTYPE_PREFIX + locale_name
     envp = ptr_array(
         MI_SESSION_ENV_PATH,
+        MI_SESSION_ENV_ZDOTDIR,
+        MI_SESSION_ENV_TERMINFO,
         home_env,
         user_env,
         logname_env,
@@ -1258,6 +1260,8 @@ int mi_spawn_networking_service(root_path: string, service_exec: string, system_
     envp = ptr_array(
         MI_NETWORKING_ENV_PATH,
         MI_NETWORKING_ENV_LD,
+        MI_SESSION_ENV_ZDOTDIR,
+        MI_SESSION_ENV_TERMINFO,
         system_name_env,
         MI_COMPAT_ENV_TERM
     )
