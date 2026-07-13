@@ -76,8 +76,8 @@ int updates_audit(db: int):
         updates_line("audit: invalid schema version: ", schema)
         bad++
     end
-    if current != "0.8" then
-        updates_line("audit: current release is not 0.8: ", current)
+    if current != target then
+        updates_line("audit: current release does not match target: ", current)
         bad++
     end
     if target != "0.9" then

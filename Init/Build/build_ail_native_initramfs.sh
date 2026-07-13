@@ -1159,8 +1159,8 @@ mi_configure_static() {
 }
 
 mi_network_ready() {
-  /System/Networking/Core/ip -4 -o addr show scope global 2>/dev/null | grep -q . || return 1
-  /System/Networking/Core/ip route show default 2>/dev/null | grep -q '^default ' || return 1
+  /System/Networking/Core/ip -4 -o addr show scope global 2>/System/Devices/null | grep -q . || return 1
+  /System/Networking/Core/ip route show default 2>/System/Devices/null | grep -q '^default ' || return 1
   return 0
 }
 

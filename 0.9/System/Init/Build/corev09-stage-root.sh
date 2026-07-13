@@ -93,6 +93,54 @@ install -m 0755 "$native_root/System/Init/MixtarRVS" "$root/System/Init/MixtarRV
 install -m 0755 "$native_root/System/Networking/start-networking" \
     "$root/System/Networking/start-networking"
 
+python3 - "$root" <<'PY'
+import pathlib
+import sqlite3
+import sys
+
+root = pathlib.Path(sys.argv[1])
+policies = {
+    root / "System/Configuration/Networking/Networking.config": {
+        "dhcp.default": "1",
+        "wifi.wlan0.address_mode": "dhcp",
+    },
+    root / "System/Configuration/Networking/WiFi.config": {
+        "wifi.wlan0.address_mode": "dhcp",
+    },
+}
+obsolete = {
+    "networking.address",
+    "networking.gateway",
+    "wifi.address",
+}
+for path, settings in policies.items():
+    db = sqlite3.connect(path)
+    try:
+        db.execute(
+            "CREATE TABLE IF NOT EXISTS setting("
+            "key TEXT PRIMARY KEY, value TEXT NOT NULL)"
+        )
+        db.executemany(
+            "INSERT INTO setting(key, value) VALUES (?, ?) "
+            "ON CONFLICT(key) DO UPDATE SET value=excluded.value",
+            settings.items(),
+        )
+        has_meta = db.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='meta'"
+        ).fetchone()
+        if has_meta:
+            db.executemany(
+                "DELETE FROM meta WHERE key=?",
+                ((key,) for key in obsolete),
+            )
+        db.commit()
+        db.execute("VACUUM")
+        if db.execute("PRAGMA integrity_check").fetchone()[0] != "ok":
+            raise RuntimeError(f"invalid networking database: {path}")
+    finally:
+        db.close()
+PY
+
 rm -rf -- "$root/System/UI"
 find "$root/Applications" -mindepth 1 -maxdepth 1 -exec rm -rf -- {} +
 
