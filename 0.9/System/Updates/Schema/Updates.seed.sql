@@ -511,7 +511,7 @@ INSERT OR REPLACE INTO setting(key, value) VALUES
     ('kernel.build.jobs', 'auto'),
     ('kernel.build.stage_root', '/Temporary/Updates/stage/0.9-candidate'),
     ('kernel.build.work_root', '/Temporary/Updates/kernel/build'),
-    ('kernel.cmdline', 'quiet loglevel=3 console=tty0 console=ttyS0,115200 rdinit=/System/Init/MixtarRVS devtmpfs.mount=0'),
+    ('kernel.cmdline', 'quiet loglevel=3 console=tty0 console=ttyS0,115200 rdinit=/System/Init/MixtarBoot devtmpfs.mount=0'),
     ('kernel.config.fragment', '/System/Configuration/Kernel/RT.config'),
     ('kernel.firmware.embedded', 'iwlwifi-8265-36.ucode regulatory.db regulatory.db.p7s'),
     ('kernel.firmware.root', '/System/Kernel/Firmware'),

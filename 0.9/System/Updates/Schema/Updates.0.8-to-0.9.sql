@@ -125,7 +125,7 @@ UPDATE setting SET value = 'in-tree'
 WHERE key = 'kernel.rt.version.pinned';
 
 UPDATE setting
-SET value = 'quiet loglevel=3 console=tty0 console=ttyS0,115200 rdinit=/System/Init/MixtarRVS devtmpfs.mount=0'
+SET value = 'quiet loglevel=3 console=tty0 console=ttyS0,115200 rdinit=/System/Init/MixtarBoot devtmpfs.mount=0'
 WHERE key = 'kernel.cmdline';
 
 INSERT OR REPLACE INTO trust_signer(trust_anchor_id, fingerprint, enabled)

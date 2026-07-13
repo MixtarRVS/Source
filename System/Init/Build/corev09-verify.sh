@@ -229,6 +229,7 @@ check_database() {
     integrity=$(db_query 'PRAGMA integrity_check')
     if [ "$integrity" = "ok" ]; then pass 'Updates.config integrity'; else fail "Updates.config integrity: $integrity"; fi
     db_equal "SELECT value FROM setting WHERE key='schema.version'" 3 'Updates.config schema'
+    db_equal "SELECT COUNT(*) FROM setting WHERE key='kernel.cmdline' AND value LIKE '%rdinit=/System/Init/MixtarBoot%' AND value NOT LIKE '%rdinit=/System/Init/MixtarRVS%'" 1 'kernel early-init policy selects MixtarBoot'
     db_equal "SELECT COUNT(*) FROM setting WHERE key='networking.dns.servers' AND length(trim(value))>0" 1 'native DNS policy is configured in SQLite'
     db_equal "SELECT COUNT(*) FROM component WHERE id='cares-build' AND install_target='/System/Libraries/CAres/1.34.8' AND enabled=1" 1 'c-ares library component policy'
     db_equal "SELECT COUNT(*) FROM component_dependency WHERE component_id='curl-downloader' AND dependency_id='cares-build'" 1 'curl depends on c-ares'
@@ -352,6 +353,24 @@ check_kernel_artifacts() {
     require_file "$profile/System.map" 'RT kernel System.map'
     require_file "$profile/build.provenance" 'RT kernel provenance'
     if grep -qx 'CONFIG_PREEMPT_RT=y' "$config"; then pass 'kernel has CONFIG_PREEMPT_RT=y'; else fail 'kernel is not PREEMPT_RT'; fi
+
+    expected_cmdline=$(db_query "SELECT value FROM setting WHERE key='kernel.cmdline'")
+    actual_cmdline=$(sed -n 's/^CONFIG_CMDLINE="\(.*\)"$/\1/p' "$config" | head -n 1)
+    if [ -n "$expected_cmdline" ] && [ "$actual_cmdline" = "$expected_cmdline" ]; then
+        pass 'kernel command line matches Updates.config policy'
+    else
+        fail 'kernel command line does not match Updates.config policy'
+    fi
+
+    initramfs=/System/Runtime/Build/MixtarRVS-initramfs.cpio
+    require_file "$initramfs" 'Mixtar early initramfs'
+    if ! command -v cpio >/dev/null 2>&1; then
+        fail 'cpio host verifier dependency missing'
+    elif cpio -it < "$root$initramfs" 2>/dev/null | grep -qx 'System/Init/MixtarBoot'; then
+        pass 'initramfs contains configured MixtarBoot rdinit'
+    else
+        fail 'initramfs is missing configured MixtarBoot rdinit'
+    fi
 
     efi="/System/EFI/MixtarRVS/$system_version.efi"
     require_file "$efi" 'versioned Mixtar EFI'
