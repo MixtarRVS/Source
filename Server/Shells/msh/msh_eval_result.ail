@@ -1,0 +1,7 @@
+// msh_eval_result.ail
+// Shared evaluator result shape.
+
+record MshEvalResult then
+    int status
+    string vars
+end

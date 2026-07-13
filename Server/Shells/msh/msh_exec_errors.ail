@@ -1,0 +1,247 @@
+// msh_exec_errors.ail
+// Shared external-command diagnostics and hosted preflight helpers.
+
+import msh_diagnostics
+import msh_exec_lookup
+import msh_state
+
+void msh_exec_diag_not_found(name: string):
+    msg = name + ": not found"
+    msh_diag(msg)
+    dealloc(msg)
+end
+
+void msh_exec_diag_permission(name: string):
+    msg = name + ": Permission denied"
+    msh_diag(msg)
+    dealloc(msg)
+end
+
+void msh_exec_diag_cannot_execute(name: string):
+    msg = name + ": Exec format error"
+    msh_diag(msg)
+    dealloc(msg)
+end
+
+void msh_exec_diag_exec_failure(name: string, status: int):
+    if status == 126 then
+        err = process_last_exec_errno()
+        if err == process_errno_eacces() or err == process_errno_eperm() then
+            msh_exec_diag_permission(name)
+        elsif err == process_errno_enoexec() then
+            msh_exec_diag_cannot_execute(name)
+        end
+    elsif status == 127 then
+        err2 = process_last_exec_errno()
+        if err2 == process_errno_enoent() then
+            msh_exec_diag_not_found(name)
+        end
+    end
+end
+
+int msh_exec_path_is_directory(path: string):
+    old_dir = current_dir()
+    rc = change_dir(path)
+    ok = 0
+    if rc == 0 then
+        ok = 1
+        change_dir(old_dir)
+    end
+    dealloc(old_dir)
+    return ok
+end
+
+int msh_exec_preflight_path_status(name: string, vars: string):
+    if msh_exec_name_has_path_sep(name) == 1 then
+        if msh_exec_path_is_directory(name) == 1 then
+            msh_exec_diag_permission(name)
+            return 126
+        end
+        if file_exists(name) == 0 then
+            msh_exec_diag_not_found(name)
+            return 127
+        end
+        if target_os() != "windows" and file_can_execute(name) == 0 then
+            msh_exec_diag_permission(name)
+            return 126
+        end
+        return 0
+    end
+
+    resolved = msh_exec_command_resolve_vars(name, vars)
+    if strlen(resolved) == 0 then
+        if msh_exec_command_has_path_permission_block_vars(name, vars) == 1 then
+            msh_exec_diag_permission(name)
+        else
+            msh_exec_diag_not_found(name)
+        end
+        dealloc(resolved)
+        return 127
+    end
+    if msh_exec_path_is_directory(resolved) == 1 then
+        msh_exec_diag_permission(name)
+        dealloc(resolved)
+        return 126
+    end
+    dealloc(resolved)
+    return 0
+end
+
+int msh_exec_preflight_path_status_quiet(name: string, vars: string):
+    if msh_exec_name_has_path_sep(name) == 1 then
+        if msh_exec_path_is_directory(name) == 1 then
+            return 126
+        end
+        if file_exists(name) == 0 then
+            return 127
+        end
+        if target_os() != "windows" and file_can_execute(name) == 0 then
+            return 126
+        end
+        return 0
+    end
+
+    resolved = msh_exec_command_resolve_vars(name, vars)
+    if strlen(resolved) == 0 then
+        dealloc(resolved)
+        return 127
+    end
+    if msh_exec_path_is_directory(resolved) == 1 then
+        dealloc(resolved)
+        return 126
+    end
+    dealloc(resolved)
+    return 0
+end
+
+void msh_exec_diag_preflight_failure(name: string, status: int, vars: string):
+    if status == 126 then
+        msh_exec_diag_permission(name)
+    elsif status == 127 then
+        if msh_exec_name_has_path_sep(name) == 0 and msh_exec_command_has_path_permission_block_vars(name, vars) == 1 then
+            msh_exec_diag_permission(name)
+        else
+            msh_exec_diag_not_found(name)
+        end
+    end
+end
+
+int msh_exec_preflight_host_path_status(name: string):
+    if msh_exec_name_has_path_sep(name) == 1 then
+        if msh_exec_path_is_directory(name) == 1 then
+            msh_exec_diag_permission(name)
+            return 126
+        end
+        if file_exists(name) == 0 then
+            msh_exec_diag_not_found(name)
+            return 127
+        end
+        if target_os() != "windows" and file_can_execute(name) == 0 then
+            msh_exec_diag_permission(name)
+            return 126
+        end
+        return 0
+    end
+
+    resolved = msh_exec_command_resolve_host_path(name)
+    if strlen(resolved) == 0 then
+        if msh_exec_command_has_path_permission_block_vars(name, "") == 1 then
+            msh_exec_diag_permission(name)
+        else
+            msh_exec_diag_not_found(name)
+        end
+        dealloc(resolved)
+        return 127
+    end
+    if msh_exec_path_is_directory(resolved) == 1 then
+        msh_exec_diag_permission(name)
+        dealloc(resolved)
+        return 126
+    end
+    dealloc(resolved)
+    return 0
+end
+
+int msh_exec_preflight_host_path_status_quiet(name: string):
+    if msh_exec_name_has_path_sep(name) == 1 then
+        if msh_exec_path_is_directory(name) == 1 then
+            return 126
+        end
+        if file_exists(name) == 0 then
+            return 127
+        end
+        if target_os() != "windows" and file_can_execute(name) == 0 then
+            return 126
+        end
+        return 0
+    end
+
+    resolved = msh_exec_command_resolve_host_path(name)
+    if strlen(resolved) == 0 then
+        dealloc(resolved)
+        return 127
+    end
+    if msh_exec_path_is_directory(resolved) == 1 then
+        dealloc(resolved)
+        return 126
+    end
+    dealloc(resolved)
+    return 0
+end
+
+void msh_exec_diag_preflight_host_failure(name: string, status: int):
+    if status == 126 then
+        msh_exec_diag_permission(name)
+    elsif status == 127 then
+        if msh_exec_name_has_path_sep(name) == 0 and msh_exec_command_has_path_permission_block_vars(name, "") == 1 then
+            msh_exec_diag_permission(name)
+        else
+            msh_exec_diag_not_found(name)
+        end
+    end
+end
+
+int msh_exec_preflight_exists(name: string, vars: string):
+    if msh_exec_name_has_path_sep(name) == 1 then
+        return file_exists(name)
+    end
+    if msh_state_has(vars, "PATH") == 1 then
+        return msh_exec_command_exists_vars(name, vars)
+    end
+    if target_os() == "windows" and file_exists(name) == 1 then
+        return 1
+    end
+    return msh_exec_command_exists_vars(name, vars)
+end
+
+int msh_exec_preflight_fields_status(fields: str_array, vars: string):
+    if str_array_len(fields) == 0 then
+        return 127
+    end
+    name = str_array_get(fields, 0)
+    return msh_exec_preflight_path_status(name, vars)
+end
+
+int msh_exec_preflight_fields_status_quiet(fields: str_array, vars: string):
+    if str_array_len(fields) == 0 then
+        return 127
+    end
+    name = str_array_get(fields, 0)
+    return msh_exec_preflight_path_status_quiet(name, vars)
+end
+
+int msh_exec_preflight_fields_host_status(fields: str_array):
+    if str_array_len(fields) == 0 then
+        return 127
+    end
+    name = str_array_get(fields, 0)
+    return msh_exec_preflight_host_path_status(name)
+end
+
+int msh_exec_preflight_fields_host_status_quiet(fields: str_array):
+    if str_array_len(fields) == 0 then
+        return 127
+    end
+    name = str_array_get(fields, 0)
+    return msh_exec_preflight_host_path_status_quiet(name)
+end

@@ -1,0 +1,77 @@
+// msh_phase2_selftest.ail
+// Parser/source-location regressions for POSIX phase 2.
+
+import msh_ast_locations
+import msh_lexer
+import msh_parser
+import msh_quote
+
+int msh_phase2_expect(source: string, expected: string):
+    tokens = msh_lex(source)
+    result = msh_parse_script(tokens)
+    node_text = msh_quote_visible_ast(result.node)
+    ok = 0
+    if result.ok == 1 and node_text == expected then
+        ok = 1
+    end
+    if ok == 0 then
+        print "msh phase2 parser selftest failed"
+        msg = "source: " + source
+        print msg
+        got = "got: " + node_text
+        print got
+        want = "want: " + expected
+        print want
+        dealloc(msg, got, want)
+    end
+    dealloc(tokens, result.node, node_text)
+    if ok == 1 then
+        return 0
+    end
+    return 1
+end
+
+int msh_phase2_expect_locations(source: string):
+    tokens = msh_lex(source)
+    result = msh_parse_script(tokens)
+    ok = 0
+    if result.ok == 1 and msh_ast_location_map_complete(tokens, result.node) == 1 then
+        ok = 1
+    end
+    if ok == 0 then
+        print "msh phase2 source-location selftest failed"
+        msg = "source: " + source
+        print msg
+        dealloc(msg)
+    end
+    dealloc(tokens, result.node)
+    if ok == 1 then
+        return 0
+    end
+    return 1
+end
+
+int msh_phase2_selftest():
+    if msh_phase2_expect("if\ntrue\nthen\nfalse\nfi > out", "REDIRECT(IF(CMD(assigns=[],words=[WORD(\"true\")],redirs=[]),CMD(assigns=[],words=[WORD(\"false\")],redirs=[]),EMPTY),redirs=[REDIR(\">\",\"out\")])") != 0 then
+        return 1
+    end
+    if msh_phase2_expect("while\nfalse\ndo\ntrue\ndone", "WHILE(CMD(assigns=[],words=[WORD(\"false\")],redirs=[]),CMD(assigns=[],words=[WORD(\"true\")],redirs=[]))") != 0 then
+        return 1
+    end
+    if msh_phase2_expect("case x in (x) true;; esac", "CASE(\"x\",[ITEM([WORD(\"x\")],CMD(assigns=[],words=[WORD(\"true\")],redirs=[]))])") != 0 then
+        return 1
+    end
+    if msh_phase2_expect("(\necho a\n) > out", "SUBSHELL(CMD(assigns=[],words=[WORD(\"echo\"),WORD(\"a\")],redirs=[]),redirs=[REDIR(\">\",\"out\")])") != 0 then
+        return 1
+    end
+    if msh_phase2_expect("{\necho a\n} > out", "GROUP(CMD(assigns=[],words=[WORD(\"echo\"),WORD(\"a\")],redirs=[]),redirs=[REDIR(\">\",\"out\")])") != 0 then
+        return 1
+    end
+    if msh_phase2_expect_locations("if\ntrue\nthen\nfalse\nfi > out") != 0 then
+        return 1
+    end
+    if msh_phase2_expect_locations("echo one; echo two") != 0 then
+        return 1
+    end
+    return 0
+end

@@ -1,0 +1,36 @@
+// msh_subst_eval.ail
+// Stateful command-substitution capture evaluator.
+
+import msh_control
+import msh_eval_result
+import msh_phase_state
+import msh_pipeio
+import msh_state
+
+extern fn msh_eval_source_state_internal(source: string, vars: string): MshEvalResult
+
+string msh_subst_capture_eval_state(command: string, vars: string):
+    subst_base = msh_trap_pipeline_subshell_vars(vars)
+    capture_vars = msh_pipeio_capture_on(subst_base)
+    eval_result = msh_eval_source_state_internal(command, capture_vars)
+    status = eval_result.status
+    exit_action = msh_trap_get(eval_result.vars, "EXIT")
+    if strlen(exit_action) > 0 and msh_trap_action_matches(eval_result.vars, "EXIT", exit_action) == 0 then
+        status_text = str(status)
+        trap_base = msh_control_clear(eval_result.vars)
+        trap_marked = msh_trap_action_mark(trap_base, "EXIT", exit_action)
+        trap_status_vars = msh_trap_action_status_set(trap_marked, "EXIT", status)
+        trap_vars = msh_state_set(trap_status_vars, "__last_status", status_text)
+        trap_result = msh_eval_source_state_internal(exit_action, trap_vars)
+        if msh_control_active(trap_result.vars) == 1 then
+            status = trap_result.status
+        end
+        out = msh_pipeio_output(trap_result.vars)
+        dealloc(status_text, trap_base, trap_marked, trap_status_vars, trap_vars, trap_result.vars)
+    else
+        out = msh_pipeio_output(eval_result.vars)
+    end
+    process_set_last_capture_status(status)
+    dealloc(subst_base, capture_vars, eval_result.vars, exit_action)
+    return out
+end

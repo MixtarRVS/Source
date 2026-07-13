@@ -1,0 +1,62 @@
+// msh_eval_signals.ail
+// Pending-signal delivery for the non-interactive evaluator profile.
+
+import msh_control
+import msh_eval_result
+import msh_phase_state
+import msh_signals
+import msh_state
+
+extern fn msh_eval_source_state_internal(source: string, vars: string): MshEvalResult
+
+def msh_eval_deliver_pending_signal(result: MshEvalResult): MshEvalResult
+    native_pending = msh_signal_native_pending_name()
+    if strlen(native_pending) == 0 then
+        pending = msh_signal_pending_get(result.vars)
+        if strlen(pending) == 0 then
+            dealloc(pending, native_pending)
+            return result
+        end
+        signal_vars = "" + result.vars
+    else
+        pending = "" + native_pending
+        signal_vars = msh_signal_pending_set(result.vars, native_pending)
+    end
+    pending_status = msh_signal_pending_status_get(signal_vars)
+    cleared = msh_signal_pending_clear(signal_vars)
+    if msh_signal_untrappable(pending) == 0 and msh_trap_has(cleared, pending) == 1 then
+        action = msh_trap_get(cleared, pending)
+        if strlen(action) == 0 then
+            status_text = str(result.status)
+            out_ignored = msh_state_set(cleared, "__last_status", status_text)
+            dealloc(status_text, pending, action, cleared, signal_vars, native_pending, result.vars)
+            return new MshEvalResult(result.status, out_ignored)
+        end
+        trap_status = result.status
+        if strlen(native_pending) > 0 then
+            trap_status = msh_signal_exit_status(pending)
+        elsif pending_status >= 0 then
+            trap_status = pending_status
+        end
+        trap_status_text = str(trap_status)
+        trap_base = msh_state_set(cleared, "__last_status", trap_status_text)
+        trap_result = msh_eval_source_state_internal(action, trap_base)
+        out_trap = "" + trap_result.vars
+        status_trap = trap_status
+        if msh_control_active(trap_result.vars) == 1 then
+            status_trap = trap_result.status
+        else
+            restored_trap = msh_state_set(out_trap, "__last_status", trap_status_text)
+            dealloc(out_trap)
+            out_trap = restored_trap
+        end
+        dealloc(pending, action, cleared, signal_vars, native_pending, result.vars, trap_base, trap_status_text, trap_result.vars)
+        return new MshEvalResult(status_trap, out_trap)
+    end
+    signal_status = msh_signal_exit_status(pending)
+    status_text2 = str(signal_status)
+    default_status_vars = msh_state_set(cleared, "__last_status", status_text2)
+    out_default = msh_control_set(default_status_vars, "signal_exit", signal_status)
+    dealloc(status_text2, pending, cleared, signal_vars, native_pending, result.vars, default_status_vars)
+    return new MshEvalResult(signal_status, out_default)
+end

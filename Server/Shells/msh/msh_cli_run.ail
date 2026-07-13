@@ -1,0 +1,75 @@
+// msh_cli_run.ail
+// POSIX command-string and script-file invocation helpers for msh_cli.
+
+import msh_defs
+import msh_diagnostics
+import msh_eval_entry
+import msh_eval_result
+import msh_eval_text
+import msh_fields
+import msh_control
+import msh_signals
+import msh_state
+
+int msh_cli_maybe_terminate_by_signal(result: MshEvalResult):
+    if msh_control_is(result.vars, "signal_exit") == 0 then
+        return result.status
+    end
+    signo = result.status - MSH_SIGNAL_STATUS_BASE
+    if signo <= 0 then
+        return result.status
+    end
+    signal_default(signo)
+    signal_raise(signo)
+    process_kill_pid(getpid(), signo)
+    return result.status
+end
+
+int msh_run_script_file_from(path: string, arg_start: int, initial_vars: string):
+    if file_exists(path) == 0 then
+        left = "cannot open " + path
+        msg = left + ": No such file"
+        msh_diag(msg)
+        dealloc(left, msg)
+        return 2
+    end
+    raw_source = read_file(path)
+    source = msh_eval_clean_file_text(raw_source)
+    base_vars = msh_state_set(initial_vars, "__script_name", path)
+    args = str_array_new(MSH_FIELD_CAP_DEFAULT)
+    i = arg_start
+    while i < argc() then
+        arg = "" + argv(i)
+        args = str_array_push(args, arg)
+        i++
+    end
+    script_vars = msh_state_set_positionals(base_vars, args, 0)
+    result = msh_eval_source_state_full(source, script_vars)
+    status = msh_cli_maybe_terminate_by_signal(result)
+    msh_field_array_destroy(args)
+    dealloc(raw_source, source, base_vars, script_vars, result.vars)
+    return status
+end
+
+int msh_run_command_string_from(source: string, command_index: int, initial_vars: string):
+    script_name = "" + argv(0)
+    name_index = command_index + 1
+    if argc() > name_index then
+        dealloc(script_name)
+        script_name = "" + argv(name_index)
+    end
+    base_vars = msh_state_set(initial_vars, "__script_name", script_name)
+    args = str_array_new(MSH_FIELD_CAP_DEFAULT)
+    i = command_index + 2
+    while i < argc() then
+        arg = "" + argv(i)
+        args = str_array_push(args, arg)
+        i++
+    end
+    command_vars = msh_state_set_positionals(base_vars, args, 0)
+    result = msh_eval_source_state_full(source, command_vars)
+    status = msh_cli_maybe_terminate_by_signal(result)
+    msh_field_array_destroy(args)
+    dealloc(script_name, base_vars, command_vars, result.vars)
+    return status
+end

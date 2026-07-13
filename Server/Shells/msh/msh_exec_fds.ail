@@ -1,0 +1,708 @@
+// msh_exec_fds.ail
+// Persistent shell fd metadata application for redirection-only exec.
+
+import msh_eval_result
+import msh_defs
+import msh_exec_fds_core
+import msh_exec_redirs
+import msh_fields
+import msh_redir_errors
+import msh_redirs
+import msh_state
+import msh_bytes
+
+string msh_exec_fds_saved_stdout_path_key(fd: int):
+    fd_text = str(fd)
+    a = "__exec_fd_" + fd_text
+    out = a + "_stdout_path"
+    dealloc(fd_text, a)
+    return out
+end
+
+string msh_exec_fds_saved_stdout_append_key(fd: int):
+    fd_text = str(fd)
+    a = "__exec_fd_" + fd_text
+    out = a + "_stdout_append"
+    dealloc(fd_text, a)
+    return out
+end
+
+string msh_exec_fds_saved_stdout_offset_key(fd: int):
+    fd_text = str(fd)
+    a = "__exec_fd_" + fd_text
+    out = a + "_stdout_offset"
+    dealloc(fd_text, a)
+    return out
+end
+
+int msh_exec_fds_saved_stdout_exists(vars: string, fd: int):
+    path_key = msh_exec_fds_saved_stdout_path_key(fd)
+    saved_path = msh_state_get(vars, path_key)
+    exists = 0
+    if strlen(saved_path) > 0 then
+        exists = 1
+    end
+    dealloc(path_key, saved_path)
+    return exists
+end
+
+string msh_exec_fds_saved_stdout_path(vars: string, fd: int):
+    path_key = msh_exec_fds_saved_stdout_path_key(fd)
+    out = msh_state_get(vars, path_key)
+    dealloc(path_key)
+    return out
+end
+
+int msh_exec_fds_saved_stdin_exists(vars: string, fd: int):
+    path_key = msh_exec_fds_saved_stdin_path_key(fd)
+    saved_path = msh_state_get(vars, path_key)
+    exists = 0
+    if strlen(saved_path) > 0 then
+        exists = 1
+    end
+    dealloc(path_key, saved_path)
+    return exists
+end
+
+int msh_exec_fds_dup_source_status(vars: string, base: string, target: string):
+    if base != ">&" and base != "<&" then
+        return 0
+    end
+    if msh_redir_is_digits(target) == 0 then
+        if target == "-" then
+            return 0
+        end
+        return msh_redir_bad_fd_number_status_context(vars)
+    end
+    source_fd = parse_int(target)
+    if source_fd < 3 then
+        return 0
+    end
+    if base == ">&" then
+        if msh_exec_fds_is_marked_closed(vars, source_fd) == 1 then
+            return msh_redir_bad_fd_status_context(target, vars)
+        end
+        if msh_exec_fds_saved_stdout_exists(vars, source_fd) == 0 then
+            if msh_exec_fds_source_fd_live(source_fd) == 0 then
+                return msh_redir_bad_fd_status_context(target, vars)
+            end
+        end
+    elsif base == "<&" then
+        if msh_exec_fds_is_marked_closed(vars, source_fd) == 1 then
+            return msh_redir_bad_fd_status_context(target, vars)
+        end
+        if msh_exec_fds_saved_stdin_exists(vars, source_fd) == 0 then
+            if msh_exec_fds_source_fd_live(source_fd) == 0 then
+                return msh_redir_bad_fd_status_context(target, vars)
+            end
+        end
+    end
+    return 0
+end
+
+int msh_exec_fds_source_fd_live(fd: int):
+    copy = fd_dup(fd)
+    if copy < 0 then
+        return 0
+    end
+    fd_close(copy)
+    return 1
+end
+
+int msh_exec_fds_path_absolute(path: string):
+    if strlen(path) == 0 then
+        return 0
+    end
+    first = char_at(path, 0)
+    if first == MSH_CH_SLASH or first == MSH_CH_BACKSLASH then
+        return 1
+    end
+    if strlen(path) > 1 and char_at(path, 1) == MSH_CH_COLON then
+        return 1
+    end
+    return 0
+end
+
+string msh_exec_fds_metadata_path(path: string):
+    if path == "/dev/null" or path == "NUL" or startswith(path, "__msh_") == 1 then
+        return "" + path
+    end
+    if msh_exec_fds_path_absolute(path) == 1 then
+        return "" + path
+    end
+    cwd = current_dir()
+    if strlen(cwd) == 0 then
+        dealloc(cwd)
+        return "" + path
+    end
+    last = char_at(cwd, strlen(cwd) - 1)
+    if last == MSH_CH_SLASH or last == MSH_CH_BACKSLASH then
+        out = cwd + path
+    else
+        left = cwd + "/"
+        out = left + path
+        dealloc(left)
+    end
+    dealloc(cwd)
+    return out
+end
+
+string msh_exec_fds_save_stdout_to_fd(vars: string, fd: int):
+    path = msh_exec_fds_stdout_path(vars)
+    saved_path = "" + path
+    if strlen(saved_path) == 0 then
+        dealloc(saved_path)
+        if msh_exec_fds_pipe_capture_active(vars) == 1 then
+            saved_path = "" + "__msh_pipe_stdout"
+        else
+            saved_path = "" + "__msh_host_stdout"
+        end
+    end
+    opened_vars = msh_exec_fds_clear_closed(vars, fd)
+    path_key = msh_exec_fds_saved_stdout_path_key(fd)
+    out = msh_state_set(opened_vars, path_key, saved_path)
+    append = msh_state_get(vars, "__exec_stdout_append")
+    if strlen(append) == 0 then
+        dealloc(append)
+        append = "" + "0"
+    end
+    append_key = msh_exec_fds_saved_stdout_append_key(fd)
+    old = out
+    out = msh_state_set(out, append_key, append)
+    offset = msh_state_get(vars, "__exec_stdout_offset")
+    if strlen(offset) > 0 then
+        offset_key = msh_exec_fds_saved_stdout_offset_key(fd)
+        old_offset = out
+        out = msh_state_set(out, offset_key, offset)
+        dealloc(old_offset, offset_key)
+    end
+    if target_os() != "windows" then
+        msh_exec_fds_apply_real_stdout_fd(fd, saved_path)
+        if strlen(offset) > 0 then
+            fd_seek(fd, parse_int(offset))
+        end
+    end
+    dealloc(opened_vars, old, path, saved_path, path_key, append, append_key, offset)
+    return out
+end
+
+string msh_exec_fds_save_stdout_path_to_fd(vars: string, fd: int, path: string, append: int):
+    path_key = msh_exec_fds_saved_stdout_path_key(fd)
+    opened_vars = msh_exec_fds_clear_closed(vars, fd)
+    out = msh_state_set(opened_vars, path_key, path)
+    append_text = str(append)
+    append_key = msh_exec_fds_saved_stdout_append_key(fd)
+    old = out
+    out = msh_state_set(out, append_key, append_text)
+    offset_key = msh_exec_fds_saved_stdout_offset_key(fd)
+    old_offset = out
+    if append == 0 then
+        out = msh_state_set(out, offset_key, "0")
+    else
+        out = msh_state_unset(out, offset_key)
+    end
+    if target_os() != "windows" then
+        msh_exec_fds_apply_real_stdout_fd(fd, path)
+    end
+    dealloc(opened_vars, old, old_offset, path_key, append_text, append_key, offset_key)
+    return out
+end
+
+string msh_exec_fds_save_readwrite_path_to_fd(vars: string, fd: int, path: string):
+    opened_vars = msh_exec_fds_clear_closed(vars, fd)
+    stdin_path_key = msh_exec_fds_saved_stdin_path_key(fd)
+    out = msh_state_set(opened_vars, stdin_path_key, path)
+    stdin_offset_key = msh_exec_fds_saved_stdin_offset_key(fd)
+    old_stdin = out
+    out = msh_state_set(out, stdin_offset_key, "0")
+    stdout_path_key = msh_exec_fds_saved_stdout_path_key(fd)
+    old_stdout = out
+    out = msh_state_set(out, stdout_path_key, path)
+    stdout_append_key = msh_exec_fds_saved_stdout_append_key(fd)
+    old_append = out
+    out = msh_state_set(out, stdout_append_key, "0")
+    stdout_offset_key = msh_exec_fds_saved_stdout_offset_key(fd)
+    old_offset = out
+    out = msh_state_set(out, stdout_offset_key, "0")
+    text_key = msh_exec_fds_saved_stdin_text_key(fd)
+    old_text = out
+    out = msh_state_unset(out, text_key)
+    dealloc(opened_vars, stdin_path_key, old_stdin, stdin_offset_key)
+    dealloc(old_stdout, stdout_path_key, old_append, stdout_append_key)
+    dealloc(old_offset, stdout_offset_key, old_text, text_key)
+    return out
+end
+
+string msh_exec_fds_save_stdout_fd_to_fd(vars: string, fd: int, source_fd: int):
+    path_key = msh_exec_fds_saved_stdout_path_key(source_fd)
+    saved_path = msh_state_get(vars, path_key)
+    if strlen(saved_path) == 0 then
+        dealloc(path_key, saved_path)
+        return "" + vars
+    end
+    append_key = msh_exec_fds_saved_stdout_append_key(source_fd)
+    append_text = msh_state_get(vars, append_key)
+    append = 0
+    if append_text == "1" then
+        append = 1
+    end
+    out = msh_exec_fds_save_stdout_path_to_fd(vars, fd, saved_path, append)
+    offset_key = msh_exec_fds_saved_stdout_offset_key(source_fd)
+    offset_text = msh_state_get(vars, offset_key)
+    if strlen(offset_text) > 0 then
+        target_offset_key = msh_exec_fds_saved_stdout_offset_key(fd)
+        old_offset = out
+        out = msh_state_set(out, target_offset_key, offset_text)
+        dealloc(old_offset, target_offset_key)
+    end
+    if target_os() != "windows" then
+        fd_dup2(source_fd, fd)
+    end
+    dealloc(path_key, saved_path, append_key, append_text, offset_key, offset_text)
+    return out
+end
+
+string msh_exec_fds_restore_stdout_from_fd(vars: string, fd: int):
+    path_key = msh_exec_fds_saved_stdout_path_key(fd)
+    saved_path = msh_state_get(vars, path_key)
+    if strlen(saved_path) == 0 then
+        dealloc(path_key, saved_path)
+        return "" + vars
+    end
+    if saved_path == "__msh_host_stdout" then
+        out = msh_state_set(vars, "__exec_stdout_path", saved_path)
+        old = out
+        out = msh_state_unset(out, "__exec_stdout_append")
+        dealloc(old)
+        old_host_offset = out
+        out = msh_state_unset(out, "__exec_stdout_offset")
+        dealloc(old_host_offset)
+        old_host_alias = out
+        out = msh_state_unset(out, "__exec_stdout_alias_fd")
+        dealloc(old_host_alias)
+    elsif saved_path == "__msh_pipe_stdout" then
+        out = msh_state_unset(vars, "__exec_stdout_path")
+        old_pipe = out
+        out = msh_state_unset(out, "__exec_stdout_append")
+        dealloc(old_pipe)
+        old_pipe_offset = out
+        out = msh_state_unset(out, "__exec_stdout_offset")
+        dealloc(old_pipe_offset)
+        old_pipe_alias = out
+        out = msh_state_unset(out, "__exec_stdout_alias_fd")
+        dealloc(old_pipe_alias)
+    else
+        out = msh_state_set(vars, "__exec_stdout_path", saved_path)
+        append_key = msh_exec_fds_saved_stdout_append_key(fd)
+        append = msh_state_get(vars, append_key)
+        if strlen(append) > 0 then
+            old2 = out
+            out = msh_state_set(out, "__exec_stdout_append", append)
+            dealloc(old2)
+        end
+        offset_key = msh_exec_fds_saved_stdout_offset_key(fd)
+        offset = msh_state_get(vars, offset_key)
+        if target_os() != "windows" then
+            if strlen(offset) == 0 then
+                live_offset = fd_tell(fd)
+                if live_offset >= 0 then
+                    dealloc(offset)
+                    offset = str(live_offset)
+                end
+            end
+        end
+        if strlen(offset) > 0 then
+            old_offset = out
+            out = msh_state_set(out, "__exec_stdout_offset", offset)
+            dealloc(old_offset)
+            fd_text = str(fd)
+            old_alias = out
+            out = msh_state_set(out, "__exec_stdout_alias_fd", fd_text)
+            dealloc(old_alias, fd_text)
+        else
+            old_offset2 = out
+            out = msh_state_unset(out, "__exec_stdout_offset")
+            dealloc(old_offset2)
+            old_alias2 = out
+            out = msh_state_unset(out, "__exec_stdout_alias_fd")
+            dealloc(old_alias2)
+        end
+        dealloc(append_key, append, offset_key, offset)
+    end
+    dealloc(path_key, saved_path)
+    return out
+end
+
+string msh_exec_fds_clear_saved_stdout_fd(vars: string, fd: int):
+    if target_os() != "windows" then
+        fd_close(fd)
+    end
+    path_key = msh_exec_fds_saved_stdout_path_key(fd)
+    out = msh_state_unset(vars, path_key)
+    append_key = msh_exec_fds_saved_stdout_append_key(fd)
+    old = out
+    out = msh_state_unset(out, append_key)
+    dealloc(old)
+    offset_key = msh_exec_fds_saved_stdout_offset_key(fd)
+    old_offset = out
+    out = msh_state_unset(out, offset_key)
+    dealloc(old_offset)
+    old2 = out
+    out = msh_exec_fds_mark_closed(out, fd)
+    dealloc(old2, path_key, append_key, offset_key)
+    return out
+end
+
+int msh_exec_fds_stdout_offset_active(vars: string):
+    value = msh_state_get(vars, "__exec_stdout_offset")
+    active = 0
+    if strlen(value) > 0 then
+        active = 1
+    end
+    dealloc(value)
+    return active
+end
+
+int msh_exec_fds_stdout_offset(vars: string):
+    value = msh_state_get(vars, "__exec_stdout_offset")
+    offset = 0
+    if strlen(value) > 0 then
+        offset = parse_int(value)
+    end
+    dealloc(value)
+    return offset
+end
+
+string msh_exec_fds_sync_stdout_peer_offsets(vars: string, stdout_path: string, text: string):
+    out = "" + vars
+    offset = parse_int(text)
+    fd = 2
+    while fd < msh_exec_fds_saved_scan_limit() then
+        path_key = msh_exec_fds_saved_stdout_path_key(fd)
+        saved_path = msh_state_get(out, path_key)
+        if strlen(saved_path) > 0 and saved_path == stdout_path then
+            offset_key = msh_exec_fds_saved_stdout_offset_key(fd)
+            old = out
+            out = msh_state_set(out, offset_key, text)
+            dealloc(old, offset_key)
+            if target_os() != "windows" then
+                fd_seek(fd, offset)
+            end
+        end
+        dealloc(path_key, saved_path)
+        fd++
+    end
+    return out
+end
+
+string msh_exec_fds_set_stdout_offset(vars: string, offset: int):
+    text = str(offset)
+    out = msh_state_set(vars, "__exec_stdout_offset", text)
+    current_stdout_path = msh_state_get(out, "__exec_stdout_path")
+    if strlen(current_stdout_path) > 0 then
+        synced_peers = msh_exec_fds_sync_stdout_peer_offsets(out, current_stdout_path, text)
+        dealloc(out)
+        out = synced_peers
+    end
+    alias_fd_text = msh_state_get(out, "__exec_stdout_alias_fd")
+    if strlen(alias_fd_text) > 0 then
+        alias_fd = parse_int(alias_fd_text)
+        offset_key = msh_exec_fds_saved_stdout_offset_key(alias_fd)
+        old = out
+        out = msh_state_set(out, offset_key, text)
+        dealloc(old, offset_key)
+        if target_os() != "windows" then
+            fd_seek(alias_fd, offset)
+        end
+        stdout_path = msh_state_get(out, "__exec_stdout_path")
+        stdin_path_key = msh_exec_fds_saved_stdin_path_key(alias_fd)
+        stdin_path = msh_state_get(out, stdin_path_key)
+        if strlen(stdin_path) > 0 and stdin_path == stdout_path then
+            stdin_offset_key = msh_exec_fds_saved_stdin_offset_key(alias_fd)
+            old_stdin = out
+            out = msh_state_set(out, stdin_offset_key, text)
+            dealloc(old_stdin, stdin_offset_key)
+        end
+        dealloc(stdout_path, stdin_path_key, stdin_path)
+    end
+    dealloc(text, alias_fd_text, current_stdout_path)
+    return out
+end
+
+def msh_exec_fds_write_stdout_state(vars: string, text: string): MshEvalResult
+    path = msh_exec_fds_stdout_path(vars)
+    if strlen(path) > 0 and msh_exec_fds_stdout_offset_active(vars) == 1 then
+        offset = msh_exec_fds_stdout_offset(vars)
+        status_at = msh_redir_write_text_at(path, text, offset)
+        if status_at == 0 then
+            out_at = msh_exec_fds_set_stdout_offset(vars, offset + strlen(text))
+        else
+            out_at = "" + vars
+        end
+        dealloc(path)
+        return new MshEvalResult(status_at, out_at)
+    end
+    status = msh_exec_fds_write_stdout(vars, text)
+    out = "" + vars
+    dealloc(path)
+    return new MshEvalResult(status, out)
+end
+
+def msh_exec_fds_write_stdout_encoded_state(vars: string, encoded: string): MshEvalResult
+    path = msh_exec_fds_stdout_path(vars)
+    if strlen(path) > 0 and msh_exec_fds_stdout_offset_active(vars) == 1 then
+        offset = msh_exec_fds_stdout_offset(vars)
+        status_at = msh_redir_write_encoded_at(path, encoded, offset)
+        if status_at == 0 then
+            out_at = msh_exec_fds_set_stdout_offset(vars, offset + msh_byte_len(encoded))
+        else
+            out_at = "" + vars
+        end
+        dealloc(path)
+        return new MshEvalResult(status_at, out_at)
+    end
+    status = msh_exec_fds_write_stdout_encoded(vars, encoded)
+    out = "" + vars
+    dealloc(path)
+    return new MshEvalResult(status, out)
+end
+
+string msh_exec_fds_apply_one_mode(vars: string, op: string, target: string, persistent: int):
+    base = msh_exec_redir_base_op(op)
+    fallback = msh_redir_target_fd(base)
+    if msh_exec_redir_is_heredoc(op) == 1 then
+        fallback = 0
+    end
+    fd = msh_redir_fd(op, fallback)
+    out = "" + vars
+    if msh_exec_redir_is_heredoc(op) == 1 and fd == 0 then
+        dealloc(out)
+        out = msh_exec_fds_record_stdin_heredoc(vars, target)
+    elsif msh_exec_redir_is_heredoc(op) == 1 and fd != 0 then
+        dealloc(out)
+        out = msh_exec_fds_save_stdin_heredoc_to_fd(vars, fd, target)
+    elsif fd == 1 and (base == ">" or base == ">|" or base == ">>") then
+        append = 0
+        if base == ">>" then
+            append = 1
+        end
+        resolved = msh_exec_fds_metadata_path(target)
+        dealloc(out)
+        out = msh_exec_fds_record_stdout(vars, resolved, append)
+        dealloc(resolved)
+    elsif fd > 2 and (base == ">" or base == ">|" or base == ">>") then
+        append_saved = 0
+        if base == ">>" then
+            append_saved = 1
+        end
+        resolved_saved = msh_exec_fds_metadata_path(target)
+        dealloc(out)
+        out = msh_exec_fds_save_stdout_path_to_fd(vars, fd, resolved_saved, append_saved)
+        dealloc(resolved_saved)
+    elsif base == ">&" and target != "-" and msh_redir_is_digits(target) == 1 then
+        source_fd = parse_int(target)
+        if fd != 1 and source_fd == 1 then
+            dealloc(out)
+            out = msh_exec_fds_save_stdout_to_fd(vars, fd)
+        elsif fd != 1 then
+            dealloc(out)
+            out = msh_exec_fds_save_stdout_fd_to_fd(vars, fd, source_fd)
+        elsif fd == 1 then
+            dealloc(out)
+            out = msh_exec_fds_restore_stdout_from_fd(vars, source_fd)
+        end
+    elsif fd == 0 and (base == "<" or base == "<>") then
+        resolved_in = msh_exec_fds_metadata_path(target)
+        dealloc(out)
+        out = msh_exec_fds_record_stdin(vars, resolved_in)
+        dealloc(resolved_in)
+    elsif fd != 0 and base == "<>" then
+        resolved_rw_fd = msh_exec_fds_metadata_path(target)
+        dealloc(out)
+        out = msh_exec_fds_save_readwrite_path_to_fd(vars, fd, resolved_rw_fd)
+        dealloc(resolved_rw_fd)
+    elsif fd != 0 and base == "<" then
+        resolved_in_fd = msh_exec_fds_metadata_path(target)
+        dealloc(out)
+        out = msh_exec_fds_save_stdin_path_to_fd(vars, fd, resolved_in_fd, 0)
+        dealloc(resolved_in_fd)
+    elsif base == "<&" and target != "-" and msh_redir_is_digits(target) == 1 then
+        source_in_fd = parse_int(target)
+        if fd != 0 and source_in_fd == 0 then
+            dealloc(out)
+            out = msh_exec_fds_save_stdin_to_fd(vars, fd)
+        elsif fd != 0 then
+            dealloc(out)
+            out = msh_exec_fds_save_stdin_fd_to_fd(vars, fd, source_in_fd)
+        elsif fd == 0 then
+            dealloc(out)
+            out = msh_exec_fds_restore_stdin_from_fd(vars, source_in_fd)
+        end
+    elsif fd == 1 and base == ">&" and target == "-" then
+        dealloc(out)
+        out = msh_state_unset(vars, "__exec_stdout_path")
+        old = out
+        out = msh_state_unset(out, "__exec_stdout_append")
+        dealloc(old)
+    elsif fd == 0 and base == "<&" and target == "-" then
+        dealloc(out)
+        out = msh_state_unset(vars, "__exec_stdin_path")
+        old2 = out
+        out = msh_state_unset(out, "__exec_stdin_offset")
+        dealloc(old2)
+        old3 = out
+        out = msh_state_unset(out, "__exec_stdin_alias_fd")
+        dealloc(old3)
+    elsif fd != 1 and base == ">&" and target == "-" then
+        dealloc(out)
+        out = msh_exec_fds_clear_saved_stdout_fd(vars, fd)
+    elsif fd != 0 and base == "<&" and target == "-" then
+        dealloc(out)
+        out = msh_exec_fds_clear_saved_stdin_fd(vars, fd)
+    end
+    dealloc(base)
+    return out
+end
+
+string msh_exec_fds_apply_one(vars: string, op: string, target: string):
+    return msh_exec_fds_apply_one_mode(vars, op, target, 1)
+end
+
+def msh_exec_fds_apply_command_redirs(ast: string, vars: string): MshEvalResult
+    targets_result = msh_exec_redir_targets_array_state(ast, vars)
+    if targets_result.status != 0 then
+        failed_status = targets_result.status
+        failed_vars = "" + targets_result.vars
+        msh_field_array_destroy(targets_result.targets)
+        dealloc(targets_result.vars)
+        return new MshEvalResult(failed_status, failed_vars)
+    end
+    ops = msh_exec_redir_ops_array(ast)
+    targets = msh_redir_targets_result_targets(targets_result)
+    out = "" + targets_result.vars
+    dealloc(targets_result.vars)
+    status = 0
+    i = 0
+    while i < str_array_len(ops) and status == 0 then
+        op = str_array_get(ops, i)
+        target = str_array_get(targets, i)
+        base = msh_exec_redir_base_op(op)
+        status = msh_exec_fds_dup_source_status(out, base, target)
+        if status == 0 then
+            next = msh_exec_fds_apply_one_mode(out, op, target, 0)
+            dealloc(out)
+            out = next
+        end
+        dealloc(base)
+        i++
+    end
+    msh_field_array_destroy(ops)
+    msh_field_array_destroy(targets)
+    return new MshEvalResult(status, out)
+end
+
+int msh_exec_fds_dup_source_available(vars: string, base: string, target: string):
+    if target == "-" then
+        return 1
+    end
+    if msh_redir_is_digits(target) == 0 then
+        return 1
+    end
+    source_fd = parse_int(target)
+    if source_fd >= 3 then
+        if msh_exec_fds_is_marked_closed(vars, source_fd) == 1 then
+            return 0
+        end
+        if base == ">&" and msh_exec_fds_saved_stdout_exists(vars, source_fd) == 1 then
+            return 1
+        end
+        if base == "<&" and msh_exec_fds_saved_stdin_exists(vars, source_fd) == 1 then
+            return 1
+        end
+    end
+    return msh_exec_fds_source_fd_live(source_fd)
+end
+
+string msh_exec_fds_mark_failed_stdout_dup(ast: string, vars: string):
+    ops = msh_exec_redir_ops_array(ast)
+    targets = msh_exec_redir_targets_array(ast, vars)
+    out = "" + vars
+    i = 0
+    while i < str_array_len(ops) then
+        op = str_array_get(ops, i)
+        target = str_array_get(targets, i)
+        base = msh_exec_redir_base_op(op)
+        fallback = msh_redir_target_fd(base)
+        fd = msh_redir_fd(op, fallback)
+        if fd == 1 and base == ">&" then
+            if msh_exec_fds_dup_source_available(out, base, target) == 0 then
+                next = msh_exec_fds_mark_closed(out, 1)
+                dealloc(out)
+                out = next
+                i = str_array_len(ops)
+            end
+        end
+        dealloc(base)
+        i++
+    end
+    msh_field_array_destroy(ops)
+    msh_field_array_destroy(targets)
+    return out
+end
+
+int msh_exec_fds_apply_real(op: string, target: string, vars: string):
+    base = msh_exec_redir_base_op(op)
+    fallback = msh_redir_target_fd(base)
+    fd = msh_redir_fd(op, fallback)
+    status = 0
+    if msh_exec_redir_is_heredoc(op) == 1 then
+        dealloc(base)
+        return 0
+    end
+    if fd == 0 or fd == 1 then
+        dealloc(base)
+        return 0
+    end
+    if base == ">&" or base == "<&" then
+        if msh_redir_dup_uses_metadata(vars, base, target) == 1 then
+            status = 0
+        else
+            status = msh_redir_apply_dup(op, base, target, vars)
+        end
+    else
+        status = msh_redir_apply_open(op, base, target, vars)
+    end
+    dealloc(base)
+    return status
+end
+
+def msh_exec_fds_apply_redirs(ast: string, vars: string): MshEvalResult
+    status = msh_exec_apply_redirs_only(ast, vars)
+    if status != 0 then
+        out_failed = msh_exec_fds_mark_failed_stdout_dup(ast, vars)
+        return new MshEvalResult(status, out_failed)
+    end
+    ops = msh_exec_redir_ops_array(ast)
+    targets = msh_exec_redir_targets_array(ast, vars)
+    out = "" + vars
+    i = 0
+    while i < str_array_len(ops) and status == 0 then
+        op = str_array_get(ops, i)
+        target = str_array_get(targets, i)
+        base = msh_exec_redir_base_op(op)
+        status = msh_exec_fds_dup_source_status(out, base, target)
+        dealloc(base)
+        if status == 0 then
+            status = msh_exec_fds_apply_real(op, target, out)
+        end
+        if status == 0 then
+            next = msh_exec_fds_apply_one(out, op, target)
+            dealloc(out)
+            out = next
+        end
+        i++
+    end
+    msh_field_array_destroy(ops)
+    msh_field_array_destroy(targets)
+    return new MshEvalResult(status, out)
+end

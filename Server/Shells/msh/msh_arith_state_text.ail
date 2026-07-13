@@ -1,0 +1,180 @@
+// msh_arith_state_text.ail
+// Text expansion and numeric coercion helpers for stateful shell arithmetic.
+
+import msh_defs
+import msh_arith
+import msh_diagnostics
+import msh_expand_diag
+import msh_expand_vars
+import msh_subst
+
+record MshArithStateNumericResult then
+    int value
+    int ok
+end
+
+void msh_arith_state_diag_illegal_number(vars: string, text: string):
+    msg = "Illegal number: " + text
+    msh_expand_diag_context(vars, msg)
+    dealloc(msg)
+end
+
+int msh_arith_state_is_value_space(c: int):
+    if c == MSH_CH_SPACE or c == MSH_CH_TAB or c == MSH_CH_LF or c == MSH_CH_CR then
+        return 1
+    end
+    return 0
+end
+
+int msh_arith_state_skip_value_ws(text: string, pos: int):
+    i = pos
+    while i < strlen(text) and msh_arith_state_is_value_space(char_at(text, i)) == 1 then
+        i++
+    end
+    return i
+end
+
+def msh_arith_state_numeric_text(text: string): MshArithStateNumericResult
+    i = msh_arith_state_skip_value_ws(text, 0)
+    if i >= strlen(text) then
+        return new MshArithStateNumericResult(0, 1)
+    end
+    sign = 1
+    c = char_at(text, i)
+    if c == MSH_CH_PLUS then
+        i++
+    elsif c == MSH_CH_MINUS then
+        sign = -1
+        i++
+    end
+    parsed = msh_arith_parse_number(text, i)
+    if parsed.ok == 0 then
+        return new MshArithStateNumericResult(0, 0)
+    end
+    end_pos = msh_arith_state_skip_value_ws(text, parsed.pos)
+    if end_pos != strlen(text) then
+        return new MshArithStateNumericResult(0, 0)
+    end
+    value = parsed.value
+    if sign < 0 then
+        value = 0 - value
+    end
+    return new MshArithStateNumericResult(value, 1)
+end
+
+def msh_arith_state_named_numeric(vars: string, name: string): MshArithStateNumericResult
+    text = msh_arith_var_get_local(vars, name)
+    parsed = msh_arith_state_numeric_text(text)
+    if parsed.ok == 0 then
+        msh_arith_state_diag_illegal_number(vars, text)
+    end
+    dealloc(text)
+    return parsed
+end
+
+string msh_arith_state_copy_nested_arith(expr: string, pos: int):
+    close = msh_arith_find_close(expr, pos + 3)
+    if close == MSH_INDEX_NOT_FOUND then
+        return "" + "$"
+    end
+    return substr(expr, pos, close + 2 - pos)
+end
+
+string msh_arith_state_expand_command_text(expr: string, pos: int, vars: string):
+    close = msh_arith_find_command_sub_close(expr, pos + 2)
+    if close == MSH_INDEX_NOT_FOUND then
+        return "" + "$"
+    end
+    command = substr(expr, pos + 2, close - pos - 2)
+    raw = msh_subst_capture_with_vars(command, vars)
+    trimmed = msh_arith_trim_command_output(raw)
+    dealloc(command, raw)
+    return trimmed
+end
+
+string msh_arith_state_param_text(vars: string, name: string, last_status: int):
+    return msh_param_value(vars, name, last_status)
+end
+
+string msh_arith_state_append_owned(out: string, piece: string):
+    next = out + piece
+    dealloc(out)
+    return next
+end
+
+int msh_arith_state_needs_text_expand(expr: string):
+    i = 0
+    while i < strlen(expr) then
+        if char_at(expr, i) == MSH_CH_DOLLAR then
+            return 1
+        end
+        i++
+    end
+    return 0
+end
+
+string msh_arith_state_expand_text(expr: string, vars: string):
+    out = "" + ""
+    last_status = msh_arith_last_status(vars)
+    i = 0
+    while i < strlen(expr) then
+        c = char_at(expr, i)
+        if c == MSH_CH_DOLLAR and i + 1 < strlen(expr) then
+            next = char_at(expr, i + 1)
+            if next == MSH_CH_LPAREN and i + 2 < strlen(expr) and char_at(expr, i + 2) == MSH_CH_LPAREN then
+                piece_nested = msh_arith_state_copy_nested_arith(expr, i)
+                out = msh_arith_state_append_owned(out, piece_nested)
+                close_nested = msh_arith_find_close(expr, i + 3)
+                dealloc(piece_nested)
+                if close_nested == MSH_INDEX_NOT_FOUND then
+                    i++
+                else
+                    i = close_nested + 2
+                end
+            elsif next == MSH_CH_LPAREN then
+                piece_cmd = msh_arith_state_expand_command_text(expr, i, vars)
+                out = msh_arith_state_append_owned(out, piece_cmd)
+                close_cmd = msh_arith_find_command_sub_close(expr, i + 2)
+                dealloc(piece_cmd)
+                if close_cmd == MSH_INDEX_NOT_FOUND then
+                    i++
+                else
+                    i = close_cmd + 1
+                end
+            elsif next == MSH_CH_LBRACE then
+                close_param = msh_arith_brace_param_end(expr, i + 2)
+                if close_param == MSH_INDEX_NOT_FOUND then
+                    ch_bad = chr(c)
+                    out = msh_arith_state_append_owned(out, ch_bad)
+                    dealloc(ch_bad)
+                    i++
+                else
+                    name = substr(expr, i + 2, close_param - i - 2)
+                    value = msh_arith_state_param_text(vars, name, last_status)
+                    out = msh_arith_state_append_owned(out, value)
+                    dealloc(name, value)
+                    i = close_param + 1
+                end
+            elsif msh_arith_is_name_start(next) == 1 then
+                end_name = msh_arith_name_end(expr, i + 1)
+                name2 = substr(expr, i + 1, end_name - i - 1)
+                value2 = msh_arith_state_param_text(vars, name2, last_status)
+                out = msh_arith_state_append_owned(out, value2)
+                dealloc(name2, value2)
+                i = end_name
+            else
+                name3 = chr(next)
+                value3 = msh_arith_state_param_text(vars, name3, last_status)
+                out = msh_arith_state_append_owned(out, value3)
+                dealloc(name3, value3)
+                i = i + 2
+            end
+        else
+            ch = chr(c)
+            out = msh_arith_state_append_owned(out, ch)
+            dealloc(ch)
+            i++
+        end
+    end
+    return out
+end

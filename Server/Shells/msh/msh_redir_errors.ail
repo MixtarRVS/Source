@@ -1,0 +1,162 @@
+// msh_redir_errors.ail
+// Shared redirection diagnostics and status mapping.
+
+import msh_defs
+import msh_diagnostics
+import msh_state
+
+int msh_redir_error_status():
+    return 2
+end
+
+int msh_redir_error_is_input(base: string):
+    if base == "<" then
+        return 1
+    end
+    return 0
+end
+
+int msh_redir_path_is_dir(path: string):
+    old_dir = current_dir()
+    rc = change_dir(path)
+    if rc == 0 then
+        change_dir(old_dir)
+        dealloc(old_dir)
+        return 1
+    end
+    dealloc(old_dir)
+    return 0
+end
+
+string msh_redir_open_failure_left(base: string):
+    if msh_redir_error_is_input(base) == 1 then
+        return "" + "cannot open "
+    end
+    return "" + "cannot create "
+end
+
+string msh_redir_open_failure_suffix(base: string, target: string):
+    if msh_redir_error_is_input(base) == 0 and msh_redir_path_is_dir(target) == 1 then
+        return "" + ": Is a directory"
+    end
+    if msh_redir_error_is_input(base) == 1 then
+        return "" + ": No such file"
+    end
+    return "" + ": Directory nonexistent"
+end
+
+void msh_redir_diag_open_failure(base: string, target: string):
+    left = msh_redir_open_failure_left(base)
+    suffix = msh_redir_open_failure_suffix(base, target)
+    mid = left + target
+    msg = mid + suffix
+    msh_diag(msg)
+    dealloc(left, suffix, mid, msg)
+end
+
+void msh_redir_diag_context(vars: string, text: string):
+    prefix = msh_state_get(vars, "__redir_diag_prefix")
+    if strlen(prefix) > 0 then
+        left = prefix + ": "
+        msg = left + text
+        msh_diag(msg)
+        dealloc(left, msg, prefix)
+        return
+    end
+    msh_diag_source(vars, text)
+    dealloc(prefix)
+end
+
+void msh_redir_diag_open_failure_context(base: string, target: string, vars: string):
+    left = msh_redir_open_failure_left(base)
+    suffix = msh_redir_open_failure_suffix(base, target)
+    mid = left + target
+    msg = mid + suffix
+    msh_redir_diag_context(vars, msg)
+    dealloc(left, suffix, mid, msg)
+end
+
+int msh_redir_open_failure_status(base: string, target: string):
+    msh_redir_diag_open_failure(base, target)
+    return msh_redir_error_status()
+end
+
+int msh_redir_open_failure_status_context(base: string, target: string, vars: string):
+    msh_redir_diag_open_failure_context(base, target, vars)
+    return msh_redir_error_status()
+end
+
+int msh_redir_create_failure_status(path: string):
+    msh_redir_diag_open_failure(">", path)
+    return msh_redir_error_status()
+end
+
+int msh_redir_create_failure_status_context(path: string, vars: string):
+    msh_redir_diag_open_failure_context(">", path, vars)
+    return msh_redir_error_status()
+end
+
+int msh_redir_file_exists_status(path: string):
+    left = "cannot create " + path
+    msg = left + ": File exists"
+    msh_diag(msg)
+    dealloc(left, msg)
+    return msh_redir_error_status()
+end
+
+int msh_redir_file_exists_status_context(path: string, vars: string):
+    left = "cannot create " + path
+    msg = left + ": File exists"
+    msh_redir_diag_context(vars, msg)
+    dealloc(left, msg)
+    return msh_redir_error_status()
+end
+
+int msh_redir_bad_operator_status(op: string):
+    msg = "bad redirection: " + op
+    msh_diag(msg)
+    dealloc(msg)
+    return msh_redir_error_status()
+end
+
+int msh_redir_bad_fd_status(target: string):
+    msg = target + ": Bad file descriptor"
+    msh_diag(msg)
+    dealloc(msg)
+    return msh_redir_error_status()
+end
+
+int msh_redir_bad_fd_status_context(target: string, vars: string):
+    msg = target + ": Bad file descriptor"
+    msh_redir_diag_context(vars, msg)
+    dealloc(msg)
+    return msh_redir_error_status()
+end
+
+int msh_redir_bad_fd_status_context_for_fd(target: string, vars: string, target_fd: int):
+    if target_fd == 2 then
+        return msh_redir_error_status()
+    end
+    return msh_redir_bad_fd_status_context(target, vars)
+end
+
+int msh_redir_bad_fd_number_status():
+    msh_diag("Syntax error: Bad fd number")
+    return msh_redir_error_status()
+end
+
+int msh_redir_bad_fd_number_status_context(vars: string):
+    msh_redir_diag_context(vars, "Syntax error: Bad fd number")
+    return msh_redir_error_status()
+end
+
+void msh_redir_diag_ambiguous(raw: string):
+    msg = raw + ": ambiguous redirect"
+    msh_diag(msg)
+    dealloc(msg)
+end
+
+int msh_redir_ambiguous_status(raw: string):
+    msh_redir_diag_ambiguous(raw)
+    return msh_redir_error_status()
+end

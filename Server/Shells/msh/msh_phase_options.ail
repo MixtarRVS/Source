@@ -1,0 +1,59 @@
+// msh_phase_options.ail
+// Shared option-list formatting for set -o / set +o.
+
+import msh_phase_state
+import msh_output
+
+string msh_phase_option_emit(vars: string, name: string, plus_form: int):
+    enabled = msh_option_get(vars, name)
+    if plus_form == 1 then
+        op = "+o"
+        if enabled == 1 then
+            op = "-o"
+        end
+        left = "set " + op
+        mid = left + " "
+        line = mid + name
+        out = msh_output_line(vars, line)
+        dealloc(left, mid, line)
+        return out
+    end
+    state = "off"
+    if enabled == 1 then
+        state = "on"
+    end
+    left2 = name + " "
+    line2 = left2 + state
+    out2 = msh_output_line(vars, line2)
+    dealloc(left2, line2)
+    return out2
+end
+
+string msh_phase_options_print(vars: string, plus_form: int):
+    out = "" + vars
+    old_a = out
+    out = msh_phase_option_emit(out, "allexport", plus_form)
+    dealloc(old_a)
+    old = out
+    out = msh_phase_option_emit(out, "errexit", plus_form)
+    dealloc(old)
+    old = out
+    out = msh_phase_option_emit(out, "noglob", plus_form)
+    dealloc(old)
+    old = out
+    out = msh_phase_option_emit(out, "noclobber", plus_form)
+    dealloc(old)
+    old = out
+    out = msh_phase_option_emit(out, "noexec", plus_form)
+    dealloc(old)
+    old = out
+    out = msh_phase_option_emit(out, "nounset", plus_form)
+    dealloc(old)
+    old = out
+    out = msh_phase_option_emit(out, "verbose", plus_form)
+    dealloc(old)
+    old = out
+    out = msh_phase_option_emit(out, "xtrace", plus_form)
+    dealloc(old)
+    return out
+end

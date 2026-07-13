@@ -1,0 +1,11 @@
+* text=auto
+*.ail text eol=lf
+*.c text eol=lf
+*.h text eol=lf
+*.sh text eol=lf
+*.sql text eol=lf
+*.md text eol=lf
+*.ps1 text eol=crlf
+*.cmd text eol=crlf
+*.gpg binary
+*.png binary

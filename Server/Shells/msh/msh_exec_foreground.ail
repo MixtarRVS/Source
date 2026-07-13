@@ -1,0 +1,127 @@
+// msh_exec_foreground.ail
+// Monitor-mode foreground external execution helpers.
+
+import msh_defs
+import msh_exec
+import msh_exec_fdmeta
+import msh_exec_redirs
+import msh_exec_resolve
+import msh_fields
+import msh_phase_state
+import msh_signals
+import msh_state
+
+record MshExecForegroundResult then
+    int status
+    string vars
+    int fatal
+end
+
+int msh_exec_foreground_stopped(status: int):
+    if status <= MSH_JOB_STOPPED_BASE then
+        return 1
+    end
+    return 0
+end
+
+int msh_exec_foreground_shell_status(status: int):
+    if msh_exec_foreground_stopped(status) == 1 then
+        offset = status - MSH_JOB_STOPPED_BASE
+        signo = 0 - offset
+        return 128 + signo
+    end
+    return status
+end
+
+string msh_exec_foreground_record_stop(vars: string, pid: int, status: int, ast: string):
+    running = msh_job_record_running(vars, pid, ast)
+    id = msh_job_id_for_pid(running, pid)
+    if id <= 0 then
+        return running
+    end
+    out = msh_job_set_status(running, id, status)
+    dealloc(running)
+    return out
+end
+
+def msh_exec_foreground_command_state_result(ast: string, vars: string, fields: str_array, skip: int): MshExecForegroundResult
+    if msh_option_get(vars, "monitor") == 0 or fd_is_tty(0) == 0 then
+        normal = msh_exec_command_status_with_fields_from_result(ast, vars, fields, skip)
+        return new MshExecForegroundResult(normal.status, "" + vars, normal.fatal)
+    end
+
+    run_fields = msh_exec_fields_slice(fields, skip)
+    if str_array_len(run_fields) == 0 then
+        msh_field_array_destroy(run_fields)
+        return new MshExecForegroundResult(127, "" + vars, 0)
+    end
+
+    name = str_array_get(run_fields, 0)
+    redir_result = msh_exec_apply_redirs_only_result(ast, vars)
+    status = redir_result.status
+    fatal = redir_result.fatal
+    if status != 0 then
+        msh_field_array_destroy(run_fields)
+        return new MshExecForegroundResult(status, "" + vars, fatal)
+    end
+
+    preflight_status = msh_exec_preflight_fields_status(run_fields, vars)
+    if preflight_status != 0 then
+        msh_field_array_destroy(run_fields)
+        return new MshExecForegroundResult(preflight_status, "" + vars, 0)
+    end
+
+    run_fields = msh_exec_resolve_fields_argv0(run_fields, vars)
+    ops = msh_exec_fdmeta_take_ops(vars, msh_exec_redir_ops_array(ast))
+    targets = msh_exec_fdmeta_take_targets(vars, msh_exec_redir_targets_array(ast, vars))
+    env = msh_state_export_child_env(vars)
+    pid = process_spawn_argv_env_redirs_pgrp(run_fields, env, ops, targets, 0)
+
+    if pid <= 0 then
+        status = 0 - pid
+        status = msh_exec_status_from_errno(status)
+        msh_exec_diag_exec_failure(name, status)
+        msh_field_array_destroy(env)
+        msh_field_array_destroy(ops)
+        msh_field_array_destroy(targets)
+        msh_field_array_destroy(run_fields)
+        return new MshExecForegroundResult(status, "" + vars, 0)
+    end
+
+    shell_pgrp = terminal_get_pgrp(0)
+    child_pgrp = process_get_pgrp(pid)
+    handed_terminal = 0
+    ttou_signal = msh_signal_number("TTOU")
+    if ttou_signal > 0 then
+        ignore_ttou_rc = signal_ignore(ttou_signal)
+    end
+    if shell_pgrp > 0 and child_pgrp > 0 then
+        handoff_rc = terminal_set_pgrp(0, child_pgrp)
+        if handoff_rc == 0 then
+            handed_terminal = 1
+        end
+    end
+
+    status = process_wait_pid_event(pid)
+    if handed_terminal == 1 then
+        restore_rc = terminal_set_pgrp(0, shell_pgrp)
+    end
+    if ttou_signal > 0 then
+        default_ttou_rc = signal_default(ttou_signal)
+    end
+
+    if msh_exec_foreground_stopped(status) == 1 then
+        out_vars = msh_exec_foreground_record_stop(vars, pid, status, ast)
+        status = msh_exec_foreground_shell_status(status)
+    else
+        status = msh_exec_status_from_errno(status)
+        msh_exec_diag_exec_failure(name, status)
+        out_vars = "" + vars
+    end
+
+    msh_field_array_destroy(env)
+    msh_field_array_destroy(ops)
+    msh_field_array_destroy(targets)
+    msh_field_array_destroy(run_fields)
+    return new MshExecForegroundResult(status, out_vars, 0)
+end

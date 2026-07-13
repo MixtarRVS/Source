@@ -1,0 +1,53 @@
+{
+  "name": "MixtarRVS Base Closure 0023",
+  "id": "0023-initramfs-builder-input-closure",
+  "status": "input-closure-generated-no-initramfs-build",
+  "purpose": "Define and measure the tool, library, module, and mount input closure required to build a future MixtarRVS initramfs containing the image-root handoff prototype.",
+  "requires": [
+    "/System/Base/Closure/0022-initramfs-handoff-prototype-no-install/initramfs-handoff-prototype-no-install-status.txt",
+    "/System/Initramfs/Prototypes/mixtar-initramfs-handoff.sh",
+    "/System/Kernel/Current/vmlinuz",
+    "/System/Kernel/Current/initramfs.img",
+    "/System/Kernel/Current/modules",
+    "/System/Generations/0015-rootfs-image-first-file/rootfs.squashfs"
+  ],
+  "installs_non_boot_prototype": [
+    "/System/Initramfs/Prototypes/mixtar-initramfs-input-closure.sh"
+  ],
+  "commands": [
+    "mixtar-initramfs-input-closure contract",
+    "mixtar-initramfs-input-closure tools",
+    "mixtar-initramfs-input-closure libraries",
+    "mixtar-initramfs-input-closure modules",
+    "mixtar-initramfs-input-closure mounts",
+    "mixtar-initramfs-input-closure report"
+  ],
+  "non_goals": [
+    "do not build initramfs",
+    "do not overwrite active initramfs",
+    "do not write bootloader entries",
+    "do not switch /System/Current",
+    "do not mount rootfs image as /",
+    "do not run switch_root"
+  ],
+  "must_report": [
+    "required tools",
+    "dynamic library closure",
+    "required kernel modules or built-in filesystem support",
+    "required mount filesystem support",
+    "overlay readiness",
+    "rootfs image readiness",
+    "handoff prototype readiness",
+    "current initramfs hash before and after",
+    "current generation before and after"
+  ],
+  "postconditions": [
+    "input closure script exists outside active initramfs",
+    "closure reports are generated",
+    "active initramfs hash is unchanged",
+    "/System/Current is unchanged",
+    "rootfs inspection mountpoint is unmounted",
+    "activation remains disallowed"
+  ],
+  "next_stage": "0024-overlay-support-decision"
+}

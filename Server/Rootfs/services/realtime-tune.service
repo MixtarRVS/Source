@@ -1,0 +1,7 @@
+name=realtime-tune
+title=Mixtar realtime tuning
+role=kernel_runtime_tuning
+backend=openrc
+backend_name=mixtar-realtime-tune
+runlevel=boot
+enabled=true

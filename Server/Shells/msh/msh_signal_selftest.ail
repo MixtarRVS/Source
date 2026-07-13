@@ -1,0 +1,179 @@
+// msh_signal_selftest.ail
+// Guards POSIX signal/trap normalization and shell-side pending dispatch.
+
+import msh_eval
+import msh_eval_entry
+import msh_eval_result
+import msh_phase_state
+import msh_signals
+import msh_state
+
+int msh_signal_expect_int(name: string, got: int, expected: int):
+    if got == expected then
+        return 0
+    end
+    print "msh signal selftest failed"
+    msg = name + " got="
+    msg2 = msg + str(got)
+    msg3 = msg2 + " want="
+    msg4 = msg3 + str(expected)
+    print msg4
+    dealloc(msg, msg2, msg3, msg4)
+    return 1
+end
+
+int msh_signal_expect_text(name: string, got: string, expected: string):
+    if got == expected then
+        dealloc(got)
+        return 0
+    end
+    print "msh signal selftest failed"
+    msg = name + " got="
+    msg2 = msg + got
+    msg3 = msg2 + " want="
+    msg4 = msg3 + expected
+    print msg4
+    dealloc(msg, msg2, msg3, msg4, got)
+    return 1
+end
+
+int msh_signal_core_selftest():
+    if msh_signal_expect_int("INT number", msh_signal_number("INT"), 2) != 0 then
+        return 1
+    end
+    if msh_signal_expect_int("numeric number", msh_signal_number("2"), 2) != 0 then
+        return 1
+    end
+    if msh_signal_expect_text("numeric canonical", msh_signal_canonical("2"), "INT") != 0 then
+        return 1
+    end
+    if msh_signal_expect_text("zero canonical", msh_signal_canonical("0"), "EXIT") != 0 then
+        return 1
+    end
+    if msh_signal_expect_int("SIG prefix rejected", msh_signal_valid("SIGINT"), 0) != 0 then
+        return 1
+    end
+    if msh_signal_expect_int("TERM exit status", msh_signal_exit_status("TERM"), 143) != 0 then
+        return 1
+    end
+    if msh_signal_expect_int("KILL untrappable", msh_signal_untrappable("KILL"), 1) != 0 then
+        return 1
+    end
+    if msh_signal_expect_int("numeric KILL untrappable", msh_signal_untrappable("9"), 1) != 0 then
+        return 1
+    end
+    if msh_signal_expect_int("STOP untrappable", msh_signal_untrappable("STOP"), 1) != 0 then
+        return 1
+    end
+    if msh_signal_expect_int("TERM trappable", msh_signal_untrappable("TERM"), 0) != 0 then
+        return 1
+    end
+    return 0
+end
+
+int msh_signal_trap_selftest():
+    result = msh_eval_source_state_internal("trap cleanup 2", "")
+    action = msh_trap_get(result.vars, "INT")
+    action2 = msh_trap_get(result.vars, "2")
+    ok = 0
+    if result.status == 0 and action == "cleanup" and action2 == "cleanup" then
+        ok = 1
+    end
+    if ok == 0 then
+        print "msh trap canonical selftest failed"
+    end
+    dealloc(action, action2, result.vars)
+    if ok == 0 then
+        return 1
+    end
+
+    bad = msh_eval_source_state_internal("trap cleanup SIGINT", "")
+    if bad.status != 1 then
+        print "msh trap invalid signal selftest failed"
+        dealloc(bad.vars)
+        return 1
+    end
+    dealloc(bad.vars)
+    return 0
+end
+
+int msh_signal_pending_default_selftest():
+    pending = msh_signal_pending_set("", "TERM")
+    result = msh_eval_source_state_internal(":", pending)
+    last_status = msh_state_get(result.vars, "__last_status")
+    pending_after = msh_signal_pending_get(result.vars)
+    ok = 0
+    if result.status == 143 and last_status == "143" and strlen(pending_after) == 0 then
+        ok = 1
+    end
+    if ok == 0 then
+        print "msh pending signal default selftest failed"
+    end
+    dealloc(pending, result.vars, last_status, pending_after)
+    if ok == 1 then
+        return 0
+    end
+    return 1
+end
+
+int msh_signal_pending_trap_selftest():
+    trapped = msh_trap_set("", "TERM", "A=trapped")
+    pending = msh_signal_pending_set(trapped, "TERM")
+    result = msh_eval_source_state_internal(":", pending)
+    value = msh_state_get(result.vars, "A")
+    pending_after = msh_signal_pending_get(result.vars)
+    ok = 0
+    if result.status == 0 and value == "trapped" and strlen(pending_after) == 0 then
+        ok = 1
+    end
+    if ok == 0 then
+        print "msh pending signal trap selftest failed"
+    end
+    dealloc(trapped, pending, result.vars, value, pending_after)
+    if ok == 1 then
+        return 0
+    end
+    return 1
+end
+
+int msh_signal_native_trap_selftest():
+    trapped = msh_trap_set("", "TERM", "A=native")
+    install_rc = signal_install(15)
+    raise_rc = signal_raise(15)
+    result = msh_eval_source_state_internal(":", trapped)
+    value = msh_state_get(result.vars, "A")
+    pending_after = msh_signal_pending_get(result.vars)
+    native_after = signal_pending()
+    expected_status = msh_signal_exit_status("TERM")
+    ok = 0
+    if install_rc == 0 and raise_rc == 0 and result.status == expected_status and value == "native" and strlen(pending_after) == 0 and native_after == 0 then
+        ok = 1
+    end
+    if ok == 0 then
+        print "msh native signal trap selftest failed"
+    end
+    dealloc(trapped, result.vars, value, pending_after)
+    if ok == 1 then
+        return 0
+    end
+    return 1
+end
+
+int msh_signal_selftest():
+    if msh_signal_core_selftest() != 0 then
+        return 1
+    end
+    if msh_signal_trap_selftest() != 0 then
+        return 1
+    end
+    if msh_signal_pending_default_selftest() != 0 then
+        return 1
+    end
+    if msh_signal_pending_trap_selftest() != 0 then
+        return 1
+    end
+    if msh_signal_native_trap_selftest() != 0 then
+        return 1
+    end
+    return 0
+end

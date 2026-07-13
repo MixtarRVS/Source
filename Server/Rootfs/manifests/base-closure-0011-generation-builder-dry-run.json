@@ -1,0 +1,60 @@
+{
+  "name": "MixtarRVS Base Closure 0011",
+  "status": "non-activating-generation-builder-dry-run",
+  "created": "2026-06-29",
+  "purpose": "Add a dry-run generation build plan to the MixtarRVS generation interface, proving that the current kernel, toolkit, package backend, service, network, remote, runtime library, and closure inputs can be collected without creating or activating a generation.",
+  "requires": [
+    "/System/Base/Closure/0001-audit/manifest.json",
+    "/System/Base/Closure/0002-mixtar-session-path/manifest.json",
+    "/System/Base/Closure/0003-shell-runtime-and-libraries-profile/manifest.json",
+    "/System/Base/Closure/0004-initramfs-loader-path-and-kernel-profile/manifest.json",
+    "/System/Base/Closure/0005-initramfs-contract-and-fallback-init-shim/manifest.json",
+    "/System/Base/Closure/0006-service-and-network-closure-inventory/manifest.json",
+    "/System/Base/Closure/0007-mixtar-service-runner-skeleton/manifest.json",
+    "/System/Base/Closure/0008-mixtar-network-profile-layer/manifest.json",
+    "/System/Base/Closure/0009-mixtar-remote-access-policy/manifest.json",
+    "/System/Base/Closure/0010-package-generation-backend-boundary/manifest.json",
+    "/System/SystemTools/mixtar-generation",
+    "/System/SystemTools/mixtar-service",
+    "/System/SystemTools/mixtar-network",
+    "/System/SystemTools/mixtar-remote",
+    "/System/Kernel/Current",
+    "/System/Tools/Current/bin",
+    "/System/Libraries/MixtarRVS/Runtime/0003/lib"
+  ],
+  "installed_paths": [
+    "/System/SystemTools/mixtar-generation",
+    "/System/Base/Closure/0011-mixtar-generation-builder-dry-run/generation-build-dry-run.txt"
+  ],
+  "command": "mixtar-generation build --dry-run",
+  "dry_run_guarantees": [
+    "Does not create a generation directory.",
+    "Does not switch /System/Current.",
+    "Does not run apk add, apk del, or apk upgrade.",
+    "Does not rewrite /etc/apk/world.",
+    "Does not rewrite /etc/apk/repositories.",
+    "Does not rebuild rootfs.",
+    "Does not rebuild initramfs.",
+    "Does not change bootloader state."
+  ],
+  "expected_inputs": [
+    "kernel profile",
+    "Toolkit count",
+    "apk package inventory",
+    "apk world",
+    "apk repositories",
+    "service manifests",
+    "network profile",
+    "remote profile",
+    "runtime libraries",
+    "initramfs contract"
+  ],
+  "known_limitations": [
+    "This stage generates a plan only; it cannot build, switch, boot, rollback, or garbage-collect generations.",
+    "mksquashfs is missing, so image-based rootfs creation is blocked.",
+    "apk remains the hidden compatibility package backend.",
+    "The active root is still an installed mutable root.",
+    "No boot generation is produced by this stage."
+  ],
+  "next_stage": "0012-mixtar-rootfs-image-builder-requirements"
+}

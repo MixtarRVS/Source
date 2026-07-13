@@ -1,0 +1,52 @@
+{
+  "name": "MixtarRVS Base Closure 0024",
+  "id": "0024-overlay-support-decision",
+  "status": "overlay-decision-generated-no-boot-mutation",
+  "purpose": "Decide how MixtarRVS handles overlay support for the future image-root boot path after the input closure reported overlay as missing from the live filesystem list.",
+  "requires": [
+    "/System/Base/Closure/0023-initramfs-builder-input-closure/initramfs-builder-input-closure-status.txt",
+    "/System/Kernel/Current/config",
+    "/lib/modules/7.1.2-mixtar-rt/kernel/fs/overlayfs/overlay.ko.xz"
+  ],
+  "installs_non_boot_tool": [
+    "/System/Initramfs/Prototypes/mixtar-overlay-support-decision.sh"
+  ],
+  "commands": [
+    "mixtar-overlay-support-decision contract",
+    "mixtar-overlay-support-decision probe",
+    "mixtar-overlay-support-decision decision"
+  ],
+  "decision": {
+    "primary_boot_policy": "squashfs-readonly-plus-writable-overlay",
+    "read_only_image_boot_policy": "emergency-or-diagnostic-only",
+    "kernel_rebuild_required": false,
+    "initramfs_must_include_overlay_module": true
+  },
+  "non_goals": [
+    "do not load overlay module",
+    "do not mount overlay",
+    "do not build kernel",
+    "do not build initramfs",
+    "do not overwrite active initramfs",
+    "do not change bootloader",
+    "do not switch /System/Current"
+  ],
+  "must_report": [
+    "CONFIG_OVERLAY_FS value",
+    "overlay module path",
+    "overlay module hash",
+    "modprobe dry-run output",
+    "kernel rebuild requirement",
+    "initramfs overlay module requirement",
+    "primary boot policy",
+    "next required stage"
+  ],
+  "postconditions": [
+    "overlay decision report exists",
+    "active initramfs hash is unchanged",
+    "/System/Current is unchanged",
+    "rootfs inspection mountpoint is unmounted",
+    "activation remains disallowed"
+  ],
+  "next_stage": "0025-initramfs-module-closure-overlay"
+}

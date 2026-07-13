@@ -1,0 +1,801 @@
+// msh_process_builtins.ail
+// Non-interactive process/job builtins for the current msh profile.
+
+import msh_defs
+import msh_ast
+import msh_control
+import msh_diagnostics
+import msh_eval_result
+import msh_fields
+import msh_output
+import msh_phase_state
+import msh_pipeio
+import msh_signals
+import msh_state
+
+record MshProcessBuiltinResult then
+    int status
+    string vars
+end
+
+extern fn msh_eval_source_state_internal(source: string, vars: string): MshEvalResult
+
+string msh_process_emit_line(vars: string, text: string):
+    return msh_output_line(vars, text)
+end
+
+int msh_process_decimal(text: string):
+    if strlen(text) == 0 then
+        return 0
+    end
+    i = 0
+    while i < strlen(text) then
+        c = char_at(text, i)
+        if c < MSH_CH_DIGIT_0 or c > MSH_CH_DIGIT_9 then
+            return 0
+        end
+        i++
+    end
+    return 1
+end
+
+string msh_process_section(text: string, start_marker: string, end_marker: string):
+    start = index_of(text, start_marker)
+    if start == MSH_INDEX_NOT_FOUND then
+        return "" + ""
+    end
+    start = start + strlen(start_marker)
+    stop = index_of_from(text, end_marker, start)
+    if stop == MSH_INDEX_NOT_FOUND then
+        return "" + ""
+    end
+    return substr(text, start, stop - start)
+end
+
+string msh_job_display_command(raw: string):
+    if startswith(raw, "CMD(") == 0 then
+        return "" + raw
+    end
+    words = msh_process_section(raw, "words=[", "],redirs=[")
+    marker = "" + "WORD(\""
+    pos = index_of(words, marker)
+    out = "" + ""
+    while pos != MSH_INDEX_NOT_FOUND then
+        word_start = pos + strlen(marker)
+        word_end = msh_ast_string_end(words, word_start)
+        if word_end == MSH_INDEX_NOT_FOUND then
+            pos = MSH_INDEX_NOT_FOUND
+        else
+            encoded = substr(words, word_start, word_end - word_start)
+            word = msh_ast_unescape(encoded)
+            old = out
+            if strlen(out) == 0 then
+                out = "" + word
+            else
+                spaced = out + " "
+                out = spaced + word
+                dealloc(spaced)
+            end
+            dealloc(old, encoded, word)
+            pos = index_of_from(words, marker, word_end + 1)
+        end
+    end
+    if strlen(out) == 0 then
+        dealloc(out)
+        out = "" + raw
+    end
+    dealloc(words, marker)
+    return out
+end
+
+int msh_job_status_stopped(status: int):
+    if status <= MSH_JOB_STOPPED_BASE then
+        return 1
+    end
+    return 0
+end
+
+string msh_job_status_stopped_text(status: int):
+    offset = status - MSH_JOB_STOPPED_BASE
+    signo = 0 - offset
+    name = msh_signal_name_from_number(signo)
+    left = "Stopped(" + name
+    out = left + ") "
+    dealloc(name, left)
+    return out
+end
+
+int msh_job_status_shell_status(status: int):
+    if msh_job_status_stopped(status) == 1 then
+        offset = status - MSH_JOB_STOPPED_BASE
+        signo = 0 - offset
+        return 128 + signo
+    end
+    return status
+end
+
+int msh_job_signal_pid_or_group(pid: int, signal_number: int):
+    pgid = process_get_pgrp(pid)
+    shell_pgid = process_get_pgrp(0)
+    if pgid > 0 and pgid != shell_pgid then
+        return process_kill_pgrp(pgid, signal_number)
+    end
+    return process_kill_pid(pid, signal_number)
+end
+
+string msh_job_mark(vars: string, id: int):
+    default_id = msh_job_default_id(vars)
+    if id == default_id then
+        return "" + "+"
+    end
+    previous_id = msh_job_previous_id(vars)
+    if id == previous_id and previous_id != default_id then
+        return "" + "-"
+    end
+    return "" + " "
+end
+
+string msh_jobs_format_line(vars: string, id: int, verbose: int):
+    id_text = str(id)
+    pid_text = msh_job_get(vars, id, "pid")
+    status_text = msh_job_get(vars, id, "status")
+    command_text = msh_job_get(vars, id, "command")
+    display_command = msh_job_display_command(command_text)
+    mark = msh_job_mark(vars, id)
+    left = "[" + id_text
+    mid = left + "] "
+    mid_mark = mid + mark
+    base = mid_mark + " "
+    status_value = parse_int(status_text)
+    if verbose == 1 then
+        mid2 = base + pid_text
+        if status_text == "-1" then
+            mid3 = mid2 + " Running "
+            out = mid3 + display_command
+            dealloc(mid2, mid3)
+            dealloc(id_text, pid_text, status_text, command_text, display_command, mark, left, mid, mid_mark, base)
+            return out
+        end
+        if msh_job_status_stopped(status_value) == 1 then
+            stopped = msh_job_status_stopped_text(status_value)
+            mid_stopped = mid2 + " "
+            mid_stopped2 = mid_stopped + stopped
+            out = mid_stopped2 + display_command
+            dealloc(mid2, mid_stopped, mid_stopped2, stopped)
+            dealloc(id_text, pid_text, status_text, command_text, display_command, mark, left, mid, mid_mark, base)
+            return out
+        end
+        mid3 = mid2 + " Done("
+        mid4 = mid3 + status_text
+        mid5 = mid4 + ") "
+        out = mid5 + display_command
+        dealloc(mid2, mid3, mid4, mid5)
+    else
+        if status_text == "-1" then
+            mid_running = base + "Running "
+            out = mid_running + display_command
+            dealloc(mid_running)
+            dealloc(id_text, pid_text, status_text, command_text, display_command, mark, left, mid, mid_mark, base)
+            return out
+        end
+        if msh_job_status_stopped(status_value) == 1 then
+            stopped2 = msh_job_status_stopped_text(status_value)
+            mid_stopped3 = base + stopped2
+            out = mid_stopped3 + display_command
+            dealloc(stopped2, mid_stopped3)
+            dealloc(id_text, pid_text, status_text, command_text, display_command, mark, left, mid, mid_mark, base)
+            return out
+        end
+        mid6 = base + "Done("
+        mid7 = mid6 + status_text
+        mid8 = mid7 + ") "
+        out = mid8 + display_command
+        dealloc(mid6, mid7, mid8)
+    end
+    dealloc(id_text, pid_text, status_text, command_text, display_command, mark, left, mid, mid_mark, base)
+    return out
+end
+
+int msh_job_default_id(vars: string):
+    id = msh_job_next_id(vars) - 1
+    while id >= 1 then
+        command_text = msh_job_get(vars, id, "command")
+        if strlen(command_text) > 0 then
+            dealloc(command_text)
+            return id
+        end
+        dealloc(command_text)
+        id = id - 1
+    end
+    return 0
+end
+
+int msh_job_previous_id(vars: string):
+    seen_default = 0
+    id = msh_job_next_id(vars) - 1
+    while id >= 1 then
+        command_text = msh_job_get(vars, id, "command")
+        if strlen(command_text) > 0 then
+            if seen_default == 1 then
+                dealloc(command_text)
+                return id
+            end
+            seen_default = 1
+        end
+        dealloc(command_text)
+        id = id - 1
+    end
+    return msh_job_default_id(vars)
+end
+
+int msh_job_ref_match_id(vars: string, needle: string, contains: int):
+    matched = 0
+    matches = 0
+    id = 1
+    while id < msh_job_next_id(vars) then
+        command_text = msh_job_get(vars, id, "command")
+        if strlen(command_text) > 0 then
+            display = msh_job_display_command(command_text)
+            is_match = 0
+            if contains == 1 then
+                if index_of(display, needle) != MSH_INDEX_NOT_FOUND then
+                    is_match = 1
+                end
+            elsif startswith(display, needle) == 1 then
+                is_match = 1
+            end
+            if is_match == 1 then
+                matched = id
+                matches++
+            end
+            dealloc(display)
+        end
+        dealloc(command_text)
+        id++
+    end
+    if matches > 1 then
+        return -2
+    end
+    return matched
+end
+
+int msh_job_ref_id(vars: string, text: string):
+    if text == "%" or text == "%%" or text == "%+" then
+        return msh_job_default_id(vars)
+    end
+    if text == "%-" then
+        return msh_job_previous_id(vars)
+    end
+    if startswith(text, "%") == 1 and strlen(text) > 1 then
+        tail = substr(text, 1, strlen(text) - 1)
+        if msh_process_decimal(tail) == 1 then
+            id = parse_int(tail)
+        elsif startswith(tail, "?") == 1 and strlen(tail) > 1 then
+            needle = substr(tail, 1, strlen(tail) - 1)
+            id = msh_job_ref_match_id(vars, needle, 1)
+            dealloc(needle)
+        else
+            id = msh_job_ref_match_id(vars, tail, 0)
+        end
+        dealloc(tail)
+        return id
+    end
+    if msh_process_decimal(text) == 1 then
+        return parse_int(text)
+    end
+    return 0
+end
+
+int msh_job_ref_pid(vars: string, text: string):
+    id = msh_job_ref_id(vars, text)
+    if id <= 0 then
+        return 0
+    end
+    pid_text = msh_job_get(vars, id, "pid")
+    pid = parse_int(pid_text)
+    dealloc(pid_text)
+    return pid
+end
+
+string msh_jobs_refresh_one(vars: string, id: int):
+    status_text = msh_job_get(vars, id, "status")
+    if status_text == "-1" then
+        pid_text = msh_job_get(vars, id, "pid")
+        poll_status = process_poll_pid(parse_int(pid_text))
+        if poll_status != -1 then
+            out = msh_job_set_status(vars, id, poll_status)
+        else
+            out = "" + vars
+        end
+        dealloc(pid_text, status_text)
+        return out
+    end
+    dealloc(status_text)
+    return "" + vars
+end
+
+string msh_jobs_emit_one(vars: string, id: int, verbose: int, pids_only: int):
+    command_text = msh_job_get(vars, id, "command")
+    if strlen(command_text) == 0 then
+        dealloc(command_text)
+        return "" + vars
+    end
+    if pids_only == 1 then
+        pid_text = msh_job_get(vars, id, "pid")
+        out = msh_process_emit_line(vars, pid_text)
+        dealloc(command_text, pid_text)
+        return out
+    end
+    line = msh_jobs_format_line(vars, id, verbose)
+    out2 = msh_process_emit_line(vars, line)
+    dealloc(command_text, line)
+    return out2
+end
+
+void msh_job_diag_no_such(name: string, text: string):
+    detail = "No such job: " + text
+    msh_diag_builtin(name, detail)
+    dealloc(detail)
+end
+
+void msh_job_diag_ambiguous(name: string, text: string):
+    detail = text + ": ambiguous"
+    msh_diag_builtin(name, detail)
+    dealloc(detail)
+end
+
+def msh_jobs_state(fields: str_array, vars: string): MshProcessBuiltinResult
+    verbose = 0
+    pids_only = 0
+    out = "" + vars
+    status = 0
+    operands = str_array_new(2)
+    i = 1
+    while i < str_array_len(fields) then
+        opt = "" + str_array_get(fields, i)
+        if opt == "-l" then
+            verbose = 1
+            pids_only = 0
+        elsif opt == "-p" then
+            pids_only = 1
+        elsif startswith(opt, "-") == 1 and opt != "-" then
+            bad = substr(opt, 0, 2)
+            detail = "Illegal option " + bad
+            msh_diag_builtin("jobs", detail)
+            dealloc(bad, detail)
+            dealloc(opt)
+            dealloc(out)
+            msh_field_array_destroy(operands)
+            return new MshProcessBuiltinResult(2, "" + vars)
+        else
+            owned_operand = "" + opt
+            operands = str_array_push(operands, owned_operand)
+        end
+        dealloc(opt)
+        i++
+    end
+
+    if str_array_len(operands) == 0 then
+        id = 1
+        while id < msh_job_next_id(out) then
+            refreshed = msh_jobs_refresh_one(out, id)
+            dealloc(out)
+            out = "" + refreshed
+            dealloc(refreshed)
+            emitted = msh_jobs_emit_one(out, id, verbose, pids_only)
+            dealloc(out)
+            out = "" + emitted
+            dealloc(emitted)
+            id++
+        end
+    else
+        i = 0
+        while i < str_array_len(operands) then
+            ref = "" + str_array_get(operands, i)
+            id2 = msh_job_ref_id(out, ref)
+            command_text2 = "" + ""
+            if id2 > 0 then
+                dealloc(command_text2)
+                command_text2 = msh_job_get(out, id2, "command")
+            end
+            if id2 == -2 then
+                msh_job_diag_ambiguous("jobs", ref)
+                status = 2
+                i = str_array_len(operands)
+            elsif id2 <= 0 or strlen(command_text2) == 0 then
+                detail_one = "No such job: " + ref
+                msh_diag_builtin("jobs", detail_one)
+                dealloc(detail_one)
+                status = 127
+                i = str_array_len(operands)
+            else
+                refreshed2 = msh_jobs_refresh_one(out, id2)
+                dealloc(out)
+                out = "" + refreshed2
+                dealloc(refreshed2)
+                emitted2 = msh_jobs_emit_one(out, id2, verbose, pids_only)
+                dealloc(out)
+                out = "" + emitted2
+                dealloc(emitted2)
+            end
+            dealloc(ref, command_text2)
+            i++
+        end
+    end
+    msh_field_array_destroy(operands)
+    return new MshProcessBuiltinResult(status, out)
+end
+
+def msh_bg_state(fields: str_array, vars: string): MshProcessBuiltinResult
+    if msh_option_get(vars, "monitor") == 0 then
+        msh_job_diag_no_such("bg", "%")
+        return new MshProcessBuiltinResult(127, "" + vars)
+    end
+    out = "" + vars
+    status = 0
+    if str_array_len(fields) == 1 then
+        id = msh_job_default_id(out)
+        if id <= 0 then
+            msh_job_diag_no_such("bg", "%")
+            dealloc(out)
+            return new MshProcessBuiltinResult(127, "" + vars)
+        end
+        pid_text = msh_job_get(out, id, "pid")
+        command_text = msh_job_get(out, id, "command")
+        display = msh_job_display_command(command_text)
+        signal_number = msh_signal_number("CONT")
+        kill_rc = msh_job_signal_pid_or_group(parse_int(pid_text), signal_number)
+        if kill_rc != 0 then
+            msh_job_diag_no_such("bg", "%")
+            status = 127
+        else
+            old_running = out
+            out = msh_job_set_status(out, id, -1)
+            dealloc(old_running)
+            id_text = str(id)
+            mark = msh_job_mark(out, id)
+            left = "[" + id_text
+            mid = left + "] "
+            mid_mark = mid + mark
+            base = mid_mark + " "
+            line = base + display
+            old = out
+            out = msh_process_emit_line(out, line)
+            dealloc(old, id_text, mark, left, mid, mid_mark, base, line)
+        end
+        dealloc(pid_text, command_text, display)
+        return new MshProcessBuiltinResult(status, out)
+    end
+    i = 1
+    while i < str_array_len(fields) then
+        ref = "" + str_array_get(fields, i)
+        id2 = msh_job_ref_id(out, ref)
+        if id2 <= 0 then
+            msh_job_diag_no_such("bg", ref)
+            status = 127
+        else
+            pid_text2 = msh_job_get(out, id2, "pid")
+            command_text2 = msh_job_get(out, id2, "command")
+            display2 = msh_job_display_command(command_text2)
+            signal_number2 = msh_signal_number("CONT")
+            kill_rc2 = msh_job_signal_pid_or_group(parse_int(pid_text2), signal_number2)
+            if kill_rc2 != 0 then
+                msh_job_diag_no_such("bg", ref)
+                status = 127
+            else
+                old_running2 = out
+                out = msh_job_set_status(out, id2, -1)
+                dealloc(old_running2)
+                id_text2 = str(id2)
+                mark2 = msh_job_mark(out, id2)
+                left2 = "[" + id_text2
+                mid2 = left2 + "] "
+                mid_mark2 = mid2 + mark2
+                base2 = mid_mark2 + " "
+                line2 = base2 + display2
+                old2 = out
+                out = msh_process_emit_line(out, line2)
+                dealloc(old2, id_text2, mark2, left2, mid2, mid_mark2, base2, line2)
+            end
+            dealloc(pid_text2, command_text2, display2)
+        end
+        dealloc(ref)
+        i++
+    end
+    return new MshProcessBuiltinResult(status, out)
+end
+
+def msh_fg_state(fields: str_array, vars: string): MshProcessBuiltinResult
+    if msh_option_get(vars, "monitor") == 0 then
+        msh_job_diag_no_such("fg", "%")
+        return new MshProcessBuiltinResult(127, "" + vars)
+    end
+    ref = "" + "%"
+    if str_array_len(fields) > 1 then
+        dealloc(ref)
+        ref = "" + str_array_get(fields, 1)
+    end
+    id = msh_job_ref_id(vars, ref)
+    if id <= 0 then
+        msh_job_diag_no_such("fg", ref)
+        dealloc(ref)
+        return new MshProcessBuiltinResult(127, "" + vars)
+    end
+    pid_text = msh_job_get(vars, id, "pid")
+    pid_value = parse_int(pid_text)
+    command_text = msh_job_get(vars, id, "command")
+    display = msh_job_display_command(command_text)
+    out = "" + vars
+    old = out
+    out = msh_process_emit_line(out, display)
+    dealloc(old)
+    signal_number = msh_signal_number("CONT")
+    shell_pgrp = terminal_get_pgrp(0)
+    child_pgrp = process_get_pgrp(pid_value)
+    handed_terminal = 0
+    ttou_signal = msh_signal_number("TTOU")
+    if ttou_signal > 0 then
+        ignore_ttou_rc = signal_ignore(ttou_signal)
+    end
+    if fd_is_tty(0) == 1 and shell_pgrp > 0 and child_pgrp > 0 then
+        handoff_rc = terminal_set_pgrp(0, child_pgrp)
+        if handoff_rc == 0 then
+            handed_terminal = 1
+        end
+    end
+    kill_rc = msh_job_signal_pid_or_group(pid_value, signal_number)
+    if kill_rc != 0 then
+        if handed_terminal == 1 then
+            restore_rc = terminal_set_pgrp(0, shell_pgrp)
+        end
+        msh_job_diag_no_such("fg", ref)
+        dealloc(ref, pid_text, command_text, display, out)
+        return new MshProcessBuiltinResult(127, "" + vars)
+    end
+    old_running3 = out
+    out = msh_job_set_status(out, id, -1)
+    dealloc(old_running3)
+    status = process_wait_pid_event(pid_value)
+    if handed_terminal == 1 then
+        restore_rc2 = terminal_set_pgrp(0, shell_pgrp)
+    end
+    if ttou_signal > 0 then
+        default_ttou_rc = signal_default(ttou_signal)
+    end
+    old2 = out
+    out = msh_job_set_status(out, id, status)
+    dealloc(old2, ref, pid_text, command_text, display)
+    return new MshProcessBuiltinResult(msh_job_status_shell_status(status), out)
+end
+
+string msh_kill_signal_list():
+    return "" + "0\nHUP\nINT\nQUIT\nILL\nTRAP\nABRT\nBUS\nFPE\nKILL\nUSR1\nSEGV\nUSR2\nPIPE\nALRM\nTERM\n16\nCHLD\nCONT\nSTOP\nTSTP\nTTIN\nTTOU\nURG\nXCPU\nXFSZ\nVTALRM\nPROF\nWINCH\nIO\nPWR\nSYS\n32\n33\nRTMIN\nRTMIN+1\nRTMIN+2\nRTMIN+3\nRTMIN+4\nRTMIN+5\nRTMIN+6\nRTMIN+7\nRTMIN+8\nRTMIN+9\nRTMIN+10\nRTMIN+11\nRTMIN+12\nRTMIN+13\nRTMIN+14\nRTMIN+15\nRTMAX-14\nRTMAX-13\nRTMAX-12\nRTMAX-11\nRTMAX-10\nRTMAX-9\nRTMAX-8\nRTMAX-7\nRTMAX-6\nRTMAX-5\nRTMAX-4\nRTMAX-3\nRTMAX-2\nRTMAX-1\nRTMAX"
+end
+
+void msh_kill_diag_usage():
+    msh_diag_builtin("kill", "Usage: kill [-s sigspec | -signum | -sigspec] [pid | job]... or\nkill -l [exitstatus]")
+end
+
+void msh_kill_diag_bad_signal(signal_name: string):
+    detail = "invalid signal number or name: " + signal_name
+    msh_diag_builtin("kill", detail)
+    dealloc(detail)
+end
+
+void msh_kill_diag_illegal_number(text: string):
+    detail = "Illegal number: " + text
+    msh_diag_builtin("kill", detail)
+    dealloc(detail)
+end
+
+void msh_kill_diag_invalid_exit_status(text: string):
+    detail = "invalid signal number or exit status: " + text
+    msh_diag_builtin("kill", detail)
+    dealloc(detail)
+end
+
+def msh_kill_list_state(fields: str_array, vars: string, start: int): MshProcessBuiltinResult
+    out = "" + vars
+    if start >= str_array_len(fields) then
+        names = msh_kill_signal_list()
+        old = out
+        out = msh_process_emit_line(out, names)
+        dealloc(old, names)
+        if msh_output_error(out) == 1 then
+            msh_diag_builtin("kill", "kill: I/O error")
+            clean_kill = msh_output_error_clear(out)
+            dealloc(out)
+            return new MshProcessBuiltinResult(1, clean_kill)
+        end
+        return new MshProcessBuiltinResult(0, out)
+    end
+    status = 0
+    i = start
+    while i < str_array_len(fields) then
+        operand = "" + str_array_get(fields, i)
+        if msh_process_decimal(operand) == 1 then
+            number = parse_int(operand)
+            if number == 0 or (number > MSH_SIGNAL_MAX_PROFILED and number <= MSH_SIGNAL_STATUS_BASE) or number > MSH_SIGNAL_STATUS_BASE + MSH_SIGNAL_MAX_PROFILED then
+                msh_kill_diag_invalid_exit_status(operand)
+                name = "" + ""
+                status = 2
+            else
+                if number > MSH_SIGNAL_STATUS_BASE then
+                    number = number - MSH_SIGNAL_STATUS_BASE
+                end
+                name = msh_signal_name_from_number(number)
+            end
+        else
+            msh_kill_diag_illegal_number(operand)
+            name = "" + ""
+            status = 2
+        end
+        if strlen(name) == 0 then
+            status = 2
+        else
+            old2 = out
+            out = msh_process_emit_line(out, name)
+            dealloc(old2)
+        end
+        dealloc(operand, name)
+        i++
+    end
+    if status == 0 and msh_output_error(out) == 1 then
+        msh_diag_builtin("kill", "kill: I/O error")
+        clean_kill2 = msh_output_error_clear(out)
+        dealloc(out)
+        out = clean_kill2
+        status = 1
+    end
+    return new MshProcessBuiltinResult(status, out)
+end
+
+string msh_kill_signal_from_option(text: string):
+    if startswith(text, "-") == 1 and strlen(text) > 1 then
+        return substr(text, 1, strlen(text) - 1)
+    end
+    return "" + ""
+end
+
+def msh_kill_state(fields: str_array, vars: string): MshProcessBuiltinResult
+    if str_array_len(fields) < 2 then
+        msh_kill_diag_usage()
+        return new MshProcessBuiltinResult(2, "" + vars)
+    end
+    signal_name = "" + "TERM"
+    index = 1
+    first = "" + str_array_get(fields, 1)
+    if first == "-l" then
+        dealloc(signal_name, first)
+        return msh_kill_list_state(fields, vars, 2)
+    elsif first == "-s" then
+        if str_array_len(fields) < 4 then
+            msh_kill_diag_usage()
+            dealloc(signal_name, first)
+            return new MshProcessBuiltinResult(2, "" + vars)
+        end
+        dealloc(signal_name)
+        signal_name = "" + str_array_get(fields, 2)
+        index = 3
+    elsif startswith(first, "-") == 1 and first != "-" then
+        opt_signal = msh_kill_signal_from_option(first)
+        opt_canonical = msh_signal_canonical(opt_signal)
+        if strlen(opt_canonical) == 0 or (opt_canonical == "EXIT" and opt_signal != "0") then
+            bad_opt = substr(first, 0, 2)
+            detail = "Illegal option " + bad_opt
+            msh_diag_builtin("kill", detail)
+            dealloc(signal_name, first, opt_signal, opt_canonical, bad_opt, detail)
+            return new MshProcessBuiltinResult(2, "" + vars)
+        end
+        dealloc(signal_name)
+        signal_name = "" + opt_signal
+        dealloc(opt_signal, opt_canonical)
+        index = 2
+    end
+    canonical = msh_signal_canonical(signal_name)
+    if strlen(canonical) == 0 or (canonical == "EXIT" and signal_name != "0") then
+        msh_kill_diag_bad_signal(signal_name)
+        dealloc(signal_name, first, canonical)
+        return new MshProcessBuiltinResult(2, "" + vars)
+    end
+    if index >= str_array_len(fields) then
+        msh_kill_diag_usage()
+        dealloc(signal_name, first, canonical)
+        return new MshProcessBuiltinResult(2, "" + vars)
+    end
+    out = "" + vars
+    status = 0
+    self_pid = getpid()
+    i = index
+    while i < str_array_len(fields) then
+        pid_text = "" + str_array_get(fields, i)
+        if startswith(pid_text, "%") == 1 then
+            if msh_option_get(out, "monitor") == 0 then
+                msh_diag_builtin("kill", "no such process")
+                if status == 0 then
+                    status = 1
+                end
+            else
+                pid_value = msh_job_ref_pid(out, pid_text)
+                if pid_value <= 0 then
+                    msh_diag_builtin("kill", "no such process")
+                    if status == 0 then
+                        status = 1
+                    end
+                else
+                    signal_number3 = msh_signal_number(canonical)
+                    if signal_name == "0" then
+                        signal_number3 = 0
+                    end
+                    kill_rc3 = msh_job_signal_pid_or_group(pid_value, signal_number3)
+                    if kill_rc3 != 0 then
+                        msh_diag_builtin("kill", "no such process")
+                        if status == 0 then
+                            status = 1
+                        end
+                    end
+                end
+            end
+        elsif msh_process_decimal(pid_text) == 0 then
+            msh_kill_diag_illegal_number(pid_text)
+            status = 2
+        else
+            pid_value = parse_int(pid_text)
+            if pid_value == self_pid then
+                signal_number = msh_signal_number(canonical)
+                if signal_name == "0" then
+                    signal_number = 0
+                end
+                if signal_number == 0 then
+                    status = status
+                elsif msh_signal_untrappable(canonical) == 1 then
+                    old_untrappable = out
+                    out = msh_signal_pending_set(out, canonical)
+                    dealloc(old_untrappable)
+                elsif msh_signal_entry_ignored(out, canonical) == 1 then
+                    status = status
+                elsif msh_subshell_depth(out) > 0 then
+                    old_subsignal = out
+                    out = msh_subshell_parent_signal_set(out, canonical)
+                    dealloc(old_subsignal)
+                elsif msh_trap_has(out, canonical) == 1 then
+                    action = msh_trap_get(out, canonical)
+                    if strlen(action) > 0 then
+                        trap_result = msh_eval_source_state_internal(action, out)
+                        old = out
+                        out = "" + trap_result.vars
+                        if msh_control_active(trap_result.vars) == 1 then
+                            status = trap_result.status
+                        end
+                        dealloc(old, trap_result.vars)
+                    end
+                    dealloc(action)
+                else
+                    old = out
+                    out = msh_signal_pending_set(out, canonical)
+                    dealloc(old)
+                end
+            else
+                signal_number2 = msh_signal_number(canonical)
+                if signal_name == "0" then
+                    signal_number2 = 0
+                end
+                if signal_number2 != 0 and msh_job_signal_ignored_for_pid(out, pid_value, canonical) == 1 then
+                    kill_rc = 0
+                else
+                    kill_rc = process_kill_pid(pid_value, signal_number2)
+                end
+                if kill_rc != 0 then
+                    msh_diag_builtin("kill", "no such process")
+                    if status == 0 then
+                        status = 1
+                    end
+                end
+            end
+        end
+        dealloc(pid_text)
+        i++
+    end
+    dealloc(signal_name, first, canonical)
+    return new MshProcessBuiltinResult(status, out)
+end

@@ -1,0 +1,109 @@
+// msh_eval_background.ail
+// Background execution helpers split out of msh_eval.ail.
+
+import msh_defs
+import msh_eval_result
+import msh_builtins
+import msh_exec
+import msh_exec_ast_helpers
+import msh_exec_pipeline_spawn
+import msh_fields
+import msh_phase_state
+import msh_pipeline
+import msh_pipeio
+import msh_state
+
+extern fn msh_eval_ast_state(ast: string, vars: string): MshEvalResult
+extern fn msh_eval_pipeline_subshell_finalize(result: MshEvalResult): MshEvalResult
+extern fn msh_eval_function_defined(vars: string, name: string): int
+
+string msh_eval_background_pipe_left_output(left: string, vars: string):
+    if startswith(left, "CMD(") == 1 and msh_pipeline_cmd_is_external(left, vars) == 1 then
+        return msh_exec_command_capture(left, vars)
+    end
+
+    pipe_left_base = msh_trap_pipeline_subshell_vars(vars)
+    pipe_left_vars = msh_pipeio_capture_on(pipe_left_base)
+    left_raw = msh_eval_ast_state(left, pipe_left_vars)
+    left_result = msh_eval_pipeline_subshell_finalize(left_raw)
+    out = msh_pipeio_output(left_result.vars)
+    dealloc(pipe_left_base, pipe_left_vars, left_result.vars)
+    return out
+end
+
+int msh_eval_background_mixed_pipe_pid(ast: string, vars: string):
+    if startswith(ast, "PIPE(") == 0 then
+        return 0
+    end
+    inner = msh_exec_call_inner(ast, "PIPE")
+    comma = msh_exec_find_top_comma(inner)
+    if comma == MSH_INDEX_NOT_FOUND then
+        dealloc(inner)
+        return 0
+    end
+    left = substr(inner, 0, comma)
+    right = substr(inner, comma + 1, strlen(inner) - comma - 1)
+    pid = 0
+    if startswith(right, "CMD(") == 1 and msh_pipeline_cmd_is_external(right, vars) == 1 then
+        input = msh_eval_background_pipe_left_output(left, vars)
+        async_vars = msh_eval_background_async_vars(vars)
+        pid = msh_exec_command_spawn_with_pipe_input(right, async_vars, input, 1, 2)
+        dealloc(async_vars)
+        dealloc(input)
+    end
+    dealloc(inner, left, right)
+    return pid
+end
+
+int msh_eval_background_direct_pid(ast: string, vars: string):
+    if startswith(ast, "PIPE(") == 1 then
+        if msh_pipeline_is_native_external(ast, vars) == 1 then
+            async_vars_pipe = msh_eval_background_async_vars(vars)
+            pid_pipe = msh_exec_pipeline_spawn_last_pid(ast, async_vars_pipe)
+            dealloc(async_vars_pipe)
+            return pid_pipe
+        end
+        return msh_eval_background_mixed_pipe_pid(ast, vars)
+    end
+    if startswith(ast, "CMD(") == 0 then
+        return 0
+    end
+    fields = msh_exec_command_fields(ast, vars)
+    if str_array_len(fields) == 0 then
+        msh_field_array_destroy(fields)
+        return 0
+    end
+    name = "" + str_array_get(fields, 0)
+    direct = 1
+    if msh_is_special_builtin(name) == 1 or msh_is_regular_builtin(name) == 1 then
+        direct = 0
+    elsif msh_eval_function_defined(vars, name) == 1 then
+        direct = 0
+    end
+    msh_field_array_destroy(fields)
+    if direct == 0 then
+        dealloc(name)
+        return 0
+    end
+    async_vars = msh_eval_background_async_vars(vars)
+    pid = msh_exec_command_spawn(ast, async_vars)
+    dealloc(async_vars)
+    dealloc(name)
+    return pid
+end
+
+string msh_eval_background_async_vars(vars: string):
+    ignored_int = msh_signal_entry_ignore_set(vars, "INT")
+    ignored_quit = msh_signal_entry_ignore_set(ignored_int, "QUIT")
+    background_stdin = msh_state_set(ignored_quit, "__background_stdin_null", "1")
+    dealloc(ignored_int)
+    dealloc(ignored_quit)
+    return background_stdin
+end
+
+int msh_eval_background_shell_ast_spawn(ast: string, vars: string):
+    async_vars = msh_eval_background_async_vars(vars)
+    pid = msh_exec_shell_ast_spawn(ast, async_vars)
+    dealloc(async_vars)
+    return pid
+end

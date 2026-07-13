@@ -1,0 +1,57 @@
+// msh_exec_resolve.ail
+// argv[0] resolver for native process calls.
+
+import msh_exec_lookup
+import msh_fields
+
+str_array msh_exec_resolve_fields_argv0(fields: str_array, vars: string):
+    if str_array_len(fields) == 0 then
+        return fields
+    end
+    name = str_array_get(fields, 0)
+    if msh_exec_name_has_path_sep(name) == 1 then
+        return fields
+    end
+    resolved = msh_exec_command_resolve_shell_vars(name, vars)
+    if strlen(resolved) == 0 then
+        dealloc(resolved)
+        return fields
+    end
+
+    out = str_array_new(str_array_len(fields))
+    out = str_array_push(out, resolved)
+    i = 1
+    while i < str_array_len(fields) then
+        field = str_array_get(fields, i)
+        out = str_array_push(out, "" + field)
+        i++
+    end
+    msh_field_array_destroy(fields)
+    return out
+end
+
+str_array msh_exec_resolve_fields_argv0_host(fields: str_array):
+    if str_array_len(fields) == 0 then
+        return fields
+    end
+    name = str_array_get(fields, 0)
+    if msh_exec_name_has_path_sep(name) == 1 then
+        return fields
+    end
+    resolved = msh_exec_command_resolve_host_path(name)
+    if strlen(resolved) == 0 then
+        dealloc(resolved)
+        return fields
+    end
+
+    out = str_array_new(str_array_len(fields))
+    out = str_array_push(out, resolved)
+    i = 1
+    while i < str_array_len(fields) then
+        field = str_array_get(fields, i)
+        out = str_array_push(out, "" + field)
+        i++
+    end
+    msh_field_array_destroy(fields)
+    return out
+end

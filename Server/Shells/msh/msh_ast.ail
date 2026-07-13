@@ -1,0 +1,273 @@
+// msh_ast.ail
+// Stable textual AST contract for msh parser tests.
+
+import msh_defs
+
+string msh_ast_escape(value: string):
+    out = "" + ""
+    i = 0
+    while i < strlen(value) then
+        c = char_at(value, i)
+        if c == MSH_CH_BACKSLASH or c == MSH_CH_DQUOTE then
+            bs = chr(MSH_CH_BACKSLASH)
+            old_bs = out
+            out = old_bs + bs
+            dealloc(old_bs, bs)
+        elsif c == MSH_CH_COMMA or c == MSH_CH_LPAREN or c == MSH_CH_RPAREN then
+            bs = chr(MSH_CH_BACKSLASH)
+            old_bs = out
+            out = old_bs + bs
+            dealloc(old_bs, bs)
+        elsif c == MSH_CH_LBRACKET or c == MSH_CH_RBRACKET then
+            bs = chr(MSH_CH_BACKSLASH)
+            old_bs = out
+            out = old_bs + bs
+            dealloc(old_bs, bs)
+        elsif c == MSH_CH_LBRACE or c == MSH_CH_RBRACE then
+            bs = chr(MSH_CH_BACKSLASH)
+            old_bs = out
+            out = old_bs + bs
+            dealloc(old_bs, bs)
+        end
+        ch = chr(c)
+        old = out
+        out = old + ch
+        dealloc(old, ch)
+        i++
+    end
+    return out
+end
+
+string msh_ast_unescape(value: string):
+    out = "" + ""
+    i = 0
+    while i < strlen(value) then
+        c = char_at(value, i)
+        if c == MSH_CH_BACKSLASH and i + 1 < strlen(value) then
+            next_ch = char_at(value, i + 1)
+            if next_ch == MSH_CH_BACKSLASH or next_ch == MSH_CH_DQUOTE then
+                c = next_ch + 0
+                i++
+            elsif next_ch == MSH_CH_COMMA or next_ch == MSH_CH_LPAREN or next_ch == MSH_CH_RPAREN then
+                c = next_ch + 0
+                i++
+            elsif next_ch == MSH_CH_LBRACKET or next_ch == MSH_CH_RBRACKET then
+                c = next_ch + 0
+                i++
+            elsif next_ch == MSH_CH_LBRACE or next_ch == MSH_CH_RBRACE then
+                c = next_ch + 0
+                i++
+            end
+        end
+        ch = chr(c)
+        old = out
+        out = old + ch
+        dealloc(old, ch)
+        i++
+    end
+    return out
+end
+
+int msh_ast_string_end(text: string, start: int):
+    i = start
+    while i < strlen(text) then
+        c = char_at(text, i)
+        if c == MSH_CH_BACKSLASH and i + 1 < strlen(text) then
+            i = i + 2
+        elsif c == MSH_CH_DQUOTE then
+            return i
+        else
+            i++
+        end
+    end
+    return MSH_INDEX_NOT_FOUND
+end
+
+string msh_ast_append(list: string, item: string):
+    if strlen(list) == 0 then
+        return "" + item
+    end
+    left = list + ","
+    out = left + item
+    dealloc(left)
+    return out
+end
+
+string msh_ast_word(value: string):
+    escaped = msh_ast_escape(value)
+    a = "WORD(\"" + escaped
+    out = a + "\")"
+    dealloc(escaped, a)
+    return out
+end
+
+string msh_ast_redir(op: string, target: string):
+    escaped_op = msh_ast_escape(op)
+    escaped_target = msh_ast_escape(target)
+    a = "REDIR(\"" + escaped_op
+    b = a + "\",\""
+    c = b + escaped_target
+    out = c + "\")"
+    dealloc(escaped_op, escaped_target, a, b, c)
+    return out
+end
+
+string msh_ast_assignment(name: string, value: string):
+    escaped_name = msh_ast_escape(name)
+    escaped_value = msh_ast_escape(value)
+    a = "ASSIGN(\"" + escaped_name
+    b = a + "\",\""
+    c = b + escaped_value
+    out = c + "\")"
+    dealloc(escaped_name, escaped_value, a, b, c)
+    return out
+end
+
+string msh_ast_command(assigns: string, words: string, redirs: string):
+    a = "CMD(assigns=[" + assigns
+    b = a + "],words=["
+    c = b + words
+    d = c + "],redirs=["
+    e = d + redirs
+    out = e + "])"
+    dealloc(a)
+    dealloc(b)
+    dealloc(c)
+    dealloc(d)
+    dealloc(e)
+    return out
+end
+
+string msh_ast_subshell(node: string, redirs: string):
+    a = "SUBSHELL(" + node
+    b = a + ",redirs=["
+    c = b + redirs
+    out = c + "])"
+    dealloc(a)
+    dealloc(b)
+    dealloc(c)
+    return out
+end
+
+string msh_ast_group(node: string, redirs: string):
+    a = "GROUP(" + node
+    b = a + ",redirs=["
+    c = b + redirs
+    out = c + "])"
+    dealloc(a)
+    dealloc(b)
+    dealloc(c)
+    return out
+end
+
+string msh_ast_redirected(node: string, redirs: string):
+    a = "REDIRECT(" + node
+    b = a + ",redirs=["
+    c = b + redirs
+    out = c + "])"
+    dealloc(a)
+    dealloc(b)
+    dealloc(c)
+    return out
+end
+
+string msh_ast_if(cond_node: string, then_node: string, else_node: string):
+    a = "IF(" + cond_node
+    b = a + ","
+    c = b + then_node
+    d = c + ","
+    e = d + else_node
+    out = e + ")"
+    dealloc(a)
+    dealloc(b)
+    dealloc(c)
+    dealloc(d)
+    dealloc(e)
+    return out
+end
+
+string msh_ast_loop(kind: string, cond_node: string, body_node: string):
+    a = kind + "("
+    b = a + cond_node
+    c = b + ","
+    d = c + body_node
+    out = d + ")"
+    dealloc(a)
+    dealloc(b)
+    dealloc(c)
+    dealloc(d)
+    return out
+end
+
+string msh_ast_for(name: string, words: string, body_node: string):
+    escaped_name = msh_ast_escape(name)
+    a = "FOR(\"" + escaped_name
+    b = a + "\",["
+    c = b + words
+    d = c + "],"
+    out = d + body_node
+    e = out + ")"
+    dealloc(escaped_name)
+    dealloc(a)
+    dealloc(b)
+    dealloc(c)
+    dealloc(d)
+    dealloc(out)
+    return e
+end
+
+string msh_ast_case_item(patterns: string, body_node: string):
+    a = "ITEM([" + patterns
+    b = a + "],"
+    out = b + body_node
+    e = out + ")"
+    dealloc(a)
+    dealloc(b)
+    dealloc(out)
+    return e
+end
+
+string msh_ast_case(subject: string, items: string):
+    escaped_subject = msh_ast_escape(subject)
+    a = "CASE(\"" + escaped_subject
+    b = a + "\",["
+    c = b + items
+    out = c + "])"
+    dealloc(escaped_subject)
+    dealloc(a)
+    dealloc(b)
+    dealloc(c)
+    return out
+end
+
+string msh_ast_func(name: string, body_node: string):
+    escaped_name = msh_ast_escape(name)
+    a = "FUNC(\"" + escaped_name
+    b = a + "\","
+    out = b + body_node
+    e = out + ")"
+    dealloc(escaped_name, a, b, out)
+    return e
+end
+
+string msh_ast_binary(kind: string, left: string, right: string):
+    a = kind + "("
+    b = a + left
+    c = b + ","
+    d = c + right
+    out = d + ")"
+    dealloc(a)
+    dealloc(b)
+    dealloc(c)
+    dealloc(d)
+    return out
+end
+
+string msh_ast_status(mode: string, node: string):
+    a = mode + "("
+    b = a + node
+    out = b + ")"
+    dealloc(a)
+    dealloc(b)
+    return out
+end

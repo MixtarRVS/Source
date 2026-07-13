@@ -1,0 +1,679 @@
+const string KERNEL_DEFAULT_CONFIG = "/System/Configuration/Updates.config"
+const int KERNEL_OK = 0
+const int KERNEL_USAGE = 64
+const int KERNEL_BLOCKED = 65
+const int KERNEL_UNAVAILABLE = 69
+const int MI_SQLITE_ROW = 100
+const int MI_SQLITE_DONE = 101
+
+void kernel_line(prefix: string, value: string):
+    line = prefix + value
+    print line
+    dealloc(line)
+end
+
+int kernel_fail(message: string):
+    kernel_line("kernel-update: ", message)
+    return KERNEL_BLOCKED
+end
+
+string kernel_config_path():
+    if argc() >= 3 then
+        return "" + argv(2)
+    end
+    return "" + KERNEL_DEFAULT_CONFIG
+end
+
+@effect(sqlite)
+string query_text(db: int, sql: string):
+    stmt = sql_prepare(db, sql)
+    if stmt == 0 then
+        return "" + ""
+    end
+    rc = sql_step(stmt)
+    if rc != MI_SQLITE_ROW then
+        sql_finalize(stmt)
+        return "" + ""
+    end
+    value = "" + sql_column_text(stmt, 0)
+    sql_finalize(stmt)
+    return value
+end
+
+@effect(sqlite, process)
+string capture_url(db: int, fetcher: string, url: string):
+    dns_servers = query_text(db, "SELECT value FROM setting WHERE key='networking.dns.servers'")
+    if strlen(dns_servers) == 0 then
+        dealloc(dns_servers)
+        return "" + ""
+    end
+    args = str_array_new(12)
+    args = str_array_push(args, fetcher)
+    args = str_array_push(args, "--dns-servers")
+    args = str_array_push(args, dns_servers)
+    args = str_array_push(args, "--fail")
+    args = str_array_push(args, "--silent")
+    args = str_array_push(args, "--show-error")
+    args = str_array_push(args, "--location")
+    args = str_array_push(args, "--connect-timeout")
+    args = str_array_push(args, "5")
+    args = str_array_push(args, "--max-time")
+    args = str_array_push(args, "20")
+    args = str_array_push(args, url)
+    env = str_array_new(0)
+    ops = str_array_new(0)
+    targets = str_array_new(0)
+    output = process_capture_argv_env_redirs(args, env, ops, targets)
+    dealloc(dns_servers)
+    rc = process_last_capture_status()
+    dealloc_str_array(args)
+    dealloc_str_array(env)
+    dealloc_str_array(ops)
+    dealloc_str_array(targets)
+    if rc != 0 then
+        dealloc(output)
+        return "" + ""
+    end
+    return output
+end
+
+int object_start(value: string, position: int):
+    raw = reinterpret(i64, value)
+    i = position
+    while i >= 0 then
+        if peek8(raw, i) == 123 then
+            return i
+        end
+        i--
+    end
+    return -1
+end
+
+int object_end(value: string, start: int):
+    raw = reinterpret(i64, value)
+    depth = 0
+    i = start
+    while i < strlen(value) then
+        ch = peek8(raw, i)
+        if ch == 123 then
+            depth++
+        else
+            if ch == 125 then
+                depth--
+                if depth == 0 then
+                    return i
+                end
+            end
+        end
+        i++
+    end
+    return -1
+end
+
+string json_string_field(object_text: string, field: string):
+    marker_left = "\"" + field
+    marker = marker_left + "\""
+    dealloc(marker_left)
+    field_at = index_of(object_text, marker)
+    dealloc(marker)
+    if field_at < 0 then
+        return "" + ""
+    end
+    colon = index_of(object_text, ":", field_at)
+    if colon < 0 then
+        return "" + ""
+    end
+    first_quote = index_of(object_text, "\"", colon + 1)
+    if first_quote < 0 then
+        return "" + ""
+    end
+    last_quote = index_of(object_text, "\"", first_quote + 1)
+    if last_quote <= first_quote then
+        return "" + ""
+    end
+    return substr(object_text, first_quote + 1, last_quote - first_quote - 1)
+end
+
+string stable_record(releases: string):
+    marker = "" + "\"moniker\""
+    cursor = 0
+    while cursor < strlen(releases) then
+        found = index_of(releases, marker, cursor)
+        if found < 0 then
+            dealloc(marker)
+            return "" + ""
+        end
+        start = object_start(releases, found)
+        finish = object_end(releases, start)
+        if start >= 0 and finish > start then
+            object_text = substr(releases, start, finish - start + 1)
+            moniker = json_string_field(object_text, "moniker")
+            if moniker == "stable" then
+                dealloc(marker, moniker)
+                return object_text
+            end
+            dealloc(object_text, moniker)
+            cursor = finish + 1
+        else
+            cursor = found + strlen(marker)
+        end
+    end
+    dealloc(marker)
+    return "" + ""
+end
+
+int version_valid(value: string):
+    n = strlen(value)
+    if n < 3 then
+        return 0
+    end
+    raw = reinterpret(i64, value)
+    dots = 0
+    digits = 0
+    i = 0
+    while i < n then
+        ch = peek8(raw, i)
+        if ch == 46 then
+            if digits == 0 then
+                return 0
+            end
+            dots++
+            digits = 0
+        else
+            if ch < 48 or ch > 57 then
+                return 0
+            end
+            digits++
+        end
+        i++
+    end
+    if digits == 0 or dots < 1 or dots > 2 then
+        return 0
+    end
+    return 1
+end
+
+int version_part(value: string, wanted: int):
+    raw = reinterpret(i64, value)
+    part = 0
+    number = 0
+    i = 0
+    while i < strlen(value) then
+        ch = peek8(raw, i)
+        if ch == 46 then
+            if part == wanted then
+                return number
+            end
+            part++
+            number = 0
+        else
+            if part == wanted then
+                number = number * 10 + ch - 48
+            end
+        end
+        i++
+    end
+    if part == wanted then
+        return number
+    end
+    return 0
+end
+
+int version_compare(left: string, right: string):
+    i = 0
+    while i < 3 then
+        a = version_part(left, i)
+        b = version_part(right, i)
+        if a > b then
+            return 1
+        end
+        if a < b then
+            return -1
+        end
+        i++
+    end
+    return 0
+end
+
+string version_branch(version: string):
+    first = index_of(version, ".")
+    if first < 0 then
+        return "" + ""
+    end
+    second = index_of(version, ".", first + 1)
+    if second < 0 then
+        return "" + ""
+    end
+    return substr(version, 0, second)
+end
+
+string rt_base(version: string):
+    marker = index_of(version, "-rt")
+    if marker < 0 then
+        return "" + ""
+    end
+    return substr(version, 0, marker)
+end
+
+int rt_serial(version: string):
+    marker = index_of(version, "-rt")
+    if marker < 0 then
+        return -1
+    end
+    raw = reinterpret(i64, version)
+    value = 0
+    digits = 0
+    i = marker + 3
+    while i < strlen(version) then
+        ch = peek8(raw, i)
+        if ch < 48 or ch > 57 then
+            return -1
+        end
+        value = value * 10 + ch - 48
+        digits++
+        i++
+    end
+    if digits == 0 then
+        return -1
+    end
+    return value
+end
+
+int rt_version_compare(left: string, right: string):
+    left_base = rt_base(left)
+    right_base = rt_base(right)
+    relation = version_compare(left_base, right_base)
+    dealloc(left_base, right_base)
+    if relation != 0 then
+        return relation
+    end
+    left_serial = rt_serial(left)
+    right_serial = rt_serial(right)
+    if left_serial > right_serial then
+        return 1
+    end
+    if left_serial < right_serial then
+        return -1
+    end
+    return 0
+end
+
+int has_branch(candidate: string, branch: string):
+    prefix = branch + "."
+    if strlen(candidate) < strlen(prefix) then
+        dealloc(prefix)
+        return 0
+    end
+    actual = substr(candidate, 0, strlen(prefix))
+    matches = 0
+    if actual == prefix then
+        matches = 1
+    end
+    dealloc(prefix, actual)
+    return matches
+end
+
+string latest_rt_version(index: string, branch: string):
+    prefix = "" + "patch-"
+    suffix = "" + ".patch.xz"
+    latest = "" + ""
+    cursor = 0
+    while cursor < strlen(index) then
+        found = index_of(index, prefix, cursor)
+        if found < 0 then
+            dealloc(prefix, suffix)
+            return latest
+        end
+        start = found + strlen(prefix)
+        finish = index_of(index, suffix, start)
+        if finish < 0 then
+            dealloc(prefix, suffix)
+            return latest
+        end
+        count = finish - start
+        if count > 0 and count < 48 then
+            candidate = substr(index, start, count)
+            base = rt_base(candidate)
+            valid = version_valid(base)
+            serial = rt_serial(candidate)
+            branch_ok = has_branch(candidate, branch)
+            dealloc(base)
+            if valid == 1 and serial >= 0 and branch_ok == 1 then
+                if strlen(latest) == 0 or rt_version_compare(candidate, latest) > 0 then
+                    dealloc(latest)
+                    latest = candidate
+                else
+                    dealloc(candidate)
+                end
+            else
+                dealloc(candidate)
+            end
+        end
+        cursor = finish + strlen(suffix)
+    end
+    dealloc(prefix, suffix)
+    return latest
+end
+
+string kernel_version_uri(pattern: string, version: string):
+    marker = "" + "{version}"
+    position = index_of(pattern, marker)
+    if position < 0 then
+        dealloc(marker)
+        return "" + ""
+    end
+    left = substr(pattern, 0, position)
+    right_start = position + strlen(marker)
+    right = substr(pattern, right_start, strlen(pattern) - right_start)
+    prefix = left + version
+    result = prefix + right
+    dealloc(marker, left, right, prefix)
+    return result
+end
+
+int kernel_index_has(index: string, filename: string):
+    if index_of(index, filename) >= 0 then
+        return 1
+    end
+    return 0
+end
+
+@effect(sqlite)
+int save_kernel_observation(db: int, stable: string, source: string, signature: string, rt: string, patch: string, patch_signature: string, state: string, detail: string):
+    now = time_ms()
+    if sql_exec(db, "BEGIN IMMEDIATE") != 0 then
+        return KERNEL_BLOCKED
+    end
+    kernel_sql = "INSERT INTO kernel_observation(component_id,stable_version,stable_source_uri,stable_signature_uri,rt_version,rt_patch_uri,rt_signature_uri,status,detail,checked_at_ms) VALUES('linux-rt',?,?,?,?,?,?,?,?,?) ON CONFLICT(component_id) DO UPDATE SET stable_version=excluded.stable_version,stable_source_uri=excluded.stable_source_uri,stable_signature_uri=excluded.stable_signature_uri,rt_version=excluded.rt_version,rt_patch_uri=excluded.rt_patch_uri,rt_signature_uri=excluded.rt_signature_uri,status=excluded.status,detail=excluded.detail,checked_at_ms=excluded.checked_at_ms"
+    stmt = sql_prepare(db, kernel_sql)
+    if stmt == 0 then
+        sql_exec(db, "ROLLBACK")
+        return KERNEL_BLOCKED
+    end
+    sql_bind_text(stmt, 1, stable)
+    sql_bind_text(stmt, 2, source)
+    sql_bind_text(stmt, 3, signature)
+    sql_bind_text(stmt, 4, rt)
+    sql_bind_text(stmt, 5, patch)
+    sql_bind_text(stmt, 6, patch_signature)
+    sql_bind_text(stmt, 7, state)
+    sql_bind_text(stmt, 8, detail)
+    sql_bind_int(stmt, 9, now)
+    rc = sql_step(stmt)
+    sql_finalize(stmt)
+    if rc != MI_SQLITE_DONE then
+        sql_exec(db, "ROLLBACK")
+        return KERNEL_BLOCKED
+    end
+    generic_sql = "INSERT INTO observation(component_id,available_version,status,source_uri,signature_uri,source_path,signature_path,trust_path,detail,checked_at_ms) VALUES('linux-rt',?,?,?,?,'','','',?,?) ON CONFLICT(component_id) DO UPDATE SET available_version=excluded.available_version,status=excluded.status,source_uri=excluded.source_uri,signature_uri=excluded.signature_uri,detail=excluded.detail,checked_at_ms=excluded.checked_at_ms"
+    stmt = sql_prepare(db, generic_sql)
+    if stmt == 0 then
+        sql_exec(db, "ROLLBACK")
+        return KERNEL_BLOCKED
+    end
+    sql_bind_text(stmt, 1, stable)
+    sql_bind_text(stmt, 2, state)
+    sql_bind_text(stmt, 3, source)
+    sql_bind_text(stmt, 4, signature)
+    sql_bind_text(stmt, 5, detail)
+    sql_bind_int(stmt, 6, now)
+    rc = sql_step(stmt)
+    sql_finalize(stmt)
+    if rc != MI_SQLITE_DONE then
+        sql_exec(db, "ROLLBACK")
+        return KERNEL_BLOCKED
+    end
+    if sql_exec(db, "COMMIT") != 0 then
+        sql_exec(db, "ROLLBACK")
+        return KERNEL_BLOCKED
+    end
+    return KERNEL_OK
+end
+
+@effect(sqlite, process)
+int updates_select_pinned_kernel(db: int, fetcher: string, rt_root: string, installed: string, fingerprint: string, latest_stable: string, latest_rt: string):
+    pinned = query_text(db, "SELECT value FROM setting WHERE key='kernel.version.pinned'")
+    pinned_rt = query_text(db, "SELECT value FROM setting WHERE key='kernel.rt.version.pinned'")
+    archive_index_uri = query_text(db, "SELECT value FROM setting WHERE key='kernel.archive.index_uri'")
+    source_template = query_text(db, "SELECT artifact_uri_template FROM component_source WHERE component_id='linux-rt' AND role='kernel-source'")
+    signature_template = query_text(db, "SELECT signature_uri_template FROM component_source WHERE component_id='linux-rt' AND role='kernel-source'")
+    pinned_base = rt_base(pinned_rt)
+    pinned_branch = version_branch(pinned)
+    if version_valid(pinned) == 0 or pinned_base != pinned or strlen(pinned_branch) == 0 or rt_serial(pinned_rt) < 0 or has_branch(pinned_rt, pinned_branch) == 0 or strlen(archive_index_uri) == 0 or strlen(source_template) == 0 or strlen(signature_template) == 0 then
+        dealloc(pinned, pinned_rt, archive_index_uri, source_template, signature_template, pinned_base, pinned_branch)
+        return kernel_fail("pinned-exact kernel policy is invalid")
+    end
+
+    source_name_left = "linux-" + pinned
+    source_name = source_name_left + ".tar.xz"
+    signature_name = source_name_left + ".tar.sign"
+    patch_name_left = "patch-" + pinned_rt
+    patch_name = patch_name_left + ".patch.xz"
+    patch_signature_name = patch_name_left + ".patch.sign"
+    dealloc(source_name_left, patch_name_left)
+
+    archive_index = capture_url(db, fetcher, archive_index_uri)
+    rt_dir = rt_root + pinned_branch
+    rt_index_uri = rt_dir + "/"
+    rt_index = capture_url(db, fetcher, rt_index_uri)
+    if strlen(archive_index) == 0 or strlen(rt_index) == 0 or kernel_index_has(archive_index, source_name) == 0 or kernel_index_has(archive_index, signature_name) == 0 or kernel_index_has(rt_index, patch_name) == 0 or kernel_index_has(rt_index, patch_signature_name) == 0 then
+        dealloc(pinned, pinned_rt, archive_index_uri, source_template, signature_template, pinned_base, pinned_branch, source_name, signature_name, patch_name, patch_signature_name, archive_index, rt_dir, rt_index_uri, rt_index)
+        return kernel_fail("pinned kernel or PREEMPT_RT artifact is absent from the official kernel.org indexes")
+    end
+    dealloc(archive_index, rt_index)
+
+    source = kernel_version_uri(source_template, pinned)
+    signature = kernel_version_uri(signature_template, pinned)
+    patch = rt_index_uri + patch_name
+    patch_signature = rt_index_uri + patch_signature_name
+    if strlen(source) == 0 or strlen(signature) == 0 or strlen(patch) == 0 or strlen(patch_signature) == 0 then
+        dealloc(pinned, pinned_rt, archive_index_uri, source_template, signature_template, pinned_base, pinned_branch, source_name, signature_name, patch_name, patch_signature_name, rt_dir, rt_index_uri, source, signature, patch, patch_signature)
+        return kernel_fail("pinned-exact kernel artifact URI construction failed")
+    end
+
+    state = "" + "available-unverified"
+    if pinned == installed then
+        dealloc(state)
+        state = "" + "current-unverified"
+    end
+    detail_a = "local pinned-exact policy selected official pair " + pinned
+    detail_b = detail_a + "/"
+    detail_c = detail_b + pinned_rt
+    detail_d = detail_c + "; latest discovered stable="
+    detail_e = detail_d + latest_stable
+    detail_f = detail_e + ", latest RT="
+    detail = detail_f + latest_rt
+    dealloc(detail_a, detail_b, detail_c, detail_d, detail_e, detail_f)
+    rc = save_kernel_observation(db, pinned, source, signature, pinned_rt, patch, patch_signature, state, detail)
+    kernel_line("Kernel installed: ", installed)
+    kernel_line("Kernel latest stable: ", latest_stable)
+    kernel_line("PREEMPT_RT latest branch patch: ", latest_rt)
+    kernel_line("Kernel selected by pinned-exact policy: ", pinned)
+    kernel_line("PREEMPT_RT selected: ", pinned_rt)
+    kernel_line("Kernel state: ", state)
+    kernel_line("Signing fingerprint: ", fingerprint)
+    dealloc(pinned, pinned_rt, archive_index_uri, source_template, signature_template, pinned_base, pinned_branch, source_name, signature_name, patch_name, patch_signature_name, rt_dir, rt_index_uri, source, signature, patch, patch_signature, state, detail)
+    return rc
+end
+
+@effect(sqlite, process)
+int updates_check_kernel(db: int):
+    schema = query_text(db, "SELECT value FROM setting WHERE key='schema.version'")
+    fetcher = query_text(db, "SELECT value FROM setting WHERE key='tool.fetch'")
+    releases_uri = query_text(db, "SELECT discovery_uri FROM component_source WHERE component_id='linux-rt' AND role='kernel-source'")
+    rt_root = query_text(db, "SELECT discovery_uri FROM component_source WHERE component_id='linux-rt' AND role='rt-patch'")
+    installed = query_text(db, "SELECT installed_version FROM component WHERE id='linux-rt' AND enabled=1")
+    fingerprint = query_text(db, "SELECT fingerprint FROM trust_anchor WHERE id='kernel-release' AND enabled=1")
+    version_policy = query_text(db, "SELECT value FROM setting WHERE key='kernel.version.policy'")
+    if schema != "3" or strlen(fetcher) == 0 or strlen(releases_uri) == 0 or strlen(rt_root) == 0 or strlen(installed) == 0 or strlen(fingerprint) == 0 or (version_policy != "latest-exact" and version_policy != "pinned-exact") then
+        dealloc(schema, fetcher, releases_uri, rt_root, installed, fingerprint, version_policy)
+        return kernel_fail("kernel update policy is incomplete")
+    end
+    releases = capture_url(db, fetcher, releases_uri)
+    if strlen(releases) == 0 then
+        dealloc(schema, fetcher, releases_uri, rt_root, installed, fingerprint, version_policy, releases)
+        return kernel_fail("could not read official kernel.org releases.json")
+    end
+    object_text = stable_record(releases)
+    dealloc(releases)
+    stable = json_string_field(object_text, "version")
+    source = json_string_field(object_text, "source")
+    signature = json_string_field(object_text, "pgp")
+    dealloc(object_text)
+    branch = version_branch(stable)
+    if version_valid(stable) == 0 or strlen(source) == 0 or strlen(signature) == 0 or strlen(branch) == 0 then
+        dealloc(schema, fetcher, releases_uri, rt_root, installed, fingerprint, version_policy, stable, source, signature, branch)
+        return kernel_fail("official stable kernel record is incomplete")
+    end
+    rt_dir = rt_root + branch
+    rt_index_uri = rt_dir + "/"
+    rt_index = capture_url(db, fetcher, rt_index_uri)
+    if strlen(rt_index) == 0 then
+        dealloc(schema, fetcher, releases_uri, rt_root, installed, fingerprint, version_policy, stable, source, signature, branch, rt_dir, rt_index_uri, rt_index)
+        return kernel_fail("could not read matching kernel.org RT branch index")
+    end
+    rt = latest_rt_version(rt_index, branch)
+    dealloc(rt_index)
+    if strlen(rt) == 0 then
+        dealloc(schema, fetcher, releases_uri, rt_root, installed, fingerprint, version_policy, stable, source, signature, branch, rt_dir, rt_index_uri, rt)
+        return kernel_fail("official RT branch contained no valid patch")
+    end
+    patch_file_left = "patch-" + rt
+    patch_file = patch_file_left + ".patch.xz"
+    dealloc(patch_file_left)
+    patch = rt_index_uri + patch_file
+    patch_signature_file_left = "patch-" + rt
+    patch_signature_file = patch_signature_file_left + ".patch.sign"
+    dealloc(patch_signature_file_left)
+    patch_signature = rt_index_uri + patch_signature_file
+    base = rt_base(rt)
+    if stable != base then
+        state_blocked = "" + "blocked-rt-version-mismatch"
+        detail_left_blocked = "official stable kernel " + stable
+        detail_middle_blocked = detail_left_blocked + " has no exact PREEMPT_RT patch; latest branch patch is "
+        detail_blocked = detail_middle_blocked + rt
+        dealloc(detail_left_blocked, detail_middle_blocked)
+        rc_blocked = save_kernel_observation(db, stable, source, signature, rt, patch, patch_signature, state_blocked, detail_blocked)
+        kernel_line("Kernel installed: ", installed)
+        kernel_line("Kernel latest stable: ", stable)
+        kernel_line("PREEMPT_RT latest branch patch: ", rt)
+        kernel_line("Kernel state: ", state_blocked)
+        kernel_line("Signing fingerprint: ", fingerprint)
+        dealloc(schema, fetcher, releases_uri, rt_root, installed, fingerprint, version_policy, stable, source, signature, branch, rt_dir, rt_index_uri, rt, patch_file, patch, patch_signature_file, patch_signature, base, state_blocked, detail_blocked)
+        return rc_blocked
+    end
+    if version_policy == "pinned-exact" then
+        rc = updates_select_pinned_kernel(db, fetcher, rt_root, installed, fingerprint, stable, rt)
+        dealloc(schema, fetcher, releases_uri, rt_root, installed, fingerprint, version_policy, stable, source, signature, branch, rt_dir, rt_index_uri, rt, patch_file, patch, patch_signature_file, patch_signature, base)
+        return rc
+    end
+    state = "" + "available-unverified"
+    detail = "" + "official stable kernel and exact PREEMPT_RT patch are available for verification"
+    if stable != base then
+        dealloc(state, detail)
+        state = "" + "blocked-rt-version-mismatch"
+        detail_left = "official stable kernel " + stable
+        detail_middle = detail_left + " has no exact PREEMPT_RT patch; latest branch patch is "
+        detail = detail_middle + rt
+        dealloc(detail_left, detail_middle)
+    else
+        relation = version_compare(stable, installed)
+        if relation == 0 then
+            dealloc(state, detail)
+            state = "" + "current-unverified"
+            detail = "" + "installed version matches the official stable and PREEMPT_RT pair"
+        else
+            if relation < 0 then
+                dealloc(state, detail)
+                state = "" + "local-newer"
+                detail = "" + "installed kernel is newer than the latest exact stable and PREEMPT_RT pair"
+            end
+        end
+    end
+    rc = save_kernel_observation(db, stable, source, signature, rt, patch, patch_signature, state, detail)
+    kernel_line("Kernel installed: ", installed)
+    kernel_line("Kernel stable: ", stable)
+    kernel_line("PREEMPT_RT patch: ", rt)
+    kernel_line("Kernel state: ", state)
+    kernel_line("Signing fingerprint: ", fingerprint)
+    dealloc(schema, fetcher, releases_uri, rt_root, installed, fingerprint, version_policy, stable, source, signature, branch, rt_dir, rt_index_uri, rt, patch_file, patch, patch_signature_file, patch_signature, base, state, detail)
+    return rc
+end
+
+@effect(sqlite)
+int updates_kernel_status(db: int):
+    stable = query_text(db, "SELECT stable_version FROM kernel_observation WHERE component_id='linux-rt'")
+    rt = query_text(db, "SELECT rt_version FROM kernel_observation WHERE component_id='linux-rt'")
+    state = query_text(db, "SELECT status FROM kernel_observation WHERE component_id='linux-rt'")
+    detail = query_text(db, "SELECT detail FROM kernel_observation WHERE component_id='linux-rt'")
+    if strlen(state) == 0 then
+        dealloc(stable, rt, state, detail)
+        return KERNEL_UNAVAILABLE
+    end
+    kernel_line("Kernel stable: ", stable)
+    kernel_line("PREEMPT_RT patch: ", rt)
+    kernel_line("Kernel state: ", state)
+    kernel_line("Detail: ", detail)
+    dealloc(stable, rt, state, detail)
+    return KERNEL_OK
+end
+
+@effect(sqlite)
+int updates_kernel_gate(db: int):
+    state = query_text(db, "SELECT status FROM kernel_observation WHERE component_id='linux-rt'")
+    if state == "artifact-gate-pass" then
+        kernel_line("Kernel gate: PASS, state=", state)
+        dealloc(state)
+        return KERNEL_OK
+    end
+    if strlen(state) == 0 then
+        dealloc(state)
+        return kernel_fail("run check-kernel before gate-kernel")
+    end
+    kernel_line("Kernel gate: BLOCKED, state=", state)
+    dealloc(state)
+    return KERNEL_BLOCKED
+end
+
+void kernel_usage():
+    print "usage: updates-kernel COMMAND [Updates.config]"
+    print "commands: check-kernel status-kernel gate-kernel help"
+end
+
+@effect(sqlite, process)
+def main(): int
+    if argc() < 2 then
+        kernel_usage()
+        return KERNEL_USAGE
+    end
+    command = argv(1)
+    config = kernel_config_path()
+    if command == "check-kernel" then
+        db = sql_open(config)
+    else
+        db = sql_open_readonly(config)
+    end
+    if db == 0 then
+        dealloc(config)
+        return kernel_fail("cannot open Updates.config")
+    end
+    sql_exec(db, "PRAGMA foreign_keys=ON")
+    rc = KERNEL_USAGE
+    match command then
+        case "check-kernel":
+            rc = updates_check_kernel(db)
+        case "status-kernel":
+            rc = updates_kernel_status(db)
+        case "gate-kernel":
+            rc = updates_kernel_gate(db)
+        case "help":
+            kernel_usage()
+            rc = KERNEL_OK
+        default:
+            kernel_usage()
+            rc = KERNEL_USAGE
+    end
+    sql_close(db)
+    dealloc(config)
+    return rc
+end

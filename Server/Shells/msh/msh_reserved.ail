@@ -1,0 +1,41 @@
+// msh_reserved.ail
+// POSIX shell reserved-word classification shared by lookup helpers.
+
+int msh_command_is_reserved_word(name: string):
+    match name then
+        case "!":
+            return 1
+        case "{":
+            return 1
+        case "}":
+            return 1
+        case "case":
+            return 1
+        case "do":
+            return 1
+        case "done":
+            return 1
+        case "elif":
+            return 1
+        case "else":
+            return 1
+        case "esac":
+            return 1
+        case "fi":
+            return 1
+        case "for":
+            return 1
+        case "if":
+            return 1
+        case "in":
+            return 1
+        case "then":
+            return 1
+        case "until":
+            return 1
+        case "while":
+            return 1
+        default:
+            return 0
+    end
+end

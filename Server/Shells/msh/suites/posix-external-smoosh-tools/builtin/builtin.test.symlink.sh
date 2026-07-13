@@ -1,0 +1,12 @@
+# msh-source: smoosh/tests/shell/builtin.test.symlink.test
+# msh-profile: posix
+# msh-run: eval
+echo hi >file
+mkdir dir
+ln -s file link_file
+ln -s dir link_dir
+[ -e file ] && [ -e link_file ] && \
+[ -f file ] && [ -f link_file ] && \
+[ -e dir ] && [ -e link_dir ] && \
+[ -d dir ] && [ -d link_dir ] && \
+[ -L link_file ] && [ -L link_dir ]

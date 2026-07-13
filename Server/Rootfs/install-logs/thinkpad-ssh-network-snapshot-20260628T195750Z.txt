@@ -1,0 +1,215 @@
+
+timestamp_utc=20260628T195750Z
+
+
+Linux MixtarRVS 7.0.0-rc3-mixtarrvs #7 SMP PREEMPT_DYNAMIC Tue Mar 10 04:43:45 CET 2026 x86_64 GNU/Linux
+uid=1000(vxz) gid=1000(vxz) groups=1000(vxz),24(cdrom),25(floppy),29(audio),30(dip),42(shadow),44(video),46(plugdev),100(users),995(input),101(netdev),102(bluetooth)
+vxz:x:1000:1000:vxz,,,:/home/vxz:/bin/bash
+sudo:x:27:
+shadow:x:42:vxz
+users:x:100:vxz
+netdev:x:101:vxz
+input:x:995:vxz
+video:x:44:vxz
+audio:x:29:vxz
+bluetooth:x:102:vxz
+plugdev:x:46:vxz
+
+
+enabled
+active
+● ssh.service - OpenBSD Secure Shell server
+     Loaded: loaded (/usr/lib/systemd/system/ssh.service; enabled; preset: enabled)
+     Active: active (running) since Sun 2026-06-28 16:55:12 CEST; 5h 2min ago
+ Invocation: fb7329bbb36e4bb0ba927397cf3f7511
+       Docs: man:sshd(8)
+             man:sshd_config(5)
+    Process: 734 ExecStartPre=/usr/sbin/sshd -t (code=exited, status=0/SUCCESS)
+   Main PID: 760 (sshd)
+      Tasks: 1 (limit: 512)
+     Memory: 12M (peak: 17.5M)
+        CPU: 16.576s
+     CGroup: /system.slice/ssh.service
+             └─760 "sshd: /usr/sbin/sshd -D [listener] 0 of 10-100 startups"
+
+Warning: some journal files were not opened due to insufficient permissions.
+
+
+┌── Desired=Unknown/Install/Remove/Purge/Hold
+│┌─ Status=Not/Inst/Conf-files/Unpacked/halF-conf/Half-inst/trig-aWait/Trig-pend
+││┌ Err?=(none)/Reinst-required (Status,Err: uppercase=bad)
+│││ Name                Version      Architecture Description
+├┼┼─═══════════════════─════════════─════════════─═══════════════════════════════════════════════════════════════════════════
+ii  openssh-client      1:10.3p1-5   amd64        secure shell (SSH) client, for secure access to remote machines
+ii  openssh-server      1:10.3p1-5   amd64        secure shell (SSH) server, for secure access from remote machines
+ii  openssh-sftp-server 1:10.3p1-5   amd64        secure shell (SSH) sftp server module, for SFTP access from remote machines
+un  openssh-sk-helper   <none>       <none>       (no description available)
+
+
+
+# This is the sshd server system-wide configuration file.  See
+# sshd_config(5) for more information.
+
+# This sshd was compiled with PATH=/usr/local/bin:/usr/bin:/bin:/usr/games
+
+# The strategy used for options in the default sshd_config shipped with
+# OpenSSH is to specify options with their default value where
+# possible, but leave them commented.  Uncommented options override the
+# default value.
+
+Include /etc/ssh/sshd_config.d/*.conf
+
+#Port 22
+#AddressFamily any
+#ListenAddress 0.0.0.0
+#ListenAddress ::
+
+#HostKey /etc/ssh/ssh_host_rsa_key
+#HostKey /etc/ssh/ssh_host_ecdsa_key
+#HostKey /etc/ssh/ssh_host_ed25519_key
+
+# Ciphers and keying
+#RekeyLimit default none
+
+# Logging
+#SyslogFacility AUTH
+#LogLevel INFO
+
+# Authentication:
+
+#LoginGraceTime 2m
+PermitRootLogin yes
+#StrictModes yes
+#MaxAuthTries 6
+#MaxSessions 10
+
+#PubkeyAuthentication yes
+
+# Expect .ssh/authorized_keys2 to be disregarded by default in future.
+#AuthorizedKeysFile	.ssh/authorized_keys .ssh/authorized_keys2
+
+#AuthorizedPrincipalsFile none
+
+#AuthorizedKeysCommand none
+#AuthorizedKeysCommandUser nobody
+
+# For this to work you will also need host keys in /etc/ssh/ssh_known_hosts
+#HostbasedAuthentication no
+# Change to yes if you don't trust ~/.ssh/known_hosts for
+# HostbasedAuthentication
+#IgnoreUserKnownHosts no
+# Don't read the user's ~/.rhosts and ~/.shosts files
+#IgnoreRhosts yes
+
+# To disable tunneled clear text passwords, change to "no" here!
+#PasswordAuthentication yes
+#PermitEmptyPasswords no
+
+# Change to "yes" to enable keyboard-interactive authentication.  Depending on
+# the system's configuration, this may involve passwords, challenge-response,
+# one-time passwords or some combination of these and other methods.
+# Beware issues with some PAM modules and threads.
+KbdInteractiveAuthentication no
+
+# Kerberos options
+#KerberosAuthentication no
+#KerberosOrLocalPasswd yes
+#KerberosTicketCleanup yes
+#KerberosGetAFSToken no
+
+# GSSAPI options
+#GSSAPIAuthentication no
+#GSSAPICleanupCredentials yes
+#GSSAPIStrictAcceptorCheck yes
+#GSSAPIKeyExchange no
+
+# Set this to 'yes' to enable PAM authentication, account processing,
+# and session processing. If this is enabled, PAM authentication will
+# be allowed through the KbdInteractiveAuthentication and
+# PasswordAuthentication.  Depending on your PAM configuration,
+# PAM authentication via KbdInteractiveAuthentication may bypass
+# the setting of "PermitRootLogin prohibit-password".
+# If you just want the PAM account and session checks to run without
+# PAM authentication, then enable this but set PasswordAuthentication
+# and KbdInteractiveAuthentication to 'no'.
+UsePAM yes
+
+#AllowAgentForwarding yes
+#AllowTcpForwarding yes
+#GatewayPorts no
+X11Forwarding yes
+#X11DisplayOffset 10
+#X11UseLocalhost yes
+#PermitTTY yes
+PrintMotd no
+#PrintLastLog yes
+#TCPKeepAlive yes
+#PermitUserEnvironment no
+#Compression delayed
+#ClientAliveInterval 0
+#ClientAliveCountMax 3
+#UseDNS no
+#PidFile /run/sshd.pid
+#MaxStartups 10:30:100
+#PermitTunnel no
+#ChrootDirectory none
+#VersionAddendum none
+
+# no default banner path
+#Banner none
+
+# Allow client to pass locale and color environment variables
+AcceptEnv LANG LC_* COLORTERM NO_COLOR
+
+# override default of no subsystems
+Subsystem	sftp	/usr/lib/openssh/sftp-server
+
+# Example of overriding settings on a per-user basis
+#Match User anoncvs
+#	X11Forwarding no
+#	AllowTcpForwarding no
+#	PermitTTY no
+#	ForceCommand cvs server
+
+
+
+# SPDX-License-Identifier: LGPL-2.1-or-later
+#
+# Make sure SSH authorized keys recorded in user records can be consumed by SSH
+#
+AuthorizedKeysCommand /usr/bin/userdbctl ssh-authorized-keys %u
+AuthorizedKeysCommandUser root
+
+
+
+ecdsa-sha2-nistp256 AAAAE2VjZHNhLXNoYTItbmlzdHAyNTYAAAAIbmlzdHAyNTYAAABBBHFcU9OZtEaJvVabOFC+mDYgJflhSy67uazFT/q/ajp8+gu0WJa89U1l6WJAEzxszA3bdWLq2UoNTFfXMwstk48= root@CYBERDYNE
+256 SHA256:mJu4YjlPIRLrffqEUpKaLwXZvmWK41Nq7YZnCFjAjRM root@CYBERDYNE (ECDSA)
+
+ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIJKMrGctWx4HQbCk4jEmQkGh3qO06hOjUI/Wud5zGbno root@CYBERDYNE
+256 SHA256:5BkRtxUfNvZDzvtxlafT+eqa8tQvSaCgZinABT5xypA root@CYBERDYNE (ED25519)
+
+ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQDXs8RsaWYShW25Iv59+NOhUUUuKCWYslqu8HzJ+1HvtsBoPlIkCzj9mgY9d+ucVCs12J13bT2Chklm8HWwzBEXd1PBKQKzTLHaL9qp12io7dydYAoWSvmdmiDPnraplt5LRb/xirbhVJlyRel7uDjULBQWBnOmlPYIwJHQECw4CGPCrCLfrwEv/RQLL3EDY4Jka8f6jyU8+wXba2kwsg3gTabRXY4I3CtAuA/Ax+mBTzUZYrr0x7rHWsFBJcFnAWhXNl2PZ8MwzRC3PcVVxeOP83O6SLXHU+UEsoQvGK5LPEHJHII14Umvkap3y//d3LPl5OjjHxs+Tq+abbDZ6FtsRXV+/wCC0kkogvYuOfHWAg+QIxEYRCvP0s4fp8nOqX2Vero453N1A6DgNKijtQIEADW3EbIvacaZoO55/AegXoWL7O3zpR9StzU4a7inpKn6ZxNZb9NOlJ+vsEFr5qXsZqrbVMHj+e2lE24K5KqyXwdZvUUD7hkSPC+q4iwwr0M= root@CYBERDYNE
+3072 SHA256:wvHUhLYdbErQKQ/7Z1xNaJ0YkbnQwdKlAH4LUJt8MbU root@CYBERDYNE (RSA)
+
+
+
+ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIMwv90hYauuvlqQp/4SyGWLMgAVJzmUz/On0r2hXocrZ mixtar@windows-host
+
+
+lo               UNKNOWN        127.0.0.1/8 ::1/128 
+enp0s31f6        DOWN           
+wlan0            UP             192.168.99.110/24 fe80::de8b:28ff:fe4a:ca59/64 
+
+
+default via 192.168.99.254 dev wlan0 proto dhcp src 192.168.99.110 metric 304 
+192.168.99.0/24 dev wlan0 proto dhcp scope link metric 304 
+
+
+# MixtarRVS — Direct DNS (no resolved daemon)
+nameserver 1.1.1.1
+nameserver 8.8.8.8
+options edns0 trust-ad
+
+
+inactive
+active

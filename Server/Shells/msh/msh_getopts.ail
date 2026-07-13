@@ -1,0 +1,362 @@
+// msh_getopts.ail
+// POSIX getopts support for non-interactive msh scripts.
+
+import msh_defs
+import msh_diagnostics
+import msh_control
+import msh_state
+
+const int MSH_GETOPTS_OPTSTRING_INDEX = 1
+const int MSH_GETOPTS_NAME_INDEX = 2
+const int MSH_GETOPTS_INITIAL_CHAR = 1
+
+record MshGetoptsResult then
+    int status
+    string vars
+end
+
+int msh_getopts_decimal(text: string):
+    if strlen(text) == 0 then
+        return 0
+    end
+    i = 0
+    if char_at(text, 0) == MSH_CH_PLUS then
+        if strlen(text) == 1 then
+            return 0
+        end
+        i = 1
+    end
+    while i < strlen(text) then
+        c = char_at(text, i)
+        if c < MSH_CH_DIGIT_0 or c > MSH_CH_DIGIT_9 then
+            return 0
+        end
+        i++
+    end
+    return 1
+end
+
+int msh_getopts_int(vars: string, name: string, fallback: int):
+    text = msh_state_get(vars, name)
+    if msh_getopts_decimal(text) == 0 then
+        dealloc(text)
+        return fallback
+    end
+    value = parse_int(text)
+    dealloc(text)
+    if value < MSH_GETOPTS_OPTSTRING_INDEX then
+        return fallback
+    end
+    return value
+end
+
+int msh_getopts_optind_text_valid(text: string):
+    return msh_getopts_decimal(text)
+end
+
+int msh_getopts_optind_changed(vars: string):
+    if msh_state_has(vars, "__getopts_public_optind") == 0 then
+        return 0
+    end
+    public_text = msh_state_get(vars, "OPTIND")
+    hidden_text = msh_state_get(vars, "__getopts_public_optind")
+    changed = 0
+    if public_text != hidden_text then
+        changed = 1
+    end
+    dealloc(public_text, hidden_text)
+    return changed
+end
+
+int msh_getopts_effective_optind(vars: string):
+    public_optind = msh_getopts_int(vars, "OPTIND", MSH_GETOPTS_OPTSTRING_INDEX)
+    last_public = msh_getopts_int(vars, "__getopts_public_optind", public_optind)
+    if public_optind != last_public then
+        return public_optind
+    end
+    return msh_getopts_int(vars, "__getopts_scan_ind", public_optind)
+end
+
+int msh_getopts_has_explicit_args(fields: str_array):
+    if str_array_len(fields) > MSH_GETOPTS_NAME_INDEX + 1 then
+        return 1
+    end
+    return 0
+end
+
+int msh_getopts_arg_count(fields: str_array, vars: string):
+    if msh_getopts_has_explicit_args(fields) == 1 then
+        return str_array_len(fields) - (MSH_GETOPTS_NAME_INDEX + 1)
+    end
+    argc_text = msh_state_get(vars, "__argc")
+    count = parse_int(argc_text)
+    dealloc(argc_text)
+    if count < 0 then
+        return 0
+    end
+    return count
+end
+
+string msh_getopts_arg_at(fields: str_array, vars: string, optind: int):
+    if optind < MSH_GETOPTS_OPTSTRING_INDEX then
+        return "" + ""
+    end
+    if msh_getopts_has_explicit_args(fields) == 1 then
+        index = MSH_GETOPTS_NAME_INDEX + 1 + optind - MSH_GETOPTS_OPTSTRING_INDEX
+        if index >= 0 and index < str_array_len(fields) then
+            return "" + str_array_get(fields, index)
+        end
+        return "" + ""
+    end
+    key = "__arg_" + str(optind)
+    value = msh_state_get(vars, key)
+    dealloc(key)
+    return value
+end
+
+int msh_getopts_optstring_silent(optstring: string):
+    if strlen(optstring) > 0 and char_at(optstring, 0) == MSH_CH_COLON then
+        return 1
+    end
+    return 0
+end
+
+int msh_getopts_option_index(optstring: string, option_char: int):
+    i = 0
+    while i < strlen(optstring) then
+        c = char_at(optstring, i)
+        if c != MSH_CH_COLON and c == option_char then
+            return i
+        end
+        i++
+    end
+    return MSH_INDEX_NOT_FOUND
+end
+
+int msh_getopts_option_requires_arg(optstring: string, index: int):
+    if index == MSH_INDEX_NOT_FOUND then
+        return 0
+    end
+    if index + 1 < strlen(optstring) and char_at(optstring, index + 1) == MSH_CH_COLON then
+        return 1
+    end
+    return 0
+end
+
+string msh_getopts_set_cursor(vars: string, optind: int, optpos: int):
+    public_ind = optind
+    if optpos > MSH_GETOPTS_INITIAL_CHAR then
+        public_ind = optind + 1
+    end
+    optind_text = str(public_ind)
+    scan_text = str(optind)
+    optpos_text = str(optpos)
+    step1 = msh_state_set(vars, "OPTIND", optind_text)
+    step2 = msh_state_set(step1, "__getopts_next", optpos_text)
+    step3 = msh_state_set(step2, "__getopts_last_optind", scan_text)
+    step4 = msh_state_set(step3, "__getopts_scan_ind", scan_text)
+    out = msh_state_set(step4, "__getopts_public_optind", optind_text)
+    dealloc(optind_text, scan_text, optpos_text, step1, step2, step3, step4)
+    return out
+end
+
+string msh_getopts_clear_cursor(vars: string):
+    step1 = msh_state_unset(vars, "__getopts_next")
+    step2 = msh_state_unset(step1, "__getopts_last_optind")
+    step3 = msh_state_unset(step2, "__getopts_scan_ind")
+    out = msh_state_unset(step3, "__getopts_public_optind")
+    dealloc(step1, step2, step3)
+    return out
+end
+
+string msh_getopts_store_option(vars: string, name: string, value: string):
+    return msh_state_set(vars, name, value)
+end
+
+string msh_getopts_store_no_arg(vars: string, name: string, value: string, optind: int, optpos: int):
+    step1 = msh_getopts_store_option(vars, name, value)
+    step2 = msh_state_set(step1, "OPTARG", "")
+    out = msh_getopts_set_cursor(step2, optind, optpos)
+    dealloc(step1, step2)
+    return out
+end
+
+string msh_getopts_store_error(vars: string, name: string, value: string, optind: int, optpos: int):
+    step1 = msh_getopts_store_option(vars, name, value)
+    step2 = msh_state_unset(step1, "OPTARG")
+    out = msh_getopts_set_cursor(step2, optind, optpos)
+    dealloc(step1, step2)
+    return out
+end
+
+string msh_getopts_store_with_arg(vars: string, name: string, value: string, optarg: string, optind: int, optpos: int):
+    step1 = msh_getopts_store_option(vars, name, value)
+    step2 = msh_state_set(step1, "OPTARG", optarg)
+    out = msh_getopts_set_cursor(step2, optind, optpos)
+    dealloc(step1, step2)
+    return out
+end
+
+def msh_getopts_end(vars: string, name: string, optind: int): MshGetoptsResult
+    optind_text = str(optind)
+    step1 = msh_state_set(vars, "OPTIND", optind_text)
+    step2 = msh_state_set(step1, name, "?")
+    out = msh_getopts_clear_cursor(step2)
+    dealloc(optind_text, step1, step2)
+    return new MshGetoptsResult(1, out)
+end
+
+int msh_getopts_effective_char_pos(vars: string, optind: int):
+    if msh_getopts_optind_changed(vars) == 1 then
+        return MSH_GETOPTS_INITIAL_CHAR
+    end
+    optpos = msh_getopts_int(vars, "__getopts_next", MSH_GETOPTS_INITIAL_CHAR)
+    last = msh_getopts_int(vars, "__getopts_last_optind", optind)
+    if last != optind or optpos < MSH_GETOPTS_INITIAL_CHAR then
+        return MSH_GETOPTS_INITIAL_CHAR
+    end
+    return optpos
+end
+
+def msh_getopts_invalid_option(vars: string, optstring: string, name: string, option_char: int, optind: int, optpos: int, arg_len: int): MshGetoptsResult
+    option_text = chr(option_char)
+    silent = msh_getopts_optstring_silent(optstring)
+    if silent == 0 then
+        msg = "Illegal option -" + option_text
+        msh_diag(msg)
+        dealloc(msg)
+    end
+    if optpos + 1 < arg_len then
+        next_ind = optind
+        next_pos = optpos + 1
+    else
+        next_ind = optind + 1
+        next_pos = MSH_GETOPTS_INITIAL_CHAR
+    end
+    if silent == 1 then
+        out = msh_getopts_store_with_arg(vars, name, "?", option_text, next_ind, next_pos)
+    else
+        out = msh_getopts_store_error(vars, name, "?", next_ind, next_pos)
+    end
+    dealloc(option_text)
+    return new MshGetoptsResult(0, out)
+end
+
+def msh_getopts_missing_arg(vars: string, optstring: string, name: string, option_char: int, optind: int): MshGetoptsResult
+    option_text = chr(option_char)
+    if msh_getopts_optstring_silent(optstring) == 1 then
+        out = msh_getopts_store_with_arg(vars, name, ":", option_text, optind + 1, MSH_GETOPTS_INITIAL_CHAR)
+        dealloc(option_text)
+        return new MshGetoptsResult(0, out)
+    end
+    msg_left = "No arg for -" + option_text
+    msg = msg_left + " option"
+    msh_diag(msg)
+    out2 = msh_getopts_store_error(vars, name, "?", optind + 1, MSH_GETOPTS_INITIAL_CHAR)
+    dealloc(option_text, msg_left, msg)
+    return new MshGetoptsResult(0, out2)
+end
+
+def msh_getopts_illegal_optind(vars: string, text: string): MshGetoptsResult
+    msg = "Illegal number: " + text
+    msh_diag(msg)
+    out = msh_control_set(vars, "error_exit", 2)
+    dealloc(msg)
+    return new MshGetoptsResult(2, out)
+end
+
+def msh_getopts_state(fields: str_array, vars: string): MshGetoptsResult
+    if str_array_len(fields) < 3 then
+        msh_diag_builtin("getopts", "Usage: getopts optstring var [arg...]")
+        return new MshGetoptsResult(2, "" + vars)
+    end
+    optstring = "" + str_array_get(fields, MSH_GETOPTS_OPTSTRING_INDEX)
+    name = "" + str_array_get(fields, MSH_GETOPTS_NAME_INDEX)
+    if msh_state_name_valid(name) == 0 then
+        detail = name + ": bad variable name"
+        msh_diag_builtin("getopts", detail)
+        dealloc(detail)
+        dealloc(optstring, name)
+        return new MshGetoptsResult(2, "" + vars)
+    end
+    if msh_state_has(vars, "OPTIND") == 1 then
+        optind_text = msh_state_get(vars, "OPTIND")
+        if msh_getopts_optind_text_valid(optind_text) == 0 then
+            illegal = msh_getopts_illegal_optind(vars, optind_text)
+            dealloc(optstring, name, optind_text)
+            return illegal
+        end
+        dealloc(optind_text)
+    end
+    optind = msh_getopts_effective_optind(vars)
+    optpos = msh_getopts_effective_char_pos(vars, optind)
+    count = msh_getopts_arg_count(fields, vars)
+    if optind > count + 1 then
+        optind = MSH_GETOPTS_OPTSTRING_INDEX
+        optpos = MSH_GETOPTS_INITIAL_CHAR
+    end
+    if optind > count then
+        ended = msh_getopts_end(vars, name, optind)
+        dealloc(optstring, name)
+        return ended
+    end
+    arg = msh_getopts_arg_at(fields, vars, optind)
+    while strlen(arg) > 0 and optpos >= strlen(arg) and optind <= count then
+        dealloc(arg)
+        optind++
+        optpos = MSH_GETOPTS_INITIAL_CHAR
+        arg = msh_getopts_arg_at(fields, vars, optind)
+    end
+    if strlen(arg) == 0 or optind > count then
+        ended2 = msh_getopts_end(vars, name, optind)
+        dealloc(optstring, name, arg)
+        return ended2
+    end
+    if arg == "--" then
+        ended3 = msh_getopts_end(vars, name, optind + 1)
+        dealloc(optstring, name, arg)
+        return ended3
+    end
+    if arg == "-" or startswith(arg, "-") == 0 then
+        ended4 = msh_getopts_end(vars, name, optind)
+        dealloc(optstring, name, arg)
+        return ended4
+    end
+    option_char = char_at(arg, optpos)
+    option_value = chr(option_char)
+    opt_index = msh_getopts_option_index(optstring, option_char)
+    if opt_index == MSH_INDEX_NOT_FOUND then
+        dealloc(option_value)
+        invalid = msh_getopts_invalid_option(vars, optstring, name, option_char, optind, optpos, strlen(arg))
+        dealloc(optstring, name, arg)
+        return invalid
+    end
+    if msh_getopts_option_requires_arg(optstring, opt_index) == 1 then
+        if optpos + 1 < strlen(arg) then
+            optarg = substr(arg, optpos + 1, strlen(arg) - optpos - 1)
+            out_arg = msh_getopts_store_with_arg(vars, name, option_value, optarg, optind + 1, MSH_GETOPTS_INITIAL_CHAR)
+            dealloc(optstring, name, arg, option_value, optarg)
+            return new MshGetoptsResult(0, out_arg)
+        end
+        if optind + 1 <= count then
+            optarg2 = msh_getopts_arg_at(fields, vars, optind + 1)
+            out_arg2 = msh_getopts_store_with_arg(vars, name, option_value, optarg2, optind + 2, MSH_GETOPTS_INITIAL_CHAR)
+            dealloc(optstring, name, arg, option_value, optarg2)
+            return new MshGetoptsResult(0, out_arg2)
+        end
+        dealloc(option_value)
+        missing = msh_getopts_missing_arg(vars, optstring, name, option_char, optind)
+        dealloc(optstring, name, arg)
+        return missing
+    end
+    if optpos + 1 < strlen(arg) then
+        next_optind = optind
+        next_optpos = optpos + 1
+    else
+        next_optind = optind + 1
+        next_optpos = MSH_GETOPTS_INITIAL_CHAR
+    end
+    out_no_arg = msh_getopts_store_no_arg(vars, name, option_value, next_optind, next_optpos)
+    dealloc(optstring, name, arg, option_value)
+    return new MshGetoptsResult(0, out_no_arg)
+end

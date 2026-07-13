@@ -1,0 +1,762 @@
+// msh_parser.ail
+// POSIX-sh AST parser foundation: lists, and/or, pipelines, commands, redirs.
+import msh_tokens
+import msh_ast
+import msh_defs
+import msh_parser_utils
+import msh_parser_core
+import msh_builtins
+import msh_reserved
+def msh_parse_if_from(tokens: string, pos: int, opener: string): MshParse
+    if msh_token_is_word_value(tokens, pos, opener) == 0 then
+        msg = "expected " + opener
+        out = msh_parse_fail(pos, msg)
+        dealloc(msg)
+        return out
+    end
+    cond = msh_parse_list_until_words(tokens, msh_parse_skip_semi(tokens, pos + 1), "then", "", "")
+    if cond.ok == 0 then
+        return cond
+    end
+    if msh_token_is_word_value(tokens, cond.pos, "then") == 0 then
+        dealloc(cond.node)
+        return msh_parse_fail(cond.pos, "missing then")
+    end
+    then_part = msh_parse_list_until_words(tokens, msh_parse_skip_semi(tokens, cond.pos + 1), "else", "elif", "fi")
+    if then_part.ok == 0 then
+        dealloc(cond.node)
+        return then_part
+    end
+    if msh_token_is_word_value(tokens, then_part.pos, "fi") == 1 then
+        node = msh_ast_if(cond.node, then_part.node, "EMPTY")
+        dealloc(cond.node, then_part.node)
+        return new MshParse(node, then_part.pos + 1, 1)
+    elsif msh_token_is_word_value(tokens, then_part.pos, "else") == 1 then
+        else_part = msh_parse_list_until_words(tokens, msh_parse_skip_semi(tokens, then_part.pos + 1), "fi", "", "")
+        if else_part.ok == 0 then
+            dealloc(cond.node)
+            dealloc(then_part.node)
+            return else_part
+        end
+        if msh_token_is_word_value(tokens, else_part.pos, "fi") == 0 then
+            dealloc(cond.node, then_part.node, else_part.node)
+            return msh_parse_fail(else_part.pos, "missing fi")
+        end
+        node = msh_ast_if(cond.node, then_part.node, else_part.node)
+        dealloc(cond.node, then_part.node, else_part.node)
+        return new MshParse(node, else_part.pos + 1, 1)
+    elsif msh_token_is_word_value(tokens, then_part.pos, "elif") == 1 then
+        elif_part = msh_parse_if_from(tokens, then_part.pos, "elif")
+        if elif_part.ok == 0 then
+            dealloc(cond.node, then_part.node)
+            return elif_part
+        end
+        node = msh_ast_if(cond.node, then_part.node, elif_part.node)
+        dealloc(cond.node, then_part.node, elif_part.node)
+        return new MshParse(node, elif_part.pos, 1)
+    end
+    dealloc(cond.node, then_part.node)
+    return msh_parse_fail(then_part.pos, "missing fi")
+end
+def msh_parse_if(tokens: string, pos: int): MshParse
+    return msh_parse_if_from(tokens, pos, "if")
+end
+def msh_parse_loop(tokens: string, pos: int, opener: string, ast_kind: string): MshParse
+    if msh_token_is_word_value(tokens, pos, opener) == 0 then
+        msg = "expected " + opener
+        out = msh_parse_fail(pos, msg)
+        dealloc(msg)
+        return out
+    end
+    cond = msh_parse_list_until_words(tokens, msh_parse_skip_semi(tokens, pos + 1), "do", "", "")
+    if cond.ok == 0 then
+        return cond
+    end
+    if msh_token_is_word_value(tokens, cond.pos, "do") == 0 then
+        dealloc(cond.node)
+        return msh_parse_fail(cond.pos, "missing do")
+    end
+    body = msh_parse_list_until_words(tokens, msh_parse_skip_semi(tokens, cond.pos + 1), "done", "", "")
+    if body.ok == 0 then
+        dealloc(cond.node)
+        return body
+    end
+    if msh_token_is_word_value(tokens, body.pos, "done") == 0 then
+        dealloc(cond.node, body.node)
+        return msh_parse_fail(body.pos, "missing done")
+    end
+    node = msh_ast_loop(ast_kind, cond.node, body.node)
+    dealloc(cond.node, body.node)
+    return new MshParse(node, body.pos + 1, 1)
+end
+def msh_parse_for(tokens: string, pos: int): MshParse
+    if msh_token_is_word_value(tokens, pos, "for") == 0 then
+        return msh_parse_fail(pos, "expected for")
+    end
+    n = msh_token_count(tokens)
+    if pos + 1 >= n then
+        return msh_parse_fail(pos + 1, "missing for variable")
+    end
+    name_line = msh_token_at(tokens, pos + 1)
+    if msh_line_is_kind(name_line, "WORD") == 0 then
+        dealloc(name_line)
+        return msh_parse_fail(pos + 1, "for variable must be a name")
+    end
+    name = msh_token_value(name_line)
+    if msh_word_assignment_equal_pos(name) != MSH_INDEX_NOT_FOUND or msh_parse_is_name_start(char_at(name, 0)) == 0 then
+        dealloc(name_line, name)
+        return msh_parse_fail(pos + 1, "for variable must be a name")
+    end
+    i = 1
+    while i < strlen(name) then
+        if msh_parse_is_name_char(char_at(name, i)) == 0 then
+            dealloc(name_line, name)
+            return msh_parse_fail(pos + 1, "for variable must be a name")
+        end
+        i++
+    end
+    dealloc(name_line)
+    cur = msh_parse_skip_semi(tokens, pos + 2)
+    words = "" + ""
+    implicit_positionals = 1
+    if cur < n and msh_token_is_word_value(tokens, cur, "in") == 1 then
+        implicit_positionals = 0
+        cur = msh_parse_skip_semi(tokens, cur + 1)
+        while cur < n and msh_token_is_word_value(tokens, cur, "do") == 0 then
+            line = msh_token_at(tokens, cur)
+            if msh_line_is_kind(line, "SEMI") == 1 then
+                dealloc(line)
+                cur++
+                break
+            elsif msh_line_is_kind(line, "WORD") == 1 then
+                value = msh_token_value(line)
+                item = msh_ast_word(value)
+                old = words
+                words = msh_ast_append(words, item)
+                dealloc(old, value, item)
+                cur++
+            else
+                dealloc(line)
+                dealloc(name, words)
+                return msh_parse_fail(cur, "for list accepts words only")
+            end
+            dealloc(line)
+        end
+    elsif cur < n then
+        line = msh_token_at(tokens, cur)
+        if msh_line_is_kind(line, "SEMI") == 1 then
+            cur++
+        end
+        dealloc(line)
+    end
+    if implicit_positionals == 1 and strlen(words) == 0 then
+        implicit_word = msh_ast_word("$@")
+        dealloc(words)
+        words = implicit_word
+    end
+    if msh_token_is_word_value(tokens, cur, "do") == 0 then
+        dealloc(name, words)
+        return msh_parse_fail(cur, "missing do")
+    end
+    body = msh_parse_list_until_words(tokens, msh_parse_skip_semi(tokens, cur + 1), "done", "", "")
+    if body.ok == 0 then
+        dealloc(name, words)
+        return body
+    end
+    if msh_token_is_word_value(tokens, body.pos, "done") == 0 then
+        dealloc(name, words, body.node)
+        return msh_parse_fail(body.pos, "missing done")
+    end
+    node = msh_ast_for(name, words, body.node)
+    dealloc(name, words, body.node)
+    return new MshParse(node, body.pos + 1, 1)
+end
+def msh_parse_case_body(tokens: string, pos: int): MshParse
+    if msh_token_is_double_semi(tokens, pos) == 1 or msh_token_is_word_value(tokens, pos, "esac") == 1 then
+        return new MshParse("" + "EMPTY", pos, 1)
+    end
+    left = msh_parse_and_or(tokens, pos)
+    if left.ok == 0 then
+        return left
+    end
+    cur = left.pos
+    n = msh_token_count(tokens)
+    while cur < n then
+        if msh_token_is_double_semi(tokens, cur) == 1 or msh_token_is_word_value(tokens, cur, "esac") == 1 then
+            return left
+        end
+        line = msh_token_at(tokens, cur)
+        if msh_line_is_kind(line, "SEMI") == 0 then
+            dealloc(line)
+            return left
+        end
+        dealloc(line)
+        right = msh_parse_and_or(tokens, cur + 1)
+        if right.ok == 0 then
+            dealloc(left.node)
+            return right
+        end
+        combined = msh_ast_binary("SEQ", left.node, right.node)
+        dealloc(left.node, right.node)
+        left = new MshParse(combined, right.pos, 1)
+        cur = left.pos
+    end
+    return left
+end
+def msh_parse_case(tokens: string, pos: int): MshParse
+    n = msh_token_count(tokens)
+    if pos + 2 >= n then
+        return msh_parse_fail(pos, "incomplete case")
+    end
+    subject_line = msh_token_at(tokens, pos + 1)
+    if msh_line_is_kind(subject_line, "WORD") == 0 or msh_token_is_word_value(tokens, pos + 2, "in") == 0 then
+        dealloc(subject_line)
+        return msh_parse_fail(pos, "case requires word and in")
+    end
+    subject = msh_token_value(subject_line)
+    dealloc(subject_line)
+    cur = msh_parse_skip_semi(tokens, pos + 3)
+    items = "" + ""
+    while cur < n and msh_token_is_word_value(tokens, cur, "esac") == 0 then
+        patterns = "" + ""
+        pattern_done = 0
+        while cur < n and pattern_done == 0 then
+            line = msh_token_at(tokens, cur)
+            if msh_line_is_kind(line, "LPAREN") == 1 and strlen(patterns) == 0 then
+                pattern_done = 0
+            elsif msh_line_is_kind(line, "RPAREN") == 1 then
+                pattern_done = 1
+            elsif msh_line_is_kind(line, "WORD") == 1 then
+                value = msh_token_value(line)
+                item = msh_ast_word(value)
+                oldp = patterns
+                patterns = msh_ast_append(patterns, item)
+                dealloc(oldp, value, item)
+            elsif msh_line_is_kind(line, "PIPE") == 0 then
+                dealloc(line)
+                dealloc(subject, items, patterns)
+                return msh_parse_fail(cur, "bad case pattern")
+            end
+            dealloc(line)
+            if pattern_done == 0 then
+                cur++
+            end
+        end
+        if cur >= n then
+            dealloc(subject, items, patterns)
+            return msh_parse_fail(cur, "missing case )")
+        end
+        cur++
+        cur = msh_parse_skip_semi(tokens, cur)
+        body = msh_parse_case_body(tokens, cur)
+        if body.ok == 0 then
+            dealloc(subject, items, patterns)
+            return body
+        end
+        case_item = msh_ast_case_item(patterns, body.node)
+        oldi = items
+        items = msh_ast_append(items, case_item)
+        dealloc(oldi, patterns, body.node, case_item)
+        cur = body.pos
+        if msh_token_is_double_semi(tokens, cur) == 1 then
+            cur = cur + 2
+        end
+        cur = msh_parse_skip_semi(tokens, cur)
+    end
+    if msh_token_is_word_value(tokens, cur, "esac") == 0 then
+        dealloc(subject, items)
+        return msh_parse_fail(cur, "missing esac")
+    end
+    node = msh_ast_case(subject, items)
+    dealloc(subject, items)
+    return new MshParse(node, cur + 1, 1)
+end
+def msh_parse_function(tokens: string, pos: int): MshParse
+    name_line = msh_token_at(tokens, pos)
+    name = msh_token_value(name_line)
+    dealloc(name_line)
+    n = msh_token_count(tokens)
+    if pos + 3 >= n then
+        dealloc(name)
+        return msh_parse_fail(pos, "incomplete function definition")
+    end
+    lpar = msh_token_at(tokens, pos + 1)
+    rpar = msh_token_at(tokens, pos + 2)
+    if msh_line_is_kind(lpar, "LPAREN") == 0 or msh_line_is_kind(rpar, "RPAREN") == 0 then
+        dealloc(name, lpar, rpar)
+        return msh_parse_fail(pos, "bad function definition")
+    end
+    dealloc(lpar, rpar)
+    if msh_is_special_builtin(name) == 1 or msh_command_is_reserved_word(name) == 1 then
+        dealloc(name)
+        return msh_parse_fail(pos, "bad function name")
+    end
+    body = msh_parse_command(tokens, msh_parse_skip_semi(tokens, pos + 3))
+    if body.ok == 0 then
+        dealloc(name)
+        return body
+    end
+    node = msh_ast_func(name, body.node)
+    dealloc(name, body.node)
+    return new MshParse(node, body.pos, 1)
+end
+def msh_parse_subshell(tokens: string, pos: int): MshParse
+    line = msh_token_at(tokens, pos)
+    if msh_line_is_kind(line, "LPAREN") == 0 then
+        dealloc(line)
+        return msh_parse_fail(pos, "expected subshell")
+    end
+    dealloc(line)
+    inner = msh_parse_list(tokens, msh_parse_skip_semi(tokens, pos + 1))
+    if inner.ok == 0 then
+        return inner
+    end
+    n = msh_token_count(tokens)
+    if inner.pos >= n then
+        dealloc(inner.node)
+        return msh_parse_fail(inner.pos, "missing )")
+    end
+    close = msh_token_at(tokens, inner.pos)
+    if msh_line_is_kind(close, "RPAREN") == 0 then
+        dealloc(close, inner.node)
+        return msh_parse_fail(inner.pos, "missing )")
+    end
+    dealloc(close)
+    redirs = msh_parse_redir_list(tokens, inner.pos + 1)
+    if redirs.ok == 0 then
+        dealloc(inner.node)
+        return redirs
+    end
+    node = msh_ast_subshell(inner.node, redirs.node)
+    dealloc(inner.node, redirs.node)
+    return new MshParse(node, redirs.pos, 1)
+end
+def msh_parse_group(tokens: string, pos: int): MshParse
+    line = msh_token_at(tokens, pos)
+    if msh_line_is_kind(line, "LBRACE") == 0 then
+        dealloc(line)
+        return msh_parse_fail(pos, "expected group")
+    end
+    dealloc(line)
+    inner = msh_parse_list(tokens, msh_parse_skip_semi(tokens, pos + 1))
+    if inner.ok == 0 then
+        return inner
+    end
+    n = msh_token_count(tokens)
+    if inner.pos >= n then
+        dealloc(inner.node)
+        return msh_parse_fail(inner.pos, "missing }")
+    end
+    close = msh_token_at(tokens, inner.pos)
+    if msh_line_is_kind(close, "RBRACE") == 0 then
+        dealloc(close, inner.node)
+        return msh_parse_fail(inner.pos, "missing }")
+    end
+    dealloc(close)
+    redirs = msh_parse_redir_list(tokens, inner.pos + 1)
+    if redirs.ok == 0 then
+        dealloc(inner.node)
+        return redirs
+    end
+    node = msh_ast_group(inner.node, redirs.node)
+    dealloc(inner.node, redirs.node)
+    return new MshParse(node, redirs.pos, 1)
+end
+def msh_parse_command(tokens: string, pos: int): MshParse
+    n = msh_token_count(tokens)
+    cur = pos
+    assigns = "" + ""
+    words = "" + ""
+    redirs = "" + ""
+    seen = 0
+    command_seen = 0
+    if cur < n then
+        first = msh_token_at(tokens, cur)
+        if msh_line_is_kind(first, "WORD") == 1 then
+            value = msh_token_value(first)
+            if cur + 2 < n then
+                lpar = msh_token_at(tokens, cur + 1)
+                rpar = msh_token_at(tokens, cur + 2)
+                if msh_line_is_kind(lpar, "LPAREN") == 1 and msh_line_is_kind(rpar, "RPAREN") == 1 then
+                    dealloc(value, first, lpar, rpar, assigns, words, redirs)
+                    parsed = msh_parse_function(tokens, cur)
+                    return msh_parse_wrap_trailing_redirs(tokens, parsed)
+                end
+                dealloc(lpar, rpar)
+            end
+            if value == "if" then
+                dealloc(value, first, assigns, words, redirs)
+                parsed = msh_parse_if(tokens, cur)
+                return msh_parse_wrap_trailing_redirs(tokens, parsed)
+            elsif value == "while" then
+                dealloc(value, first, assigns, words, redirs)
+                parsed = msh_parse_loop(tokens, cur, "while", "WHILE")
+                return msh_parse_wrap_trailing_redirs(tokens, parsed)
+            elsif value == "until" then
+                dealloc(value, first, assigns, words, redirs)
+                parsed = msh_parse_loop(tokens, cur, "until", "UNTIL")
+                return msh_parse_wrap_trailing_redirs(tokens, parsed)
+            elsif value == "for" then
+                dealloc(value, first, assigns, words, redirs)
+                parsed = msh_parse_for(tokens, cur)
+                return msh_parse_wrap_trailing_redirs(tokens, parsed)
+            elsif value == "case" then
+                dealloc(value, first, assigns, words, redirs)
+                parsed = msh_parse_case(tokens, cur)
+                return msh_parse_wrap_trailing_redirs(tokens, parsed)
+            end
+            dealloc(value)
+        end
+        if msh_line_is_kind(first, "LPAREN") == 1 then
+            dealloc(first)
+            dealloc(assigns, words, redirs)
+            return msh_parse_subshell(tokens, cur)
+        elsif msh_line_is_kind(first, "LBRACE") == 1 then
+            dealloc(first)
+            dealloc(assigns, words, redirs)
+            return msh_parse_group(tokens, cur)
+        end
+        dealloc(first)
+    end
+    while cur < n then
+        line = msh_token_at(tokens, cur)
+        if msh_line_is_kind(line, "WORD") == 1 then
+            value = msh_token_value(line)
+            eq = msh_word_assignment_equal_pos(value)
+            if command_seen == 0 and eq != MSH_INDEX_NOT_FOUND then
+                name = substr(value, 0, eq)
+                assign_value = substr(value, eq + 1, strlen(value) - eq - 1)
+                item = msh_ast_assignment(name, assign_value)
+                olda = assigns
+                assigns = msh_ast_append(assigns, item)
+                dealloc(olda, name, assign_value, item)
+            else
+                item = msh_ast_word(value)
+                old = words
+                words = msh_ast_append(words, item)
+                dealloc(old, item)
+                command_seen = 1
+            end
+            dealloc(value)
+            seen = 1
+            cur++
+        elsif msh_line_is_redir(line) == 1 then
+            if cur + 1 >= n then
+                dealloc(line, assigns, words, redirs)
+                return msh_parse_fail(cur, "redirection without target")
+            end
+            op = msh_token_value(line)
+            next_line = msh_token_at(tokens, cur + 1)
+            if msh_line_is_kind(next_line, "WORD") == 0 then
+                dealloc(line, next_line, op, assigns, words, redirs)
+                return msh_parse_fail(cur + 1, "redirection target must be a word")
+            end
+            target = msh_token_value(next_line)
+            item = msh_ast_redir(op, target)
+            oldr = redirs
+            redirs = msh_ast_append(redirs, item)
+            dealloc(oldr, op, target, item, next_line)
+            seen = 1
+            cur = cur + 2
+        elsif msh_line_is_kind(line, "BANG") == 1 and command_seen == 1 then
+            item = msh_ast_word("!")
+            old_bang = words
+            words = msh_ast_append(words, item)
+            dealloc(old_bang, item)
+            seen = 1
+            cur++
+        else
+            dealloc(line)
+            break
+        end
+        dealloc(line)
+    end
+    if seen == 0 then
+        dealloc(assigns, words, redirs)
+        return msh_parse_fail(pos, "expected command")
+    end
+    node = msh_ast_command(assigns, words, redirs)
+    dealloc(assigns, words, redirs)
+    return new MshParse(node, cur, 1)
+end
+def msh_parse_pipeline(tokens: string, pos: int): MshParse
+    cur_start = pos
+    negate = 0
+    n0 = msh_token_count(tokens)
+    if cur_start < n0 then
+        first = msh_token_at(tokens, cur_start)
+        if msh_line_is_kind(first, "BANG") == 1 then
+            negate = 1
+            cur_start++
+        end
+        dealloc(first)
+    end
+    left = msh_parse_command(tokens, cur_start)
+    if left.ok == 0 then
+        return left
+    end
+    cur = left.pos
+    n = msh_token_count(tokens)
+    while cur < n then
+        line = msh_token_at(tokens, cur)
+        if msh_line_is_kind(line, "PIPE") == 0 then
+            dealloc(line)
+            break
+        end
+        dealloc(line)
+        right = msh_parse_command(tokens, cur + 1)
+        if right.ok == 0 then
+            dealloc(left.node)
+            return right
+        end
+        combined = msh_ast_binary("PIPE", left.node, right.node)
+        dealloc(left.node, right.node)
+        left = new MshParse(combined, right.pos, 1)
+        cur = left.pos
+    end
+    if negate == 1 then
+        wrapped = msh_ast_status("NOT", left.node)
+        dealloc(left.node)
+        left = new MshParse(wrapped, left.pos, 1)
+    end
+    return left
+end
+def msh_parse_and_or(tokens: string, pos: int): MshParse
+    left = msh_parse_pipeline(tokens, pos)
+    if left.ok == 0 then
+        return left
+    end
+    cur = left.pos
+    n = msh_token_count(tokens)
+    while cur < n then
+        line = msh_token_at(tokens, cur)
+        if msh_line_is_kind(line, "AND_IF") == 1 then
+            kind = "" + "AND"
+        elsif msh_line_is_kind(line, "OR_IF") == 1 then
+            kind = "" + "OR"
+        else
+            dealloc(line)
+            break
+        end
+        dealloc(line)
+        right = msh_parse_pipeline(tokens, cur + 1)
+        if right.ok == 0 then
+            dealloc(kind, left.node)
+            return right
+        end
+        combined = msh_ast_binary(kind, left.node, right.node)
+        dealloc(kind, left.node, right.node)
+        left = new MshParse(combined, right.pos, 1)
+        cur = left.pos
+    end
+    return left
+end
+def msh_parse_list(tokens: string, pos: int): MshParse
+    left = msh_parse_and_or(tokens, pos)
+    if left.ok == 0 then
+        return left
+    end
+    cur = left.pos
+    n = msh_token_count(tokens)
+    while cur < n then
+        line = msh_token_at(tokens, cur)
+        if msh_line_is_kind(line, "SEMI") == 1 then
+            next_pos = cur + 1
+            if next_pos >= n then
+                return msh_parse_return_left_at_with_line(left, next_pos, line)
+            end
+            next_line = msh_token_at(tokens, next_pos)
+            if msh_line_is_kind(next_line, "RPAREN") == 1 then
+                dealloc(next_line, line)
+                return msh_parse_return_left_at(left, next_pos)
+            elsif msh_line_is_kind(next_line, "RBRACE") == 1 then
+                dealloc(next_line, line)
+                return msh_parse_return_left_at(left, next_pos)
+            end
+            dealloc(next_line)
+            right = msh_parse_and_or(tokens, next_pos)
+            if right.ok == 0 then
+                dealloc(line, left.node)
+                return right
+            end
+            after_right = right.pos
+            if after_right < n then
+                after_line = msh_token_at(tokens, after_right)
+                if msh_line_is_kind(after_line, "AMP") == 1 then
+                    bg_right = msh_ast_status("BACKGROUND", right.node)
+                    combined = msh_ast_binary("SEQ", left.node, bg_right)
+                    dealloc(left.node, right.node, bg_right)
+                    next_after_amp = after_right + 1
+                    if next_after_amp < n then
+                        amp_next_line = msh_token_at(tokens, next_after_amp)
+                        if msh_line_is_kind(amp_next_line, "SEMI") == 0 and msh_line_is_kind(amp_next_line, "RPAREN") == 0 and msh_line_is_kind(amp_next_line, "RBRACE") == 0 then
+                            tail = msh_parse_and_or(tokens, next_after_amp)
+                            if tail.ok == 0 then
+                                dealloc(after_line, amp_next_line, combined)
+                                return tail
+                            end
+                            combined_tail = msh_ast_binary("SEQ", combined, tail.node)
+                            dealloc(combined, tail.node)
+                            left = new MshParse(combined_tail, tail.pos, 1)
+                        else
+                            left = new MshParse(combined, next_after_amp, 1)
+                        end
+                        dealloc(amp_next_line)
+                    else
+                        left = new MshParse(combined, next_after_amp, 1)
+                    end
+                else
+                    combined = msh_ast_binary("SEQ", left.node, right.node)
+                    dealloc(left.node, right.node)
+                    left = new MshParse(combined, right.pos, 1)
+                end
+                dealloc(after_line)
+            else
+                combined = msh_ast_binary("SEQ", left.node, right.node)
+                dealloc(left.node, right.node)
+                left = new MshParse(combined, right.pos, 1)
+            end
+            cur = left.pos
+        elsif msh_line_is_kind(line, "AMP") == 1 then
+            bg = msh_ast_status("BACKGROUND", left.node)
+            dealloc(left.node)
+            next_pos = cur + 1
+            if next_pos >= n then
+                left = new MshParse(bg, next_pos, 1)
+                cur = next_pos
+            else
+                right = msh_parse_and_or(tokens, next_pos)
+                if right.ok == 0 then
+                    dealloc(line, bg)
+                    return right
+                end
+                combined = msh_ast_binary("SEQ", bg, right.node)
+                dealloc(bg, right.node)
+                left = new MshParse(combined, right.pos, 1)
+                cur = left.pos
+            end
+        else
+            dealloc(line)
+            break
+        end
+        dealloc(line)
+    end
+    return left
+end
+
+def msh_parse_return_left_at(left: MshParse, pos: int): MshParse
+    node_copy = "" + left.node
+    dealloc(left.node)
+    return new MshParse(node_copy, pos, 1)
+end
+
+def msh_parse_return_left_at_with_line(left: MshParse, pos: int, line: string): MshParse
+    dealloc(line)
+    return msh_parse_return_left_at(left, pos)
+end
+
+def msh_parse_list_until_words(tokens: string, pos: int, stop1: string, stop2: string, stop3: string): MshParse
+    if msh_token_is_stop_word(tokens, pos, stop1, stop2, stop3) == 1 then
+        return msh_parse_fail(pos, "expected command before reserved word")
+    end
+    left = msh_parse_and_or(tokens, pos)
+    if left.ok == 0 then
+        return left
+    end
+    cur = left.pos
+    n = msh_token_count(tokens)
+    while cur < n then
+        if msh_token_is_stop_word(tokens, cur, stop1, stop2, stop3) == 1 then
+            return left
+        end
+        line = msh_token_at(tokens, cur)
+        if msh_line_is_kind(line, "SEMI") == 1 then
+            next_pos = cur + 1
+            if next_pos >= n then
+                dealloc(line)
+                return left
+            end
+            if msh_token_is_stop_word(tokens, next_pos, stop1, stop2, stop3) == 1 then
+                dealloc(line)
+                return msh_parse_return_left_at(left, next_pos)
+            end
+            next_line = msh_token_at(tokens, next_pos)
+            if msh_line_is_kind(next_line, "RPAREN") == 1 then
+                dealloc(next_line, line)
+                return msh_parse_return_left_at(left, next_pos)
+            elsif msh_line_is_kind(next_line, "RBRACE") == 1 then
+                dealloc(next_line, line)
+                return msh_parse_return_left_at(left, next_pos)
+            end
+            dealloc(next_line)
+            right = msh_parse_and_or(tokens, next_pos)
+            if right.ok == 0 then
+                dealloc(line, left.node)
+                return right
+            end
+            after_right = right.pos
+            if after_right < n then
+                after_line = msh_token_at(tokens, after_right)
+                if msh_line_is_kind(after_line, "AMP") == 1 then
+                    bg_right = msh_ast_status("BACKGROUND", right.node)
+                    combined = msh_ast_binary("SEQ", left.node, bg_right)
+                    dealloc(left.node, right.node, bg_right)
+                    next_after_amp = after_right + 1
+                    if next_after_amp < n then
+                        amp_next_line = msh_token_at(tokens, next_after_amp)
+                        if msh_token_is_stop_word(tokens, next_after_amp, stop1, stop2, stop3) == 0 and msh_line_is_kind(amp_next_line, "SEMI") == 0 then
+                            tail = msh_parse_and_or(tokens, next_after_amp)
+                            if tail.ok == 0 then
+                                dealloc(after_line, amp_next_line, combined)
+                                return tail
+                            end
+                            combined_tail = msh_ast_binary("SEQ", combined, tail.node)
+                            dealloc(combined, tail.node)
+                            left = new MshParse(combined_tail, tail.pos, 1)
+                        else
+                            left = new MshParse(combined, next_after_amp, 1)
+                        end
+                        dealloc(amp_next_line)
+                    else
+                        left = new MshParse(combined, next_after_amp, 1)
+                    end
+                else
+                    combined = msh_ast_binary("SEQ", left.node, right.node)
+                    dealloc(left.node, right.node)
+                    left = new MshParse(combined, right.pos, 1)
+                end
+                dealloc(after_line)
+            else
+                combined = msh_ast_binary("SEQ", left.node, right.node)
+                dealloc(left.node, right.node)
+                left = new MshParse(combined, right.pos, 1)
+            end
+            cur = left.pos
+        elsif msh_line_is_kind(line, "AMP") == 1 then
+            bg = msh_ast_status("BACKGROUND", left.node)
+            dealloc(left.node)
+            left = new MshParse(bg, cur + 1, 1)
+            cur = cur + 1
+        else
+            dealloc(line)
+            break
+        end
+        dealloc(line)
+    end
+    return left
+end
+def msh_parse_script(tokens: string): MshParse
+    n = msh_token_count(tokens)
+    if n == 0 then
+        return new MshParse("" + "EMPTY", 0, 1)
+    end
+    result = msh_parse_list(tokens, msh_parse_skip_semi(tokens, 0))
+    if result.ok == 0 then
+        return result
+    end
+    if result.pos < n then
+        dealloc(result.node)
+        return msh_parse_fail(result.pos, "unexpected token")
+    end
+    return result
+end

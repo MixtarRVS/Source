@@ -1,0 +1,22 @@
+# msh-source: smoosh/tests/shell/builtin.kill.signame.test
+# msh-profile: posix
+# msh-run: eval
+rm -f foo
+set -e
+
+trap 'touch foo' TERM
+
+kill $$
+[ -f foo ] && ! [ -s foo ]
+rm foo
+echo plain kill
+
+kill -TERM $$
+[ -f foo ] && ! [ -s foo ]
+rm foo
+echo named \(-TERM\)
+
+kill -15 $$
+[ -f foo ] && ! [ -s foo ]
+rm foo
+echo numbered \(-15\)

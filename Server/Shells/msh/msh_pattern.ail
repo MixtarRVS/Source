@@ -1,0 +1,248 @@
+// msh_pattern.ail
+// POSIX-style shell pattern matching core for case and parameter trimming.
+
+import msh_defs
+
+int msh_pattern_class_end(pattern: string, pos: int):
+    i = pos + 1
+    n = strlen(pattern)
+    if i < n and char_at(pattern, i) == MSH_CH_BANG then
+        i++
+    end
+    if i < n and char_at(pattern, i) == MSH_CH_RBRACKET then
+        i++
+    end
+    while i < n then
+        if char_at(pattern, i) == MSH_Q_ESC and i + 1 < n then
+            i = i + 2
+        elsif char_at(pattern, i) == MSH_CH_RBRACKET then
+            prev = char_at(pattern, i - 1)
+            if i > pos + 1 and i + 1 < n and char_at(pattern, i + 1) == MSH_CH_RBRACKET and prev == MSH_CH_COLON then
+                i++
+            else
+                return i
+            end
+        else
+            i++
+        end
+    end
+    return MSH_INDEX_NOT_FOUND
+end
+
+int msh_pattern_is_upper(c: int):
+    if c >= MSH_CH_UPPER_A and c <= MSH_CH_UPPER_Z then
+        return 1
+    end
+    return 0
+end
+
+int msh_pattern_is_lower(c: int):
+    if c >= MSH_CH_LOWER_A and c <= MSH_CH_LOWER_Z then
+        return 1
+    end
+    return 0
+end
+
+int msh_pattern_is_digit(c: int):
+    if c >= MSH_CH_DIGIT_0 and c <= MSH_CH_DIGIT_9 then
+        return 1
+    end
+    return 0
+end
+
+int msh_pattern_named_class_match(name: string, c: int):
+    if name == "alpha" then
+        if msh_pattern_is_upper(c) == 1 or msh_pattern_is_lower(c) == 1 then
+            return 1
+        end
+    elsif name == "alnum" then
+        if msh_pattern_is_upper(c) == 1 or msh_pattern_is_lower(c) == 1 or msh_pattern_is_digit(c) == 1 then
+            return 1
+        end
+    elsif name == "digit" then
+        return msh_pattern_is_digit(c)
+    elsif name == "lower" then
+        return msh_pattern_is_lower(c)
+    elsif name == "upper" then
+        return msh_pattern_is_upper(c)
+    elsif name == "space" then
+        if c == MSH_CH_SPACE or c == MSH_CH_TAB or c == MSH_CH_LF or c == MSH_CH_CR then
+            return 1
+        end
+    elsif name == "blank" then
+        if c == MSH_CH_SPACE or c == MSH_CH_TAB then
+            return 1
+        end
+    elsif name == "xdigit" then
+        if msh_pattern_is_digit(c) == 1 then
+            return 1
+        end
+        if c >= MSH_CH_UPPER_A and c <= 70 then
+            return 1
+        end
+        if c >= MSH_CH_LOWER_A and c <= 102 then
+            return 1
+        end
+    end
+    return 0
+end
+
+int msh_pattern_class_name_end(pattern: string, pos: int, stop: int):
+    if pos + 1 >= stop then
+        return MSH_INDEX_NOT_FOUND
+    end
+    if char_at(pattern, pos) != MSH_CH_LBRACKET or char_at(pattern, pos + 1) != MSH_CH_COLON then
+        return MSH_INDEX_NOT_FOUND
+    end
+    i = pos + 2
+    while i + 1 < stop then
+        if char_at(pattern, i) == MSH_CH_COLON and char_at(pattern, i + 1) == MSH_CH_RBRACKET then
+            return i
+        end
+        i++
+    end
+    return MSH_INDEX_NOT_FOUND
+end
+
+int msh_pattern_symbolic_class_end(pattern: string, pos: int, stop: int, marker: int):
+    if pos + 1 >= stop then
+        return MSH_INDEX_NOT_FOUND
+    end
+    if char_at(pattern, pos) != MSH_CH_LBRACKET or char_at(pattern, pos + 1) != marker then
+        return MSH_INDEX_NOT_FOUND
+    end
+    i = pos + 2
+    while i + 1 < stop then
+        if char_at(pattern, i) == marker and char_at(pattern, i + 1) == MSH_CH_RBRACKET then
+            return i
+        end
+        i++
+    end
+    return MSH_INDEX_NOT_FOUND
+end
+
+int msh_pattern_single_symbol_match(pattern: string, pos: int, end_pos: int, c: int):
+    if msh_pattern_is_upper(c) == 0 and msh_pattern_is_lower(c) == 0 and msh_pattern_is_digit(c) == 0 then
+        return 0
+    end
+    if end_pos == pos + 3 and char_at(pattern, pos + 2) == c then
+        return 1
+    end
+    return 0
+end
+
+int msh_pattern_class_match(pattern: string, pos: int, c: int):
+    stop = msh_pattern_class_end(pattern, pos)
+    if stop == MSH_INDEX_NOT_FOUND then
+        return 0
+    end
+    i = pos + 1
+    negate = 0
+    if i < stop and char_at(pattern, i) == MSH_CH_BANG then
+        negate = 1
+        i++
+    end
+    hit = 0
+    if i < stop and char_at(pattern, i) == MSH_CH_RBRACKET then
+        if c == MSH_CH_RBRACKET then
+            hit = 1
+        end
+        i++
+    end
+    while i < stop then
+        cur = char_at(pattern, i)
+        class_end = msh_pattern_class_name_end(pattern, i, stop)
+        if cur == MSH_Q_ESC and i + 1 < stop then
+            if char_at(pattern, i + 1) == c then
+                hit = 1
+            end
+            i = i + 2
+        elsif class_end != MSH_INDEX_NOT_FOUND then
+            name = substr(pattern, i + 2, class_end - i - 2)
+            if msh_pattern_named_class_match(name, c) == 1 then
+                hit = 1
+            end
+            dealloc(name)
+            i = class_end + 2
+        elsif i + 2 < stop and char_at(pattern, i + 1) == MSH_CH_MINUS then
+            high = char_at(pattern, i + 2)
+            if c >= cur and c <= high then
+                hit = 1
+            end
+            i = i + 3
+        else
+            if c == cur then
+                hit = 1
+            end
+            i++
+        end
+    end
+    if negate == 1 then
+        if hit == 1 then
+            return 0
+        end
+        return 1
+    end
+    return hit
+end
+
+int msh_pattern_match_from(pattern: string, pi: int, text: string, ti: int):
+    plen = strlen(pattern)
+    tlen = strlen(text)
+    if pi >= plen then
+        if ti == tlen then
+            return 1
+        end
+        return 0
+    end
+    pc = char_at(pattern, pi)
+    if pc == MSH_Q_ESC and pi + 1 < plen then
+        if ti >= tlen then
+            return 0
+        end
+        if char_at(pattern, pi + 1) != char_at(text, ti) then
+            return 0
+        end
+        return msh_pattern_match_from(pattern, pi + 2, text, ti + 1)
+    elsif pc == MSH_CH_STAR then
+        next_pi = pi + 1
+        while next_pi < plen and char_at(pattern, next_pi) == MSH_CH_STAR then
+            next_pi++
+        end
+        if next_pi >= plen then
+            return 1
+        end
+        k = ti
+        while k <= tlen then
+            if msh_pattern_match_from(pattern, next_pi, text, k) == 1 then
+                return 1
+            end
+            k++
+        end
+        return 0
+    elsif pc == MSH_CH_QUESTION then
+        if ti >= tlen then
+            return 0
+        end
+        return msh_pattern_match_from(pattern, pi + 1, text, ti + 1)
+    elsif pc == MSH_CH_LBRACKET then
+        stop = msh_pattern_class_end(pattern, pi)
+        if stop != MSH_INDEX_NOT_FOUND and ti < tlen then
+            if msh_pattern_class_match(pattern, pi, char_at(text, ti)) == 1 then
+                return msh_pattern_match_from(pattern, stop + 1, text, ti + 1)
+            end
+            return 0
+        end
+    end
+    if ti >= tlen then
+        return 0
+    end
+    if pc != char_at(text, ti) then
+        return 0
+    end
+    return msh_pattern_match_from(pattern, pi + 1, text, ti + 1)
+end
+
+int msh_pattern_match(pattern: string, text: string):
+    return msh_pattern_match_from(pattern, 0, text, 0)
+end

@@ -1,0 +1,21 @@
+{
+  "stage": "0033-create-candidate-efi-entry-preserve-bootorder",
+  "status": "planned_mutation",
+  "mutates_efi_variables": true,
+  "creates_boot_entry": true,
+  "restores_existing_bootorder": true,
+  "sets_bootnext": false,
+  "reboots": false,
+  "candidate": {
+    "label": "MixtarRVS RT Candidate 0029",
+    "kernel": "\\EFI\\mixtarrvs-rt\\vmlinuz.efi",
+    "initrd": "\\EFI\\mixtarrvs-rt\\initrd-mixtar-candidate-0029.img",
+    "source_stage": "0029-initramfs-handoff-boot-command-no-install"
+  },
+  "fallback": {
+    "bootnum": "0006",
+    "label": "MixtarRVS RT",
+    "must_remain_first_in_bootorder": true
+  },
+  "next_required_stage": "0034-set-bootnext-one-shot-candidate-test"
+}

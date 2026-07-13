@@ -1,0 +1,79 @@
+// stdio.ail
+// AILang-owned FILE * compatibility slice for BSD-derived Toolkit code.
+//
+// Scope: helpers that can be expressed without inspecting host FILE internals.
+// Lifetime-sensitive helpers such as fgetln/fgetwln remain in the bridge until
+// the runtime has a managed stream cache.
+
+#cinclude <stdio.h>
+#cinclude <stdlib.h>
+#cinclude <sys/types.h>
+
+@header_declared
+@abi("ssize_t", "char ** lineptr", "size_t * n", "FILE * stream")
+extern fn getline(lineptr: charpp, n: size_tp, stream: fileptr): i64
+
+@header_declared
+@abi("int", "FILE * stream")
+extern fn fflush(stream: fileptr): int
+
+internal charptr fparseln(
+    stream: internal fileptr,
+    len: internal size_tp,
+    lineno: internal size_tp,
+    delim: internal cstring,
+    flags: internal int
+):
+    line_slot = alloc(8)
+    cap_slot = alloc(8)
+    if line_slot == 0 then
+        return reinterpret(pointer, 0)
+    end
+    if cap_slot == 0 then
+        dealloc(line_slot)
+        return reinterpret(pointer, 0)
+    end
+
+    poke64(line_slot, 0, 0)
+    poke64(cap_slot, 0, 0)
+    nread = getline(
+        reinterpret(charpp, line_slot),
+        reinterpret(size_tp, cap_slot),
+        stream
+    )
+    line_addr = peek64(line_slot, 0)
+    dealloc(line_slot, cap_slot)
+
+    if nread < 0 then
+        return reinterpret(pointer, 0)
+    end
+
+    if reinterpret(i64, lineno) != 0 then
+        lineno_addr = reinterpret(i64, lineno)
+        current_line = peek64(lineno_addr, 0)
+        poke64(lineno_addr, 0, current_line + 1)
+    end
+
+    // This first slice matches the current bridge behavior: custom delimiter
+    // and continuation flags are accepted but not interpreted yet.
+    while nread > 0 then
+        last = peek8(line_addr, nread - 1)
+        if last != 10 then
+            if last != 13 then
+                break
+            end
+        end
+        nread--
+        poke8(line_addr, nread, 0)
+    end
+
+    if reinterpret(i64, len) != 0 then
+        poke64(reinterpret(i64, len), 0, nread)
+    end
+
+    return reinterpret(pointer, line_addr)
+end
+
+internal int fpurge(stream: internal fileptr):
+    return fflush(stream)
+end

@@ -1,0 +1,166 @@
+// msh_fd_scope.ail
+// Real fd save/restore for simulated subshell execution.
+
+import msh_defs
+
+record MshFdScope then
+    string pairs
+    string originals
+    string copies
+    int ok
+end
+
+int msh_fd_scope_limit():
+    return 64
+end
+
+int msh_fd_scope_save_base():
+    return 128
+end
+
+int msh_fd_scope_save_fd_at(source_fd: int, saved_fd: int):
+    tmp = fd_dup(source_fd)
+    if tmp < 0 then
+        return -1
+    end
+    if fd_dup2(tmp, saved_fd) < 0 then
+        fd_close(tmp)
+        return -1
+    end
+    fd_close(tmp)
+    return saved_fd
+end
+
+int msh_fd_scope_contains(list: string, fd: int):
+    fd_text = str(fd)
+    a = "|" + fd_text
+    needle = a + "|"
+    found = 0
+    if index_of(list, needle) != MSH_INDEX_NOT_FOUND then
+        found = 1
+    end
+    dealloc(fd_text, a, needle)
+    return found
+end
+
+string msh_fd_scope_append_list(list: string, fd: int):
+    fd_text = str(fd)
+    a = list + fd_text
+    out = a + "|"
+    dealloc(fd_text, a)
+    return out
+end
+
+string msh_fd_scope_append_pair(pairs: string, fd: int, saved: int):
+    fd_text = str(fd)
+    saved_text = str(saved)
+    a = pairs + fd_text
+    b = a + ":"
+    c = b + saved_text
+    out = c + ";"
+    dealloc(fd_text, saved_text, a, b, c)
+    return out
+end
+
+def msh_fd_scope_save(): MshFdScope
+    if target_os() == "windows" then
+        return new MshFdScope("" + "", "" + "|", "" + "|", 1)
+    end
+    fd_flush()
+    pairs = "" + ""
+    originals = "" + "|"
+    copies = "" + "|"
+    ok = 1
+    fd = 3
+    while fd < msh_fd_scope_limit() then
+        if msh_fd_scope_contains(copies, fd) == 0 then
+            saved = msh_fd_scope_save_base() + fd
+            saved = msh_fd_scope_save_fd_at(fd, saved)
+            if saved >= 0 then
+                next_pairs = msh_fd_scope_append_pair(pairs, fd, saved)
+                next_originals = msh_fd_scope_append_list(originals, fd)
+                next_copies = msh_fd_scope_append_list(copies, saved)
+                dealloc(pairs, originals, copies)
+                pairs = next_pairs
+                originals = next_originals
+                copies = next_copies
+            end
+        end
+        fd++
+    end
+    return new MshFdScope(pairs, originals, copies, ok)
+end
+
+int msh_fd_scope_pair_colon(pairs: string, start: int, end_pos: int):
+    pos = start
+    while pos < end_pos then
+        if char_at(pairs, pos) == MSH_CH_COLON then
+            return pos
+        end
+        pos++
+    end
+    return MSH_INDEX_NOT_FOUND
+end
+
+int msh_fd_scope_restore_pairs(pairs: string):
+    status = 0
+    start = 0
+    semi = index_of_from(pairs, ";", start)
+    while semi != MSH_INDEX_NOT_FOUND then
+        colon = msh_fd_scope_pair_colon(pairs, start, semi)
+        if colon != MSH_INDEX_NOT_FOUND then
+            orig_text = substr(pairs, start, colon - start)
+            saved_text = substr(pairs, colon + 1, semi - colon - 1)
+            orig = parse_int(orig_text)
+            saved = parse_int(saved_text)
+            if fd_dup2(saved, orig) < 0 then
+                status = 1
+            end
+            dealloc(orig_text, saved_text)
+        end
+        start = semi + 1
+        semi = index_of_from(pairs, ";", start)
+    end
+    return status
+end
+
+int msh_fd_scope_close_unsaved(scope: MshFdScope):
+    fd = 3
+    while fd < msh_fd_scope_limit() then
+        if msh_fd_scope_contains(scope.originals, fd) == 0 then
+            if msh_fd_scope_contains(scope.copies, fd) == 0 then
+                fd_close(fd)
+            end
+        end
+        fd++
+    end
+    return 0
+end
+
+int msh_fd_scope_close_copies(pairs: string):
+    start = 0
+    semi = index_of_from(pairs, ";", start)
+    while semi != MSH_INDEX_NOT_FOUND then
+        colon = msh_fd_scope_pair_colon(pairs, start, semi)
+        if colon != MSH_INDEX_NOT_FOUND then
+            saved_text = substr(pairs, colon + 1, semi - colon - 1)
+            saved = parse_int(saved_text)
+            fd_close(saved)
+            dealloc(saved_text)
+        end
+        start = semi + 1
+        semi = index_of_from(pairs, ";", start)
+    end
+    return 0
+end
+
+int msh_fd_scope_restore(scope: MshFdScope):
+    if target_os() == "windows" then
+        return 0
+    end
+    fd_flush()
+    status = msh_fd_scope_restore_pairs(scope.pairs)
+    msh_fd_scope_close_unsaved(scope)
+    msh_fd_scope_close_copies(scope.pairs)
+    return status
+end

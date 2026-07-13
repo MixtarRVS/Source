@@ -1,0 +1,39 @@
+{
+  "schema": 1,
+  "name": "MixtarRVS CoreV07 RT kernel profile",
+  "version": "0.8",
+  "kernel": {
+    "family": "Linux",
+    "profile": "RT",
+    "version": "7.1.2",
+    "layout": "/System/Kernel/Linux/RT/7.1.2",
+    "source_policy": "stable-git-tag-or-local-custom",
+    "upstream_kernel_org_archive": false,
+    "git": {
+      "remote": "https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git",
+      "tag": "v7.1.2"
+    },
+    "snapshot": "https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git/snapshot/linux-7.1.2.tar.gz"
+  },
+  "boot": {
+    "mode": "single-uki",
+    "artifact": "/System/EFI/MixtarRVS/0.8.efi",
+    "efi_stage_artifact": "EFI/MixtarRVS/0.8.efi",
+    "split_kernel_initramfs_allowed_as_official_output": false
+  },
+  "build": {
+    "default_source_path": "case-sensitive build workspace, normally $HOME/.cache/mixtarrvs-corev07/kernel/src/linux-7.1.2 when the repo is on /mnt/c",
+    "default_build_path": "case-sensitive build workspace, normally $HOME/.cache/mixtarrvs-corev07/kernel/build/linux-7.1.2-mixtar-rt when the repo is on /mnt/c",
+    "config_fragment": "Server/Kernel/configs/mixtar-corev07-rt.fragment",
+    "initramfs_source": "Server/Rootfs/Generated/corev07-efi-build/corev07-initramfs.cpio",
+    "debian_policy": "build-rescue-only",
+    "fetch_policy": "download stable git snapshot into case-sensitive build workspace; copy final EFI artifact back into repo Generated staging"
+  },
+  "requirements": [
+    "CONFIG_EFI_STUB=y",
+    "CONFIG_PREEMPT_RT=y",
+    "CONFIG_INITRAMFS_SOURCE points at CoreV07 initramfs",
+    "PID1 command line points at /System/Init/MixtarRVS",
+    "output is copied only into staging until explicit install"
+  ]
+}

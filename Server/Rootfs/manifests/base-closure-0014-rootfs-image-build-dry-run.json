@@ -1,0 +1,49 @@
+{
+  "name": "MixtarRVS Base Closure 0014",
+  "status": "non-activating-rootfs-image-build-dry-run",
+  "created": "2026-06-29",
+  "purpose": "Add a dry-run rootfs image build plan that computes target generation paths, planned mksquashfs command, exclusions, future manifest/activation paths, and input size estimates without creating rootfs.squashfs or switching generations.",
+  "requires": [
+    "/System/Base/Closure/0011-mixtar-generation-builder-dry-run/manifest.json",
+    "/System/Base/Closure/0012-rootfs-image-builder-requirements/manifest.json",
+    "/System/Base/Closure/0013-rootfs-image-builder-dependency-stage/manifest.json",
+    "/System/SystemTools/mixtar-rootfs-image",
+    "/System/SystemTools/mixtar-generation",
+    "/System/Config/ImageBuilder/rootfs-image.requirements",
+    "/System/Kernel/Current/vmlinuz",
+    "/System/Kernel/Current/initramfs.img",
+    "/System/Tools/Current/bin",
+    "/System/Libraries/MixtarRVS/Runtime/0003/lib",
+    "/usr/bin/mksquashfs",
+    "/usr/bin/unsquashfs"
+  ],
+  "installed_paths": [
+    "/System/SystemTools/mixtar-rootfs-image",
+    "/System/Base/Closure/0014-rootfs-image-build-dry-run/rootfs-image-build-dry-run.txt"
+  ],
+  "command": "mixtar-rootfs-image build --dry-run",
+  "target": {
+    "generation_id": "0014-rootfs-image-preview",
+    "generation_dir": "/System/Generations/0014-rootfs-image-preview",
+    "image": "/System/Generations/0014-rootfs-image-preview/rootfs.squashfs",
+    "manifest": "/System/Generations/0014-rootfs-image-preview/manifest.json",
+    "activation": "/System/Generations/0014-rootfs-image-preview/activation.plan"
+  },
+  "dry_run_guarantees": [
+    "Does not create rootfs.squashfs.",
+    "Does not create the target generation directory.",
+    "Does not mount filesystems.",
+    "Does not run mksquashfs.",
+    "Does not rebuild initramfs.",
+    "Does not switch /System/Current.",
+    "Does not change bootloader state.",
+    "Does not remove Alpine/OpenRC/apk fallback."
+  ],
+  "known_limitations": [
+    "This stage generates the real build plan only; it does not create an image.",
+    "The file manifest is planned but not emitted as a full file list yet.",
+    "Activation, switch, boot, rollback, and garbage collection are still missing.",
+    "The active root is still a mutable ext4 install."
+  ],
+  "next_stage": "0015-rootfs-image-build-first-file-no-activation"
+}

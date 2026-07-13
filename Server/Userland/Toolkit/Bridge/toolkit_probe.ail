@@ -1,0 +1,164 @@
+// toolkit_probe.ail
+// Batch strict-compile probe for mirrored Toolkit candidates.
+
+string toolkit_probe_script_path():
+    return "" + "Server/Userland/Generated/tests/toolkit-probe-wsl.sh"
+end
+
+string toolkit_probe_report_path():
+    return "" + "Server/Userland/Generated/reports/toolkit-probe-wsl.md"
+end
+
+string toolkit_auto_probe_script_path():
+    return "" + "Server/Userland/Generated/tests/toolkit-auto-probe-wsl.sh"
+end
+
+string toolkit_auto_probe_report_path():
+    return "" + "Server/Userland/Generated/reports/toolkit-auto-probe-wsl.md"
+end
+
+string toolkit_openbsd_probe_script_path():
+    return "" + "Server/Userland/Generated/tests/toolkit-openbsd-auto-probe-wsl.sh"
+end
+
+string toolkit_openbsd_probe_report_path():
+    return "" + "Server/Userland/Generated/reports/toolkit-openbsd-auto-probe-wsl.md"
+end
+
+string toolkit_probe_wsl_command():
+    path = toolkit_probe_script_path()
+    prefix = "" + "wsl.exe -d Debian -- bash "
+    cmd = prefix + path
+    dealloc(prefix)
+    dealloc(path)
+    return cmd
+end
+
+string toolkit_auto_probe_wsl_command():
+    path = toolkit_auto_probe_script_path()
+    prefix = "" + "wsl.exe -d Debian -- bash "
+    cmd = prefix + path
+    dealloc(prefix)
+    dealloc(path)
+    return cmd
+end
+
+string toolkit_probe_script():
+    return "" + "#!/usr/bin/env bash\nset +e\nexport LC_ALL=C\nrepo=\"/mnt/c/Users/V/source/repos/MixtarRVS\"\ncd \"$repo\" || exit 99\nout=\"Server/Userland/Generated/probe/linux-x64/bin\"\nlogs=\"Server/Userland/Generated/probe/logs\"\nreport=\"Server/Userland/Generated/reports/toolkit-probe-wsl.md\"\nrm -rf \"$out\" \"$logs\"\nmkdir -p \"$out\" \"$logs\" \"$(dirname \"$report\")\"\nstrict=\"cc -std=c23 -Wall -Wextra -Werror -pedantic\"\ncommon=\"-D_GNU_SOURCE -D_DEFAULT_SOURCE -DMIXTAR_BRIDGE=1 -I Server/Userland/Toolkit/Bridge/include -include Server/Userland/Toolkit/Bridge/include/mixtar_bridge_compat.h\"\npass=0\nfail=0\nnorecipe=0\nprintf '# Toolkit WSL Batch Probe\\n\\n' > \"$report\"\nprintf 'Policy: strict compile only; this does not certify behavior.\\n\\n' >> \"$report\"\nprintf '| Tool | Result | Log |\\n| --- | --- | --- |\\n' >> \"$report\"\nprobe_cmd() {\n  name=\"$1\"\n  cmd=\"$2\"\n  log=\"$logs/$name.log\"\n  printf 'probe %s\\n' \"$name\"\n  timeout 8s bash -lc \"$cmd\" >\"$log\" 2>&1\n  rc=$?\n  if [ \"$rc\" = 0 ]; then\n    pass=$((pass+1))\n    printf '| `%s` | PASS | `%s` |\\n' \"$name\" \"$log\" >> \"$report\"\n  else\n    fail=$((fail+1))\n    printf '| `%s` | FAIL rc=%s | `%s` |\\n' \"$name\" \"$rc\" \"$log\" >> \"$report\"\n    printf '\\n## %s first errors\\n\\n```text\\n' \"$name\" >> \"$report\"\n    grep -E 'error:|fatal error:|undefined reference|No such file' \"$log\" | head -40 >> \"$report\"\n    printf '\\n```\\n' >> \"$report\"\n  fi\n}\nprobe_cmd echo \"$strict $common -o $out/echo Server/Userland/Toolkit/FreeBSD/freebsd-src/bin/echo/echo.c\"\nprobe_cmd cat \"$strict $common -DNO_UDOM_SUPPORT -DBOOTSTRAP_CAT -o $out/cat Server/Userland/Toolkit/FreeBSD/freebsd-src/bin/cat/cat.c\"\nprobe_cmd pwd \"$strict $common -o $out/pwd Server/Userland/Toolkit/FreeBSD/freebsd-src/bin/pwd/pwd.c\"\nprobe_cmd mkdir \"$strict $common -o $out/mkdir Server/Userland/Toolkit/FreeBSD/freebsd-src/bin/mkdir/mkdir.c\"\nprobe_cmd rmdir \"$strict $common -o $out/rmdir Server/Userland/Toolkit/FreeBSD/freebsd-src/bin/rmdir/rmdir.c\"\nprobe_cmd true \"$strict $common -o $out/true Server/Userland/Toolkit/FreeBSD/freebsd-src/usr.bin/true/true.c\"\nprobe_cmd false \"$strict $common -o $out/false Server/Userland/Toolkit/FreeBSD/freebsd-src/usr.bin/false/false.c\"\nprobe_cmd cp \"$strict $common -o $out/cp Server/Userland/Toolkit/FreeBSD/freebsd-src/bin/cp/cp.c Server/Userland/Toolkit/FreeBSD/freebsd-src/bin/cp/utils.c\"\nprobe_cmd ls \"$strict -Wno-format -Wno-implicit-fallthrough $common -o $out/ls Server/Userland/Toolkit/FreeBSD/freebsd-src/bin/ls/ls.c Server/Userland/Toolkit/FreeBSD/freebsd-src/bin/ls/cmp.c Server/Userland/Toolkit/FreeBSD/freebsd-src/bin/ls/print.c Server/Userland/Toolkit/FreeBSD/freebsd-src/bin/ls/util.c\"\nprobe_cmd mv \"$strict $common -o $out/mv Server/Userland/Toolkit/FreeBSD/freebsd-src/bin/mv/mv.c\"\nprobe_cmd rm \"$strict $common -o $out/rm Server/Userland/Toolkit/FreeBSD/freebsd-src/bin/rm/rm.c\"\nknown=' cat cp echo false ls mkdir mv pwd rm rmdir true '\nfor d in Server/Userland/Toolkit/FreeBSD/freebsd-src/bin/* Server/Userland/Toolkit/FreeBSD/freebsd-src/usr.bin/*; do\n  [ -d \"$d\" ] || continue\n  name=$(basename \"$d\")\n  case \"$known\" in\n    *\" $name \"*) ;;\n    *) norecipe=$((norecipe+1)); printf '| `%s` | NO_RECIPE | `%s` |\\n' \"$name\" \"$d\" >> \"$report\" ;;\n  esac\ndone\nprintf '\\nSummary: pass=%s fail=%s no_recipe=%s\\n' \"$pass\" \"$fail\" \"$norecipe\" >> \"$report\"\nprintf 'toolkit probe report: %s\\n' \"$report\"\nexit 0\n"
+end
+
+string toolkit_openbsd_probe_wsl_command():
+    path = toolkit_openbsd_probe_script_path()
+    prefix = "" + "wsl.exe -d Debian -- bash "
+    cmd = prefix + path
+    dealloc(prefix)
+    dealloc(path)
+    return cmd
+end
+
+string toolkit_auto_probe_script():
+    return "" + "#!/usr/bin/env bash\nset +e\nexport LC_ALL=C\nrepo=\"/mnt/c/Users/V/source/repos/MixtarRVS\"\ncd \"$repo\" || exit 99\nout=\"Server/Userland/Generated/probe-auto/linux-x64/bin\"\nlogs=\"Server/Userland/Generated/probe-auto/logs\"\nreport=\"Server/Userland/Generated/reports/toolkit-auto-probe-wsl.md\"\nrm -rf \"$out\" \"$logs\"\nmkdir -p \"$out\" \"$logs\" \"$(dirname \"$report\")\"\nstrict=\"cc -std=c23 -Wall -Wextra -Werror -pedantic\"\ncommon=\"-D_GNU_SOURCE -D_DEFAULT_SOURCE -DMIXTAR_BRIDGE=1 -I Server/Userland/Toolkit/Bridge/include -include Server/Userland/Toolkit/Bridge/include/mixtar_bridge_compat.h\"\npass=0\nfail=0\nnorecipe=0\nprintf '# Toolkit WSL Auto Probe\\n\\n' > \"$report\"\nprintf 'Policy: strict compile discovery across mirrored directories; this does not certify behavior.\\n\\n' >> \"$report\"\nprintf '| Tool | Result | Recipe | Log |\\n| --- | --- | --- | --- |\\n' >> \"$report\"\ncompile_recipe() {\n  name=\"$1\"\n  dir=\"$2\"\n  case \"$dir/$name\" in\n    bin/cat) echo \"$strict $common -DNO_UDOM_SUPPORT -DBOOTSTRAP_CAT -o $out/$name Server/Userland/Toolkit/FreeBSD/freebsd-src/bin/cat/cat.c\" ;;\n    bin/cp) echo \"$strict $common -o $out/$name Server/Userland/Toolkit/FreeBSD/freebsd-src/bin/cp/cp.c Server/Userland/Toolkit/FreeBSD/freebsd-src/bin/cp/utils.c\" ;;\n    bin/ls) echo \"$strict -Wno-format -Wno-implicit-fallthrough $common -o $out/$name Server/Userland/Toolkit/FreeBSD/freebsd-src/bin/ls/ls.c Server/Userland/Toolkit/FreeBSD/freebsd-src/bin/ls/cmp.c Server/Userland/Toolkit/FreeBSD/freebsd-src/bin/ls/print.c Server/Userland/Toolkit/FreeBSD/freebsd-src/bin/ls/util.c\" ;;\n    *)\n      src=\"Server/Userland/Toolkit/FreeBSD/freebsd-src/$dir/$name/$name.c\"\n      if [ -f \"$src\" ]; then\n        echo \"$strict $common -o $out/$name $src\"\n      else\n        one=$(find \"Server/Userland/Toolkit/FreeBSD/freebsd-src/$dir/$name\" -maxdepth 1 -name '*.c' -type f 2>/dev/null | sort)\n        count=$(printf '%s\\n' \"$one\" | sed '/^$/d' | wc -l)\n        if [ \"$count\" = 1 ]; then\n          echo \"$strict $common -o $out/$name $one\"\n        else\n          echo \"\"\n        fi\n      fi\n      ;;\n  esac\n}\nprobe_one() {\n  dir=\"$1\"\n  name=\"$2\"\n  cmd=$(compile_recipe \"$name\" \"$dir\")\n  log=\"$logs/$name.log\"\n  if [ -z \"$cmd\" ]; then\n    norecipe=$((norecipe+1))\n    printf '| `%s` | NO_RECIPE | multiple/no obvious C entry | `%s` |\\n' \"$name\" \"$dir/$name\" >> \"$report\"\n    return\n  fi\n  printf 'auto-probe %s\\n' \"$name\"\n  timeout 8s bash -lc \"$cmd\" >\"$log\" 2>&1\n  rc=$?\n  if [ \"$rc\" = 0 ]; then\n    pass=$((pass+1))\n    printf '| `%s` | PASS | strict | `%s` |\\n' \"$name\" \"$log\" >> \"$report\"\n  else\n    fail=$((fail+1))\n    printf '| `%s` | FAIL rc=%s | strict | `%s` |\\n' \"$name\" \"$rc\" \"$log\" >> \"$report\"\n    printf '\\n## %s first errors\\n\\n```text\\n' \"$name\" >> \"$report\"\n    grep -E 'error:|fatal error:|undefined reference|No such file' \"$log\" | head -30 >> \"$report\"\n    printf '\\n```\\n' >> \"$report\"\n  fi\n}\nfor d in bin usr.bin; do\n  root=\"Server/Userland/Toolkit/FreeBSD/freebsd-src/$d\"\n  [ -d \"$root\" ] || continue\n  for tool_dir in \"$root\"/*; do\n    [ -d \"$tool_dir\" ] || continue\n    name=$(basename \"$tool_dir\")\n    [ \"$name\" = tests ] && continue\n    probe_one \"$d\" \"$name\"\n  done\ndone\nprintf '\\nSummary: pass=%s fail=%s no_recipe=%s\\n' \"$pass\" \"$fail\" \"$norecipe\" >> \"$report\"\nprintf 'toolkit auto-probe report: %s\\n' \"$report\"\nexit 0\n"
+end
+
+int toolkit_write_probe_script():
+    if file_exists("Server/Userland/Generated") == 0 then
+        mkdir("Server/Userland/Generated")
+    end
+    if file_exists("Server/Userland/Generated/tests") == 0 then
+        mkdir("Server/Userland/Generated/tests")
+    end
+    if file_exists("Server/Userland/Generated/reports") == 0 then
+        mkdir("Server/Userland/Generated/reports")
+    end
+    script = toolkit_probe_script()
+    path = toolkit_probe_script_path()
+    rc = write_file(path, script)
+    dealloc(script, path)
+    if rc == 0 then
+        return 1
+    end
+    return 0
+end
+
+string toolkit_openbsd_probe_script():
+    return "" + "#!/usr/bin/env bash\nset +e\nexport LC_ALL=C\nrepo=\"/mnt/c/Users/V/source/repos/MixtarRVS\"\ncd \"$repo\" || exit 99\nsrcroot=\"Server/Userland/Toolkit/OpenBSD/src\"\nout=\"Server/Userland/Generated/probe-openbsd/linux-x64/bin\"\nlogs=\"Server/Userland/Generated/probe-openbsd/logs\"\nreport=\"Server/Userland/Generated/reports/toolkit-openbsd-auto-probe-wsl.md\"\nrm -rf \"$out\" \"$logs\"\nmkdir -p \"$out\" \"$logs\" \"$(dirname \"$report\")\"\nstrict=\"cc -std=c23 -Wall -Wextra -Werror -pedantic -Wno-error=unused-parameter -Wno-error=sign-compare -Wno-error=missing-field-initializers -Wno-error=implicit-fallthrough -Wno-error=format -Wno-error=format-truncation -Wno-error=overflow -Wno-error=pedantic -Wno-error=pointer-sign -Wno-error=old-style-definition -Wno-error=deprecated-declarations -Wno-error=incompatible-pointer-types\"\ncommon=\"-D_GNU_SOURCE -D_DEFAULT_SOURCE -DMIXTAR_BRIDGE=1 -I Server/Userland/Toolkit/Bridge/include -I Server/Userland/Toolkit/OpenBSD/src/lib/libevent -I Server/Userland/Toolkit/OpenBSD/src/lib/libutil -include Server/Userland/Toolkit/Bridge/include/mixtar_bridge_compat.h\"\nlibs=\"-lm -lutil -lncursesw\"\nimsg_sources=\"Server/Userland/Toolkit/OpenBSD/src/lib/libutil/imsg.c Server/Userland/Toolkit/OpenBSD/src/lib/libutil/imsg-buffer.c\"\npass=0\nfail=0\nnorecipe=0\nsummary_written=0\nwrite_summary() {\n  if [ \"$summary_written\" = 0 ]; then\n    summary_written=1\n    printf '\\nSummary: pass=%s fail=%s no_recipe=%s\\n' \"$pass\" \"$fail\" \"$norecipe\" >> \"$report\"\n  fi\n}\ntrap write_summary EXIT\nprintf '# OpenBSD Toolkit WSL Auto Probe\\n\\n' > \"$report\"\nprintf 'Policy: bridge-strict compile discovery across mirrored OpenBSD source directories; this does not certify behavior.\\n\\n' >> \"$report\"\nprintf 'Bridge-strict keeps -Wall/-Wextra/-Werror/-pedantic, applies a 8s per-tool compile timeout, and leaves known cross-toolchain style warnings non-fatal: unused-parameter, sign-compare, missing-field-initializers, implicit-fallthrough, format, format-truncation, overflow, pedantic macro style, pointer-sign, old-style-definition, deprecated-declarations, incompatible-pointer-types.\\n\\n' >> \"$report\"\nprintf 'Scanned roots: bin, sbin, usr.bin, usr.sbin, games.\\n\\n' >> \"$report\"\nprintf '| Tool | Root | Result | Recipe | Log |\\n| --- | --- | --- | --- | --- |\\n' >> \"$report\"\ncompile_recipe() {\n  dir=\"$1\"\n  name=\"$2\"\n  base=\"$srcroot/$dir/$name\"\n  case \"$dir/$name\" in\n    bin/cat) echo \"$strict $common -o $out/$name $base/cat.c $libs\" ;;\n    bin/cp) echo \"$strict $common -o $out/$name $base/cp.c $base/utils.c $libs\" ;;\n    bin/ls) echo \"$strict -Wno-format -Wno-implicit-fallthrough $common -o $out/$name $base/main.c $base/ls.c $base/cmp.c $base/print.c $base/utf8.c $base/util.c $libs\" ;;\n    *)\n      one=$(find \"$base\" -maxdepth 1 -name '*.c' -type f 2>/dev/null | sort)\n      sources=$(printf '%s\\n' \"$one\" | sed '/^$/d' | tr '\\n' ' ')\n      count=$(printf '%s\\n' \"$one\" | sed '/^$/d' | wc -l)\n      extra=\"\"\n      if grep -Rqs '#[[:space:]]*include[[:space:]]*<imsg.h>' \"$base\"; then\n        extra=\"$extra $imsg_sources\"\n      fi\n      if [ \"$count\" = 1 ]; then\n        echo \"$strict $common -o $out/$name $sources $extra $libs\"\n      else\n        mains=$(grep -lE '(^|[[:space:]])main[[:space:]]*\\(' $one 2>/dev/null)\n        main_count=$(printf '%s\\n' \"$mains\" | sed '/^$/d' | wc -l)\n        if [ \"$main_count\" = 1 ]; then\n          echo \"$strict $common -o $out/$name $sources $extra $libs\"\n        else\n          echo \"\"\n        fi\n      fi\n      ;;\n  esac\n}\nprobe_one() {\n  dir=\"$1\"\n  name=\"$2\"\n  cmd=$(compile_recipe \"$dir\" \"$name\")\n  safe_dir=$(printf '%s' \"$dir\" | tr '/' '_')\n  log=\"$logs/${safe_dir}_${name}.log\"\n  if [ -z \"$cmd\" ]; then\n    norecipe=$((norecipe+1))\n    printf '| `%s` | `%s` | NO_RECIPE | multiple/no obvious C entry | `%s/%s` |\\n' \"$name\" \"$dir\" \"$dir\" \"$name\" >> \"$report\"\n    return\n  fi\n  printf 'openbsd-auto-probe %s/%s\\n' \"$dir\" \"$name\"\n  timeout 8s bash -lc \"$cmd\" >\"$log\" 2>&1\n  rc=$?\n  if [ \"$rc\" = 0 ]; then\n    pass=$((pass+1))\n    printf '| `%s` | `%s` | PASS | bridge-strict | `%s` |\\n' \"$name\" \"$dir\" \"$log\" >> \"$report\"\n  else\n    fail=$((fail+1))\n    printf '| `%s` | `%s` | FAIL rc=%s | bridge-strict | `%s` |\\n' \"$name\" \"$dir\" \"$rc\" \"$log\" >> \"$report\"\n    printf '\\n## %s/%s first errors\\n\\n```text\\n' \"$dir\" \"$name\" >> \"$report\"\n    grep -E 'error:|fatal error:|undefined reference|No such file' \"$log\" | head -30 >> \"$report\"\n    printf '\\n```\\n' >> \"$report\"\n  fi\n}\nfor d in bin sbin usr.bin usr.sbin games; do\n  root=\"$srcroot/$d\"\n  [ -d \"$root\" ] || continue\n  for tool_dir in \"$root\"/*; do\n    [ -d \"$tool_dir\" ] || continue\n    name=$(basename \"$tool_dir\")\n    [ \"$name\" = CVS ] && continue\n    [ \"$name\" = tests ] && continue\n    probe_one \"$d\" \"$name\"\n  done\ndone\nwrite_summary\nprintf 'openbsd toolkit auto-probe report: %s\\n' \"$report\"\nexit 0"
+end
+
+int toolkit_write_auto_probe_script():
+    if file_exists("Server/Userland/Generated") == 0 then
+        mkdir("Server/Userland/Generated")
+    end
+    if file_exists("Server/Userland/Generated/tests") == 0 then
+        mkdir("Server/Userland/Generated/tests")
+    end
+    if file_exists("Server/Userland/Generated/reports") == 0 then
+        mkdir("Server/Userland/Generated/reports")
+    end
+    script = toolkit_auto_probe_script()
+    path = toolkit_auto_probe_script_path()
+    rc = write_file(path, script)
+    dealloc(script, path)
+    if rc == 0 then
+        return 1
+    end
+    return 0
+end
+
+int toolkit_probe_wsl():
+    rc = toolkit_write_probe_script()
+    if rc != 0 then
+        print "toolkit-build: failed to write probe script"
+        return rc
+    end
+    cmd = toolkit_probe_wsl_command()
+    print "toolkit-build: probing mirrored Toolkit candidates"
+    run_rc = system(cmd)
+    dealloc(cmd)
+    return run_rc
+end
+
+int toolkit_write_openbsd_probe_script():
+    if file_exists("Server/Userland/Generated") == 0 then
+        mkdir("Server/Userland/Generated")
+    end
+    if file_exists("Server/Userland/Generated/tests") == 0 then
+        mkdir("Server/Userland/Generated/tests")
+    end
+    if file_exists("Server/Userland/Generated/reports") == 0 then
+        mkdir("Server/Userland/Generated/reports")
+    end
+    script = toolkit_openbsd_probe_script()
+    path = toolkit_openbsd_probe_script_path()
+    rc = write_file(path, script)
+    dealloc(script, path)
+    if rc == 0 then
+        return 1
+    end
+    return 0
+end
+
+int toolkit_auto_probe_wsl():
+    rc = toolkit_write_auto_probe_script()
+    if rc != 0 then
+        print "toolkit-build: failed to write auto-probe script"
+        return rc
+    end
+    cmd = toolkit_auto_probe_wsl_command()
+    print "toolkit-build: auto-probing mirrored Toolkit candidates"
+    run_rc = system(cmd)
+    dealloc(cmd)
+    return run_rc
+end
+
+int toolkit_openbsd_probe_wsl():
+    rc = toolkit_write_openbsd_probe_script()
+    if rc != 0 then
+        print "toolkit-build: failed to write OpenBSD auto-probe script"
+        return rc
+    end
+    cmd = toolkit_openbsd_probe_wsl_command()
+    print "toolkit-build: auto-probing mirrored OpenBSD Toolkit candidates"
+    run_rc = system(cmd)
+    dealloc(cmd)
+    return run_rc
+end

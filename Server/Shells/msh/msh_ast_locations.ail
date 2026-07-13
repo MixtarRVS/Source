@@ -1,0 +1,186 @@
+// msh_ast_locations.ail
+// Diagnostic source-location sidecar for the stable textual AST.
+
+import msh_defs
+import msh_tokens
+
+int msh_ast_has_tag_at(ast: string, pos: int, tag: string):
+    if pos + strlen(tag) > strlen(ast) then
+        return 0
+    end
+    part = substr(ast, pos, strlen(tag))
+    ok = 0
+    if part == tag then
+        ok = 1
+    end
+    dealloc(part)
+    return ok
+end
+
+string msh_ast_tag_at(ast: string, pos: int):
+    if msh_ast_has_tag_at(ast, pos, "BACKGROUND(") == 1 then
+        return "" + "BACKGROUND"
+    end
+    if msh_ast_has_tag_at(ast, pos, "SUBSHELL(") == 1 then
+        return "" + "SUBSHELL"
+    end
+    if msh_ast_has_tag_at(ast, pos, "REDIRECT(") == 1 then
+        return "" + "REDIRECT"
+    end
+    if msh_ast_has_tag_at(ast, pos, "ASSIGN(") == 1 then
+        return "" + "ASSIGN"
+    end
+    if msh_ast_has_tag_at(ast, pos, "REDIR(") == 1 then
+        return "" + "REDIR"
+    end
+    if msh_ast_has_tag_at(ast, pos, "GROUP(") == 1 then
+        return "" + "GROUP"
+    end
+    if msh_ast_has_tag_at(ast, pos, "WHILE(") == 1 then
+        return "" + "WHILE"
+    end
+    if msh_ast_has_tag_at(ast, pos, "UNTIL(") == 1 then
+        return "" + "UNTIL"
+    end
+    if msh_ast_has_tag_at(ast, pos, "WORD(") == 1 then
+        return "" + "WORD"
+    end
+    if msh_ast_has_tag_at(ast, pos, "FUNC(") == 1 then
+        return "" + "FUNC"
+    end
+    if msh_ast_has_tag_at(ast, pos, "CASE(") == 1 then
+        return "" + "CASE"
+    end
+    if msh_ast_has_tag_at(ast, pos, "ITEM(") == 1 then
+        return "" + "ITEM"
+    end
+    if msh_ast_has_tag_at(ast, pos, "PIPE(") == 1 then
+        return "" + "PIPE"
+    end
+    if msh_ast_has_tag_at(ast, pos, "AND(") == 1 then
+        return "" + "AND"
+    end
+    if msh_ast_has_tag_at(ast, pos, "SEQ(") == 1 then
+        return "" + "SEQ"
+    end
+    if msh_ast_has_tag_at(ast, pos, "CMD(") == 1 then
+        return "" + "CMD"
+    end
+    if msh_ast_has_tag_at(ast, pos, "NOT(") == 1 then
+        return "" + "NOT"
+    end
+    if msh_ast_has_tag_at(ast, pos, "FOR(") == 1 then
+        return "" + "FOR"
+    end
+    if msh_ast_has_tag_at(ast, pos, "IF(") == 1 then
+        return "" + "IF"
+    end
+    if msh_ast_has_tag_at(ast, pos, "OR(") == 1 then
+        return "" + "OR"
+    end
+    if msh_ast_has_tag_at(ast, pos, "EMPTY") == 1 then
+        return "" + "EMPTY"
+    end
+    return "" + ""
+end
+
+int msh_ast_token_is_location_separator(line: string):
+    kind = msh_token_kind(line)
+    value = msh_token_value(line)
+    ok = 0
+    if kind == "SEMI" or kind == "PIPE" or kind == "AND_IF" or kind == "OR_IF" or kind == "AMP" then
+        ok = 1
+    elsif kind == "WORD" then
+        if value == "then" or value == "else" or value == "elif" or value == "fi" then
+            ok = 1
+        elsif value == "do" or value == "done" or value == "in" or value == "esac" then
+            ok = 1
+        end
+    end
+    dealloc(kind, value)
+    return ok
+end
+
+int msh_ast_next_location_token(tokens: string, pos: int):
+    cur = pos
+    n = msh_token_count(tokens)
+    while cur < n then
+        line = msh_token_at(tokens, cur)
+        if msh_ast_token_is_location_separator(line) == 0 then
+            dealloc(line)
+            return cur
+        end
+        dealloc(line)
+        cur++
+    end
+    if n <= 0 then
+        return 0
+    end
+    return n - 1
+end
+
+int msh_ast_advance_for_tag(cursor: int, tag: string):
+    if tag == "WORD" or tag == "ASSIGN" or tag == "REDIR" then
+        return cursor + 1
+    end
+    if tag == "IF" or tag == "WHILE" or tag == "UNTIL" or tag == "FOR" then
+        return cursor + 1
+    end
+    if tag == "CASE" then
+        return cursor + 3
+    end
+    if tag == "SUBSHELL" or tag == "GROUP" or tag == "NOT" then
+        return cursor + 1
+    end
+    if tag == "FUNC" then
+        return cursor + 3
+    end
+    return cursor
+end
+
+string msh_ast_location_map(tokens: string, ast: string):
+    out = "" + ""
+    cursor = 0
+    index = 0
+    i = 0
+    while i < strlen(ast) then
+        tag = msh_ast_tag_at(ast, i)
+        if strlen(tag) > 0 then
+            loc_token = msh_ast_next_location_token(tokens, cursor)
+            line = msh_token_at(tokens, loc_token)
+            a = str(index) + "\t"
+            b = a + tag
+            c = b + "\t"
+            d = c + str(msh_token_line(line))
+            e = d + "\t"
+            f = e + str(msh_token_col(line))
+            g = f + "\t"
+            h = g + str(i)
+            entry = h + "\n"
+            old = out
+            out = old + entry
+            dealloc(old, a, b, c, d, e, f, g, h, entry)
+            cursor = msh_ast_advance_for_tag(loc_token, tag)
+            index++
+            i = i + strlen(tag)
+            dealloc(line)
+        else
+            i++
+        end
+        dealloc(tag)
+    end
+    return out
+end
+
+int msh_ast_location_map_complete(tokens: string, ast: string):
+    loc_map = msh_ast_location_map(tokens, ast)
+    ok = 1
+    if strlen(loc_map) == 0 then
+        ok = 0
+    end
+    if index_of(loc_map, "\t0\t") != MSH_INDEX_NOT_FOUND then
+        ok = 0
+    end
+    dealloc(loc_map)
+    return ok
+end

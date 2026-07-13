@@ -1,0 +1,284 @@
+// msh_expand_vars.ail
+// Shared POSIX shell parameter/name helpers for expansion modules.
+
+import msh_defs
+import msh_phase_state
+import msh_state
+
+int msh_is_name_start(c: int):
+    if c >= MSH_CH_UPPER_A and c <= MSH_CH_UPPER_Z then
+        return 1
+    elsif c >= MSH_CH_LOWER_A and c <= MSH_CH_LOWER_Z then
+        return 1
+    elsif c == MSH_CH_UNDERSCORE then
+        return 1
+    end
+    return 0
+end
+
+int msh_is_name_char(c: int):
+    if msh_is_name_start(c) == 1 then
+        return 1
+    elsif c >= MSH_CH_DIGIT_0 and c <= MSH_CH_DIGIT_9 then
+        return 1
+    end
+    return 0
+end
+
+int msh_is_special_parameter_char(c: int):
+    if c == MSH_CH_QUESTION or c == MSH_CH_DOLLAR or c == MSH_CH_HASH then
+        return 1
+    elsif c == MSH_CH_STAR or c == MSH_CH_AT or c == MSH_CH_BANG then
+        return 1
+    elsif c == MSH_CH_MINUS then
+        return 1
+    end
+    return 0
+end
+
+int msh_is_unbraced_parameter_start(c: int):
+    if msh_is_name_start(c) == 1 then
+        return 1
+    elsif c >= MSH_CH_DIGIT_0 and c <= MSH_CH_DIGIT_9 then
+        return 1
+    end
+    return msh_is_special_parameter_char(c)
+end
+
+int msh_name_end(text: string, start: int):
+    i = start
+    n = strlen(text)
+    while i < n then
+        if msh_is_name_char(char_at(text, i)) == 0 then
+            return i
+        end
+        i++
+    end
+    return i
+end
+
+int msh_var_local_pos(vars: string, name: string):
+    needle = name + "="
+    pos = index_of(vars, needle)
+    while pos != MSH_INDEX_NOT_FOUND then
+        if pos == 0 then
+            dealloc(needle)
+            return pos
+        end
+        if char_at(vars, pos - 1) == MSH_CH_LF then
+            dealloc(needle)
+            return pos
+        end
+        pos = index_of_from(vars, needle, pos + 1)
+    end
+    dealloc(needle)
+    return MSH_INDEX_NOT_FOUND
+end
+
+int msh_var_is_local_set(vars: string, name: string):
+    return msh_state_has(vars, name)
+end
+
+string msh_var_get_local(vars: string, name: string):
+    return msh_state_get(vars, name)
+end
+
+string msh_var_path_slashes(text: string):
+    out = "" + ""
+    i = 0
+    while i < strlen(text) then
+        c = char_at(text, i)
+        if c == MSH_CH_BACKSLASH then
+            c = MSH_CH_SLASH
+        end
+        old = out
+        out = msh_str_append_char(out, c)
+        dealloc(old)
+        i++
+    end
+    return out
+end
+
+string msh_var_host_home():
+    home = getenv("HOME")
+    if strlen(home) > 0 then
+        return msh_var_path_slashes(home)
+    end
+    if target_os() == "windows" then
+        profile = getenv("USERPROFILE")
+        if strlen(profile) > 0 then
+            return msh_var_path_slashes(profile)
+        end
+    end
+    return "" + ""
+end
+
+int msh_var_is_set(vars: string, name: string):
+    if msh_var_is_local_set(vars, name) == 1 then
+        return 1
+    end
+    if name == "IFS" then
+        return 0
+    end
+    if name == "HOME" then
+        host_home = msh_var_host_home()
+        ok_home = 0
+        if strlen(host_home) > 0 then
+            ok_home = 1
+        end
+        dealloc(host_home)
+        return ok_home
+    end
+    env_value = getenv(name)
+    if strlen(env_value) > 0 then
+        return 1
+    end
+    return 0
+end
+
+string msh_var_get(vars: string, name: string):
+    if msh_var_is_local_set(vars, name) == 1 then
+        return msh_var_get_local(vars, name)
+    end
+    local_value = msh_var_get_local(vars, name)
+    dealloc(local_value)
+    if name == "IFS" then
+        return "" + ""
+    end
+    if name == "HOME" then
+        return msh_var_host_home()
+    end
+    env_value = getenv(name)
+    return "" + env_value
+end
+
+int msh_param_is_positive_decimal(name: string):
+    if strlen(name) == 0 then
+        return 0
+    end
+    if strlen(name) == 1 and char_at(name, 0) == MSH_CH_DIGIT_0 then
+        return 0
+    end
+    i = 0
+    while i < strlen(name) then
+        c = char_at(name, i)
+        if c < MSH_CH_DIGIT_0 or c > MSH_CH_DIGIT_9 then
+            return 0
+        end
+        i++
+    end
+    return 1
+end
+
+string msh_param_value(vars: string, name: string, last_status: int):
+    if msh_param_is_positive_decimal(name) == 1 then
+        key = "__arg_" + name
+        out = msh_var_get(vars, key)
+        dealloc(key)
+        return out
+    end
+    match name then
+        case "?":
+            return str(last_status)
+        case "$":
+            return str(getpid())
+        case "!":
+            return msh_var_get(vars, "__last_bg_pid")
+        case "#":
+            argc_text = msh_var_get(vars, "__argc")
+            if strlen(argc_text) == 0 then
+                dealloc(argc_text)
+                return "" + "0"
+            end
+            return argc_text
+        case "-":
+            return msh_option_flags(vars)
+        case "*":
+            return msh_positional_join(vars)
+        case "@":
+            return msh_positional_join(vars)
+        case "0":
+            script_name = msh_var_get(vars, "__script_name")
+            if strlen(script_name) > 0 then
+                return script_name
+            end
+            dealloc(script_name)
+            return "" + "msh"
+        default:
+            return msh_var_get(vars, name)
+    end
+end
+
+string msh_positional_join(vars: string):
+    argc_text = msh_var_get(vars, "__argc")
+    argc = parse_int(argc_text)
+    dealloc(argc_text)
+    out = "" + ""
+    i = 1
+    while i <= argc then
+        key = "__arg_" + str(i)
+        value = msh_var_get(vars, key)
+        old = out
+        if i > 1 then
+            temp = out + " "
+            out = temp + value
+            dealloc(temp)
+        else
+            out = out + value
+        end
+        dealloc(old, key, value)
+        i++
+    end
+    return out
+end
+
+int msh_param_is_set(vars: string, name: string):
+    if msh_param_is_positive_decimal(name) == 1 then
+        key = "__arg_" + name
+        ok = msh_var_is_set(vars, key)
+        dealloc(key)
+        return ok
+    end
+    match name then
+        case "?":
+            return 1
+        case "$":
+            return 1
+        case "!":
+            return msh_var_is_set(vars, "__last_bg_pid")
+        case "#":
+            return 1
+        case "*":
+            return 1
+        case "@":
+            return 1
+        case "0":
+            return 1
+        default:
+            return msh_var_is_set(vars, name)
+    end
+end
+
+string msh_expand_join(left: string, middle: string, right: string):
+    a = left + middle
+    out = a + right
+    dealloc(a)
+    return out
+end
+
+string msh_str_append_char(text: string, c: int):
+    if c == MSH_CH_CR then
+        ch = chr(MSH_CH_LF)
+    else
+        ch = chr(c)
+    end
+    out = text + ch
+    dealloc(ch)
+    return out
+end
+
+string msh_str_append_text(text: string, extra: string):
+    out = text + extra
+    return out
+end
+

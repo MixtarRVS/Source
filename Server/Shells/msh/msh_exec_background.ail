@@ -1,0 +1,106 @@
+// msh_exec_background.ail
+// Child-only background execution redirection helpers.
+
+import msh_defs
+import msh_exec_redirs
+import msh_fields
+import msh_state
+
+int msh_exec_background_stdin_null_enabled(vars: string):
+    flag = msh_state_get(vars, "__background_stdin_null")
+    enabled = 0
+    if flag == "1" then
+        enabled = 1
+    end
+    dealloc(flag)
+    return enabled
+end
+
+string msh_exec_background_null_device_path():
+    if target_os() == "windows" then
+        return "" + "NUL"
+    end
+    return "" + "/dev/null"
+end
+
+str_array msh_exec_background_redir_array_prefix(items: str_array, first: string):
+    out = str_array_new(str_array_len(items) + 1)
+    owned_first = "" + first
+    out = str_array_push(out, owned_first)
+    i = 0
+    while i < str_array_len(items) then
+        item = str_array_get(items, i)
+        owned = "" + item
+        out = str_array_push(out, owned)
+        i++
+    end
+    return out
+end
+
+int msh_exec_background_explicit_stdin_op(op: string):
+    base = msh_exec_redir_base_op(op)
+    fd = 0
+    i = 0
+    saw_fd = 0
+    while i < strlen(op) and char_at(op, i) >= MSH_CH_DIGIT_0 and char_at(op, i) <= MSH_CH_DIGIT_9 then
+        fd = fd * 10 + char_at(op, i) - MSH_CH_DIGIT_0
+        saw_fd = 1
+        i++
+    end
+    if saw_fd == 0 then
+        if base == "<" or base == "<&" or base == "<>" or msh_exec_redir_is_heredoc(op) == 1 then
+            fd = 0
+        else
+            fd = 1
+        end
+    end
+    explicit = 0
+    if fd == 0 then
+        if base == "<" or base == "<&" or base == "<>" or msh_exec_redir_is_heredoc(op) == 1 then
+            explicit = 1
+        end
+    end
+    dealloc(base)
+    return explicit
+end
+
+int msh_exec_background_has_explicit_stdin_redir(ast: string):
+    ops = msh_exec_redir_ops_array(ast)
+    i = 0
+    found = 0
+    while i < str_array_len(ops) and found == 0 then
+        op = str_array_get(ops, i)
+        if msh_exec_background_explicit_stdin_op(op) == 1 then
+            found = 1
+        end
+        i++
+    end
+    msh_field_array_destroy(ops)
+    return found
+end
+
+str_array msh_exec_background_ops_for(ast: string, vars: string, base: str_array):
+    if msh_exec_background_stdin_null_enabled(vars) == 0 then
+        return base
+    end
+    if msh_exec_background_has_explicit_stdin_redir(ast) == 1 then
+        return base
+    end
+    out = msh_exec_background_redir_array_prefix(base, "<")
+    msh_field_array_destroy(base)
+    return out
+end
+
+str_array msh_exec_background_targets_for(ast: string, vars: string, base: str_array):
+    if msh_exec_background_stdin_null_enabled(vars) == 0 then
+        return base
+    end
+    if msh_exec_background_has_explicit_stdin_redir(ast) == 1 then
+        return base
+    end
+    null_path = msh_exec_background_null_device_path()
+    out = msh_exec_background_redir_array_prefix(base, null_path)
+    msh_field_array_destroy(base)
+    dealloc(null_path)
+    return out
+end

@@ -1,0 +1,797 @@
+import msh_alias_expand
+import msh_lexer
+import msh_parser
+import msh_phase_builtins
+import msh_phase_control
+import msh_phase_state
+import msh_control
+import msh_diagnostics
+import msh_cd
+import msh_command
+import msh_defs
+import msh_exec
+import msh_exec_errors
+import msh_exec_fd_sync
+import msh_exec_foreground
+import msh_exec_fds
+import msh_exec_pipeline_spawn
+import msh_exec_redirs
+import msh_errors
+import msh_expand_state
+import msh_eval_assigns
+import msh_eval_background
+import msh_eval_command_redirs
+import msh_eval_export
+import msh_eval_field_profile
+import msh_eval_io
+import msh_eval_result
+import msh_eval_signals
+import msh_eval_support
+import msh_eval_case_utils
+import msh_eval_functions
+import msh_expansion
+import msh_eval_text
+import msh_fields
+import msh_getopts
+import msh_hash
+import msh_io_builtins
+import msh_pattern
+import msh_pipeio
+import msh_process_builtins
+import msh_loop_control
+import msh_parse_diagnostics
+import msh_state
+import msh_pipeline
+import msh_redir_syntax
+import msh_redirs
+import msh_script
+import msh_eval_nodes
+import msh_signals
+import msh_subst_eval
+import msh_trace
+import msh_verbose
+extern fn msh_eval_wrapped_state(ast: string, tag: string, vars: string): MshEvalResult
+extern fn msh_eval_compound_state(ast: string, tag: string, vars: string): MshEvalResult
+extern fn msh_eval_binary_state(ast: string, tag: string, vars: string): MshEvalResult
+extern fn msh_eval_if_state(ast: string, vars: string): MshEvalResult
+extern fn msh_eval_loop_state(ast: string, tag: string, vars: string): MshEvalResult
+extern fn msh_eval_for_state(ast: string, vars: string): MshEvalResult
+extern fn msh_eval_case_state(ast: string, vars: string): MshEvalResult
+extern fn msh_eval_func_state(ast: string, vars: string): MshEvalResult
+extern fn msh_eval_redirect_state(ast: string, vars: string): MshEvalResult
+extern fn msh_eval_source_state_internal(source: string, vars: string): MshEvalResult
+def msh_eval_command_state(ast: string, vars: string): MshEvalResult
+    assigns = msh_eval_command_assigns(ast)
+    last_text = msh_state_get(vars, "__last_status")
+    last_status = parse_int(last_text)
+    field_result = msh_eval_command_fields_state_from(ast, vars, last_status)
+    dealloc(last_text)
+    if field_result.status != 0 then
+        dealloc(assigns)
+        return msh_eval_field_error_result(field_result)
+    end
+    msh_trace_simple_command(assigns, field_result.fields, field_result.vars)
+    if str_array_len(field_result.fields) == 0 then
+        assign_result = msh_eval_apply_assigns_state(field_result.vars, assigns)
+        out_vars = "" + assign_result.vars
+        status = assign_result.status
+        subst_status = process_last_capture_status()
+        if status == 0 and subst_status != MSH_INDEX_NOT_FOUND then
+            status = subst_status
+        end
+        if assign_result.status != 0 then
+            fatal_vars = msh_control_set(out_vars, "exit", status)
+            dealloc(out_vars)
+            out_vars = fatal_vars
+        elsif msh_exec_command_has_redirs(ast) == 1 then
+            bad_fd_number = msh_redir_syntax_has_bad_fd_number(ast, out_vars)
+            redir_only_result = msh_exec_apply_redirs_only_result(ast, out_vars)
+            status = redir_only_result.status
+            if redir_only_result.fatal == 1 or (status != 0 and bad_fd_number == 1) then
+                fatal_vars2 = msh_control_set(out_vars, "exit", status)
+                dealloc(out_vars)
+                out_vars = fatal_vars2
+            end
+        end
+        dealloc(field_result.vars)
+        msh_field_array_destroy(field_result.fields)
+        dealloc(assigns)
+        dealloc(assign_result.vars)
+        return new MshEvalResult(status, out_vars)
+    end
+    name = "" + str_array_get(field_result.fields, 0)
+    assign_readonly_status = msh_eval_assigns_readonly_status(field_result.vars, assigns)
+    if assign_readonly_status != 0 then
+        out_readonly = msh_control_set(field_result.vars, "error_exit", assign_readonly_status)
+        msh_field_array_destroy(field_result.fields)
+        dealloc(name, assigns, field_result.vars)
+        return new MshEvalResult(assign_readonly_status, out_readonly)
+    end
+    special_redir_status = msh_error_special_redir_status(ast, field_result.vars, name)
+    if special_redir_status != 0 then
+        out_vars = msh_error_special_consequence(name, special_redir_status, field_result.vars)
+        msh_field_array_destroy(field_result.fields)
+        dealloc(name, assigns, field_result.vars)
+        return new MshEvalResult(special_redir_status, out_vars)
+    end
+    if msh_exec_command_has_redirs(ast) == 1 and msh_redir_syntax_has_bad_fd_number(ast, field_result.vars) == 1 then
+        bad_fd_status = msh_exec_apply_redirs_only(ast, field_result.vars)
+        if msh_is_special_builtin(name) == 1 then
+            out_bad_fd = msh_error_special_consequence(name, bad_fd_status, field_result.vars)
+        else
+            out_bad_fd = msh_control_set(field_result.vars, "exit", bad_fd_status)
+        end
+        msh_field_array_destroy(field_result.fields)
+        dealloc(name, assigns, field_result.vars)
+        return new MshEvalResult(bad_fd_status, out_bad_fd)
+    end
+    if name == "export" or name == "readonly" then
+        assign_result = msh_eval_apply_assigns_state(field_result.vars, assigns)
+        if assign_result.status == 0 then
+            if msh_exec_command_has_redirs(ast) == 1 then
+                command_result = msh_command_run_supported_builtin_with_redirs(ast, field_result.fields, assign_result.vars)
+                status = command_result.status
+                out_vars = "" + command_result.vars
+                dealloc(command_result.vars)
+            else
+                export_result = msh_eval_export_readonly_state(name, field_result.fields, assign_result.vars)
+                status = export_result.status
+                out_vars = "" + export_result.vars
+                dealloc(export_result.vars)
+            end
+        else
+            status = assign_result.status
+            out_vars = msh_error_special_consequence(name, status, assign_result.vars)
+        end
+        dealloc(assign_result.vars)
+        msh_field_array_destroy(field_result.fields)
+        dealloc(name, assigns, field_result.vars)
+        return new MshEvalResult(status, out_vars)
+    elsif name == "set" then
+        special_assign = msh_eval_apply_special_assigns(name, field_result.vars, assigns)
+        if special_assign.status != 0 then
+            msh_field_array_destroy(field_result.fields)
+            dealloc(name, assigns, field_result.vars)
+            return special_assign
+        end
+        command_result = msh_command_run_supported_builtin_with_redirs(ast, field_result.fields, special_assign.vars)
+        out_vars = "" + command_result.vars
+        status = command_result.status
+        msh_field_array_destroy(field_result.fields)
+        dealloc(name, assigns, field_result.vars, special_assign.vars, command_result.vars)
+        return new MshEvalResult(status, out_vars)
+    elsif msh_is_special_builtin(name) == 0 and msh_eval_function_defined(field_result.vars, name) == 1 then
+        fn_result = msh_eval_function_call_with_assigns_redirs(name, ast, field_result.fields, field_result.vars, assigns)
+        status = fn_result.status
+        out_vars = "" + fn_result.vars
+        msh_field_array_destroy(field_result.fields)
+        dealloc(name, assigns, field_result.vars, fn_result.vars)
+        return new MshEvalResult(status, out_vars)
+    elsif name == "alias" then
+        command_result = msh_command_run_supported_builtin_with_redirs(ast, field_result.fields, field_result.vars)
+        out_vars = "" + command_result.vars
+        status = command_result.status
+        msh_field_array_destroy(field_result.fields)
+        dealloc(name, assigns, field_result.vars, command_result.vars)
+        return new MshEvalResult(status, out_vars)
+    elsif name == "unalias" then
+        command_result = msh_command_run_supported_builtin_with_redirs(ast, field_result.fields, field_result.vars)
+        out_vars = "" + command_result.vars
+        status = command_result.status
+        msh_field_array_destroy(field_result.fields)
+        dealloc(name, assigns, field_result.vars, command_result.vars)
+        return new MshEvalResult(status, out_vars)
+    elsif name == "trap" then
+        special_assign2 = msh_eval_apply_special_assigns(name, field_result.vars, assigns)
+        if special_assign2.status != 0 then
+            msh_field_array_destroy(field_result.fields)
+            dealloc(name, assigns, field_result.vars)
+            return special_assign2
+        end
+        command_result = msh_command_run_supported_builtin_with_redirs(ast, field_result.fields, special_assign2.vars)
+        out_vars = "" + command_result.vars
+        status = command_result.status
+        msh_field_array_destroy(field_result.fields)
+        dealloc(name, assigns, field_result.vars, special_assign2.vars, command_result.vars)
+        return new MshEvalResult(status, out_vars)
+    elsif name == "break" or name == "continue" or name == "return" or name == "exit" then
+        special_assign3 = msh_eval_apply_special_assigns(name, field_result.vars, assigns)
+        if special_assign3.status != 0 then
+            msh_field_array_destroy(field_result.fields)
+            dealloc(name, assigns, field_result.vars)
+            return special_assign3
+        end
+        last_value = msh_state_get(special_assign3.vars, "__last_status")
+        last_status2 = parse_int(last_value)
+        phase_result = msh_control_builtin_state(name, field_result.fields, special_assign3.vars, last_status2)
+        out_vars = "" + phase_result.vars
+        status = phase_result.status
+        msh_field_array_destroy(field_result.fields)
+        dealloc(name, assigns, field_result.vars, special_assign3.vars, phase_result.vars, last_value)
+        return new MshEvalResult(status, out_vars)
+    elsif name == "wait" then
+        command_result = msh_command_run_supported_builtin_with_redirs(ast, field_result.fields, field_result.vars)
+        out_vars = "" + command_result.vars
+        status = command_result.status
+        msh_field_array_destroy(field_result.fields)
+        dealloc(name, assigns, field_result.vars, command_result.vars)
+        return new MshEvalResult(status, out_vars)
+    elsif name == "umask" or name == "ulimit" then
+        command_result = msh_command_run_supported_builtin_with_redirs(ast, field_result.fields, field_result.vars)
+        out_vars = "" + command_result.vars
+        status = command_result.status
+        msh_field_array_destroy(field_result.fields)
+        dealloc(name, assigns, field_result.vars, command_result.vars)
+        return new MshEvalResult(status, out_vars)
+    elsif name == "times" then
+        special_assign4 = msh_eval_apply_special_assigns(name, field_result.vars, assigns)
+        if special_assign4.status != 0 then
+            msh_field_array_destroy(field_result.fields)
+            dealloc(name, assigns, field_result.vars)
+            return special_assign4
+        end
+        command_result = msh_command_run_supported_builtin_with_redirs(ast, field_result.fields, special_assign4.vars)
+        out_vars = "" + command_result.vars
+        status = command_result.status
+        msh_field_array_destroy(field_result.fields)
+        dealloc(name, assigns, field_result.vars, special_assign4.vars, command_result.vars)
+        return new MshEvalResult(status, out_vars)
+    elsif name == "getopts" then
+        command_result = msh_command_run_supported_builtin_with_redirs(ast, field_result.fields, field_result.vars)
+        out_vars = "" + command_result.vars
+        status = command_result.status
+        msh_field_array_destroy(field_result.fields)
+        dealloc(name, assigns, field_result.vars, command_result.vars)
+        return new MshEvalResult(status, out_vars)
+    elsif name == "hash" then
+        command_result = msh_command_run_supported_builtin_with_redirs(ast, field_result.fields, field_result.vars)
+        out_vars = "" + command_result.vars
+        status = command_result.status
+        msh_field_array_destroy(field_result.fields)
+        dealloc(name, assigns, field_result.vars, command_result.vars)
+        return new MshEvalResult(status, out_vars)
+    elsif name == "fc" then
+        command_result = msh_command_run_supported_builtin_with_redirs(ast, field_result.fields, field_result.vars)
+        out_vars = "" + command_result.vars
+        status = command_result.status
+        msh_field_array_destroy(field_result.fields)
+        dealloc(name, assigns, field_result.vars, command_result.vars)
+        return new MshEvalResult(status, out_vars)
+    elsif name == "jobs" or name == "kill" or name == "bg" or name == "fg" then
+        command_result = msh_command_run_supported_builtin_with_redirs(ast, field_result.fields, field_result.vars)
+        out_vars = "" + command_result.vars
+        status = command_result.status
+        msh_field_array_destroy(field_result.fields)
+        dealloc(name, assigns, field_result.vars, command_result.vars)
+        return new MshEvalResult(status, out_vars)
+    elsif msh_builtin_is_pure_status(name) == 1 and msh_is_special_builtin(name) == 1 then
+        status = msh_builtin_status(name)
+        if msh_exec_command_has_redirs(ast) == 1 then
+            redir_status = msh_exec_apply_redirs_only(ast, field_result.vars)
+            if redir_status != 0 then
+                status = redir_status
+            end
+        end
+    elsif name == "unset" then
+        special_assign5 = msh_eval_apply_special_assigns(name, field_result.vars, assigns)
+        if special_assign5.status != 0 then
+            msh_field_array_destroy(field_result.fields)
+            dealloc(name, assigns, field_result.vars)
+            return special_assign5
+        end
+        phase_result = msh_unset_state(field_result.fields, special_assign5.vars)
+        out_vars = "" + phase_result.vars
+        status = phase_result.status
+        msh_field_array_destroy(field_result.fields)
+        dealloc(name, assigns, field_result.vars, special_assign5.vars, phase_result.vars)
+        return new MshEvalResult(status, out_vars)
+    elsif name == "shift" then
+        special_assign6 = msh_eval_apply_special_assigns(name, field_result.vars, assigns)
+        if special_assign6.status != 0 then
+            msh_field_array_destroy(field_result.fields)
+            dealloc(name, assigns, field_result.vars)
+            return special_assign6
+        end
+        phase_result = msh_shift_state(field_result.fields, special_assign6.vars)
+        out_vars = "" + phase_result.vars
+        status = phase_result.status
+        msh_field_array_destroy(field_result.fields)
+        dealloc(name, assigns, field_result.vars, special_assign6.vars, phase_result.vars)
+        return new MshEvalResult(status, out_vars)
+    elsif name == "cd" then
+        command_result = msh_command_run_supported_builtin_with_redirs(ast, field_result.fields, field_result.vars)
+        out_vars = "" + command_result.vars
+        status = command_result.status
+        msh_field_array_destroy(field_result.fields)
+        dealloc(name, assigns, field_result.vars, command_result.vars)
+        return new MshEvalResult(status, out_vars)
+    elsif name == "eval" then
+        special_assign7 = msh_eval_apply_special_assigns(name, field_result.vars, assigns)
+        if special_assign7.status != 0 then
+            msh_field_array_destroy(field_result.fields)
+            dealloc(name, assigns, field_result.vars)
+            return special_assign7
+        end
+        eval_source = msh_eval_join_fields_from(field_result.fields, 1)
+        eval_result = msh_eval_eval_with_redirs(ast, eval_source, special_assign7.vars)
+        out_vars = "" + eval_result.vars
+        status = eval_result.status
+        msh_field_array_destroy(field_result.fields)
+        dealloc(name, assigns, field_result.vars, special_assign7.vars, eval_result.vars, eval_source)
+        return new MshEvalResult(status, out_vars)
+    elsif name == "exec" then
+        special_assign8 = msh_eval_apply_special_assigns(name, field_result.vars, assigns)
+        if special_assign8.status != 0 then
+            msh_field_array_destroy(field_result.fields)
+            dealloc(name, assigns, field_result.vars)
+            return special_assign8
+        end
+        if str_array_len(field_result.fields) == 1 then
+            if msh_exec_command_has_redirs(ast) == 1 then
+                exec_result = msh_exec_fds_apply_redirs(ast, special_assign8.vars)
+                status = exec_result.status
+                out_vars = "" + exec_result.vars
+                dealloc(exec_result.vars)
+            else
+                status = 0
+                out_vars = "" + special_assign8.vars
+            end
+            msh_field_array_destroy(field_result.fields)
+            dealloc(name, assigns, field_result.vars, special_assign8.vars)
+            return new MshEvalResult(status, out_vars)
+        else
+            exec_base_vars = "" + special_assign8.vars
+            exec_name = "" + str_array_get(field_result.fields, 1)
+            if msh_is_special_builtin(exec_name) == 1 or msh_is_regular_builtin(exec_name) == 1 then
+                exec_fields = msh_exec_fields_slice(field_result.fields, 1)
+                exec_builtin_result = msh_command_run_supported_builtin_with_redirs(ast, exec_fields, special_assign8.vars)
+                status = exec_builtin_result.status
+                dealloc(exec_base_vars)
+                exec_base_vars = "" + exec_builtin_result.vars
+                msh_field_array_destroy(exec_fields)
+                dealloc(exec_builtin_result.vars)
+            elsif msh_exec_real_replacement_enabled(special_assign8.vars) == 1 then
+                status = msh_exec_command_replace_with_fields_from(ast, special_assign8.vars, field_result.fields, 1)
+            else
+                status = msh_exec_command_status_with_fields_from(ast, special_assign8.vars, field_result.fields, 1)
+            end
+            if status == 127 and msh_exec_last_failure_was_enoexec() == 1 then
+                exec_script_path = msh_script_resolve(exec_name, special_assign8.vars)
+                if strlen(exec_script_path) > 0 then
+                    exec_raw_script_text = read_file(exec_script_path)
+                    exec_script_text = msh_eval_clean_file_text(exec_raw_script_text)
+                    exec_script_vars = msh_state_set_positionals(special_assign8.vars, field_result.fields, 2)
+                    exec_script_result = msh_eval_source_state_internal(exec_script_text, exec_script_vars)
+                    status = exec_script_result.status
+                    dealloc(exec_base_vars)
+                    exec_base_vars = "" + exec_script_result.vars
+                    dealloc(exec_raw_script_text, exec_script_text, exec_script_vars, exec_script_result.vars)
+                else
+                    msh_exec_diag_cannot_execute(exec_name)
+                    status = 126
+                end
+                dealloc(exec_script_path)
+            end
+            out_vars = msh_control_set(exec_base_vars, "exit", status)
+            msh_field_array_destroy(field_result.fields)
+            dealloc(name, assigns, field_result.vars, special_assign8.vars, exec_base_vars, exec_name)
+            return new MshEvalResult(status, out_vars)
+        end
+    elsif name == "." then
+        assign_result = msh_eval_apply_assigns_state(field_result.vars, assigns)
+        if assign_result.status != 0 then
+            out_vars = msh_error_special_consequence(name, assign_result.status, assign_result.vars)
+            msh_field_array_destroy(field_result.fields)
+            dealloc(name, assigns, field_result.vars, assign_result.vars)
+            return new MshEvalResult(assign_result.status, out_vars)
+        end
+        source_index = msh_eval_dot_operand_index(field_result.fields, 1)
+        if source_index == MSH_INDEX_NOT_FOUND then
+            out_vars = "" + assign_result.vars
+            status = 0
+        else
+            source_arg = str_array_get(field_result.fields, source_index)
+            if msh_exec_name_has_path_sep(source_arg) == 1 then
+                source_path = "" + source_arg
+            else
+                source_path = msh_script_resolve_source(source_arg, assign_result.vars)
+            end
+            if file_exists(source_path) == 0 then
+                msh_diag_dot_missing_source(source_arg)
+                out_vars = msh_error_special_consequence(name, 2, assign_result.vars)
+                status = 2
+            elsif msh_exec_path_is_directory(source_path) == 1 then
+                msh_diag_dot_cannot_open(source_path, "Is a directory")
+                out_vars = msh_error_special_consequence(name, 2, assign_result.vars)
+                status = 2
+            elsif msh_script_source_can_read(source_path) == 0 then
+                msh_diag_dot_cannot_open(source_path, "Permission denied")
+                out_vars = msh_error_special_consequence(name, 2, assign_result.vars)
+                status = 2
+            else
+                raw_source_text = read_file(source_path)
+                source_text = msh_eval_clean_file_text(raw_source_text)
+                source_vars = msh_source_push(assign_result.vars, source_path)
+                source_result = msh_eval_source_state_internal(source_text, source_vars)
+                if msh_control_is(source_result.vars, "return") == 1 then
+                    status = msh_control_status(source_result.vars)
+                    cleared_source = msh_control_clear(source_result.vars)
+                    popped_vars = msh_source_pop(cleared_source)
+                    dealloc(cleared_source)
+                else
+                    popped_vars = msh_source_pop(source_result.vars)
+                    status = source_result.status
+                end
+                out_vars = "" + popped_vars
+                dealloc(source_result.vars, raw_source_text, source_text, source_vars, popped_vars)
+            end
+            dealloc(source_path)
+        end
+        msh_field_array_destroy(field_result.fields)
+        dealloc(name, assigns, field_result.vars, assign_result.vars)
+        return new MshEvalResult(status, out_vars)
+    elsif name == "command" then
+        target_index = msh_command_execute_index(field_result.fields)
+        if target_index >= 0 and target_index < str_array_len(field_result.fields) and str_array_get(field_result.fields, target_index) == "eval" then
+            command_assign = msh_eval_apply_assigns_state(field_result.vars, assigns)
+            if command_assign.status != 0 then
+                msh_field_array_destroy(field_result.fields)
+                dealloc(name, assigns, field_result.vars)
+                return command_assign
+            end
+            eval_source = msh_eval_join_fields_from(field_result.fields, target_index + 1)
+            eval_result = msh_eval_eval_with_redirs(ast, eval_source, command_assign.vars)
+            if msh_control_is(eval_result.vars, "error_exit") == 1 then
+                cleared_eval = msh_control_clear(eval_result.vars)
+                out_vars = msh_eval_restore_assign_names(field_result.vars, cleared_eval, assigns)
+                dealloc(cleared_eval)
+            else
+                out_vars = msh_eval_restore_assign_names(field_result.vars, eval_result.vars, assigns)
+            end
+            status = eval_result.status
+            msh_field_array_destroy(field_result.fields)
+            dealloc(name, assigns, field_result.vars, command_assign.vars, eval_result.vars, eval_source)
+            return new MshEvalResult(status, out_vars)
+        elsif target_index >= 0 and target_index < str_array_len(field_result.fields) and str_array_get(field_result.fields, target_index) == "." then
+            command_assign2 = msh_eval_apply_assigns_state(field_result.vars, assigns)
+            if command_assign2.status != 0 then
+                msh_field_array_destroy(field_result.fields)
+                dealloc(name, assigns, field_result.vars)
+                return command_assign2
+            end
+            source_index2 = msh_eval_dot_operand_index(field_result.fields, target_index + 1)
+            if source_index2 == MSH_INDEX_NOT_FOUND then
+                if msh_exec_command_has_redirs(ast) == 1 then
+                    status = msh_exec_apply_redirs_only(ast, command_assign2.vars)
+                else
+                    status = 0
+                end
+                out_vars = msh_eval_restore_assign_names(field_result.vars, command_assign2.vars, assigns)
+            else
+                source_arg = str_array_get(field_result.fields, source_index2)
+                if msh_exec_name_has_path_sep(source_arg) == 1 then
+                    source_path = "" + source_arg
+                else
+                    source_path = msh_script_resolve_source(source_arg, command_assign2.vars)
+                end
+                if file_exists(source_path) == 0 then
+                    msh_diag_dot_missing_source(source_arg)
+                    out_vars = msh_eval_restore_assign_names(field_result.vars, command_assign2.vars, assigns)
+                    status = 2
+                elsif msh_exec_path_is_directory(source_path) == 1 then
+                    msh_diag_dot_cannot_open(source_path, "Is a directory")
+                    out_vars = msh_eval_restore_assign_names(field_result.vars, command_assign2.vars, assigns)
+                    status = 2
+                elsif msh_script_source_can_read(source_path) == 0 then
+                    msh_diag_dot_cannot_open(source_path, "Permission denied")
+                    out_vars = msh_eval_restore_assign_names(field_result.vars, command_assign2.vars, assigns)
+                    status = 2
+                else
+                    raw_source_text = read_file(source_path)
+                    source_text = msh_eval_clean_file_text(raw_source_text)
+                    source_vars = msh_source_push(command_assign2.vars, source_path)
+                    source_result = msh_eval_source_state_internal(source_text, source_vars)
+                    if msh_control_is(source_result.vars, "return") == 1 then
+                        status = msh_control_status(source_result.vars)
+                        cleared_source = msh_control_clear(source_result.vars)
+                        popped_vars = msh_source_pop(cleared_source)
+                        dealloc(cleared_source)
+                    else
+                        popped_vars = msh_source_pop(source_result.vars)
+                        status = source_result.status
+                    end
+                    out_vars = msh_eval_restore_assign_names(field_result.vars, popped_vars, assigns)
+                    dealloc(source_result.vars, raw_source_text, source_text, source_vars, popped_vars)
+                end
+                dealloc(source_path)
+            end
+            msh_field_array_destroy(field_result.fields)
+            dealloc(name, assigns, field_result.vars, command_assign2.vars)
+            return new MshEvalResult(status, out_vars)
+        elsif target_index >= 0 and target_index < str_array_len(field_result.fields) and str_array_get(field_result.fields, target_index) == "exec" then
+            if str_array_len(field_result.fields) == target_index + 1 then
+                if msh_exec_command_has_redirs(ast) == 1 then
+                    exec_result = msh_exec_fds_apply_redirs(ast, field_result.vars)
+                    status = exec_result.status
+                    out_vars = "" + exec_result.vars
+                    dealloc(exec_result.vars)
+                else
+                    status = 0
+                    out_vars = "" + field_result.vars
+                end
+            else
+                if msh_exec_real_replacement_enabled(field_result.vars) == 1 then
+                    status = msh_exec_command_replace_with_fields_from(ast, field_result.vars, field_result.fields, target_index + 1)
+                else
+                    status = msh_exec_command_status_with_fields_from(ast, field_result.vars, field_result.fields, target_index + 1)
+                end
+                out_vars = msh_control_set(field_result.vars, "exit", status)
+            end
+            msh_field_array_destroy(field_result.fields)
+            dealloc(name, assigns, field_result.vars)
+            return new MshEvalResult(status, out_vars)
+        else
+            command_assign3 = msh_eval_apply_assigns_exported_state(field_result.vars, assigns)
+            if command_assign3.status != 0 then
+                msh_field_array_destroy(field_result.fields)
+                dealloc(name, assigns, field_result.vars)
+                return command_assign3
+            end
+            command_result = msh_command_state(ast, field_result.fields, command_assign3.vars)
+            out_vars = msh_eval_restore_assign_names(field_result.vars, command_result.vars, assigns)
+            status = command_result.status
+            msh_field_array_destroy(field_result.fields)
+            dealloc(name, assigns, field_result.vars, command_assign3.vars, command_result.vars)
+            return new MshEvalResult(status, out_vars)
+        end
+    elsif name == "type" then
+        command_result = msh_command_run_supported_builtin_with_redirs(ast, field_result.fields, field_result.vars)
+        out_vars = "" + command_result.vars
+        status = command_result.status
+        msh_field_array_destroy(field_result.fields)
+        dealloc(name, assigns, field_result.vars, command_result.vars)
+        return new MshEvalResult(status, out_vars)
+    elsif name == "test" or name == "[" then
+        command_result = msh_command_run_supported_builtin_with_redirs(ast, field_result.fields, field_result.vars)
+        out_vars = "" + command_result.vars
+        status = command_result.status
+        msh_field_array_destroy(field_result.fields)
+        dealloc(name, assigns, field_result.vars, command_result.vars)
+        return new MshEvalResult(status, out_vars)
+    else
+        if name == "true" or name == "false" then
+            status = msh_builtin_status(name)
+            if msh_exec_command_has_redirs(ast) == 1 then
+                redir_status = msh_exec_apply_redirs_only(ast, field_result.vars)
+                if redir_status != 0 then
+                    status = redir_status
+                end
+            end
+        else
+        script_path = msh_script_resolve(name, field_result.vars)
+        if strlen(script_path) > 0 then
+            raw_script_text = read_file(script_path)
+            script_text = msh_eval_clean_file_text(raw_script_text)
+            script_vars = msh_state_set_positionals(field_result.vars, field_result.fields, 1)
+            script_result = msh_eval_source_state_internal(script_text, script_vars)
+            status = script_result.status
+            if msh_pipeio_capture_active(field_result.vars) == 1 then
+                captured_script = msh_pipeio_output(script_result.vars)
+                out_vars = msh_pipeio_append_output(field_result.vars, captured_script)
+                dealloc(captured_script)
+            else
+                out_vars = "" + field_result.vars
+            end
+            msh_field_array_destroy(field_result.fields)
+            dealloc(name, assigns, field_result.vars, script_path, raw_script_text, script_text, script_vars, script_result.vars)
+            return new MshEvalResult(status, out_vars)
+        end
+        dealloc(script_path)
+        if name == "printf" or name == "read" or name == "pwd" or name == "echo" then
+            temp_assign = msh_eval_apply_assigns_state(field_result.vars, assigns)
+            if temp_assign.status != 0 then
+                out_vars = "" + temp_assign.vars
+                status = temp_assign.status
+                msh_field_array_destroy(field_result.fields)
+                dealloc(name, assigns, field_result.vars, temp_assign.vars)
+                return new MshEvalResult(status, out_vars)
+            end
+            io_result = msh_eval_io_builtin_with_redirs(name, ast, field_result.fields, temp_assign.vars)
+            if io_result.handled == 1 then
+                out_vars = msh_eval_restore_assign_names(field_result.vars, io_result.vars, assigns)
+                status = io_result.status
+                msh_field_array_destroy(field_result.fields)
+                dealloc(name, assigns, field_result.vars, temp_assign.vars, io_result.vars)
+                return new MshEvalResult(status, out_vars)
+            end
+            dealloc(temp_assign.vars, io_result.vars)
+        end
+        if msh_pipeio_capture_active(field_result.vars) == 1 then
+            external_assign_capture = msh_eval_apply_assigns_exported_state(field_result.vars, assigns)
+            if external_assign_capture.status != 0 then
+                out_capture_error = "" + external_assign_capture.vars
+                status_capture_error = external_assign_capture.status
+                msh_field_array_destroy(field_result.fields)
+                dealloc(name, assigns, field_result.vars, external_assign_capture.vars)
+                return new MshEvalResult(status_capture_error, out_capture_error)
+            end
+            captured = msh_exec_command_capture_with_fields_from(ast, external_assign_capture.vars, field_result.fields, 0)
+            status = process_last_capture_status()
+            status = msh_exec_status_from_errno(status)
+            if status == 127 and msh_exec_last_failure_was_enoexec() == 1 then
+                script_path = msh_script_resolve(name, external_assign_capture.vars)
+                if strlen(script_path) > 0 then
+                    raw_script_text = read_file(script_path)
+                    script_text = msh_eval_clean_file_text(raw_script_text)
+                    script_vars = msh_state_set_positionals(external_assign_capture.vars, field_result.fields, 1)
+                    script_result = msh_eval_source_state_internal(script_text, script_vars)
+                    out_vars = msh_eval_restore_assign_names(field_result.vars, script_result.vars, assigns)
+                    msh_field_array_destroy(field_result.fields)
+                    dealloc(name, assigns, field_result.vars, external_assign_capture.vars, captured, script_path, raw_script_text, script_text, script_vars, script_result.vars)
+                    return new MshEvalResult(script_result.status, out_vars)
+                end
+                msh_exec_diag_cannot_execute(name)
+                status = 126
+                dealloc(script_path)
+            end
+            restored_capture_vars = msh_eval_restore_assign_names(field_result.vars, external_assign_capture.vars, assigns)
+            out_vars = msh_pipeio_append_output(restored_capture_vars, captured)
+            msh_field_array_destroy(field_result.fields)
+            dealloc(name, assigns, field_result.vars, external_assign_capture.vars, restored_capture_vars, captured)
+            return new MshEvalResult(status, out_vars)
+        end
+        external_assign2 = msh_eval_apply_assigns_exported_state(field_result.vars, assigns)
+        if external_assign2.status != 0 then
+            out_external_error2 = "" + external_assign2.vars
+            status_external_error2 = external_assign2.status
+            msh_field_array_destroy(field_result.fields)
+            dealloc(name, assigns, field_result.vars, external_assign2.vars)
+            return new MshEvalResult(status_external_error2, out_external_error2)
+        end
+        native_status_result = msh_exec_foreground_command_state_result(ast, external_assign2.vars, field_result.fields, 0)
+        status = native_status_result.status
+        if status == 127 and msh_exec_last_failure_was_enoexec() == 1 then
+            script_path = msh_script_resolve(name, native_status_result.vars)
+            if strlen(script_path) > 0 then
+                raw_script_text = read_file(script_path)
+                script_text = msh_eval_clean_file_text(raw_script_text)
+                script_vars = msh_state_set_positionals(native_status_result.vars, field_result.fields, 1)
+                script_result = msh_eval_source_state_internal(script_text, script_vars)
+                status = script_result.status
+                out_vars = "" + native_status_result.vars
+                msh_field_array_destroy(field_result.fields)
+                dealloc(name, assigns, field_result.vars, external_assign2.vars, native_status_result.vars, script_path, raw_script_text, script_text, script_vars, script_result.vars)
+                return new MshEvalResult(status, out_vars)
+            end
+            msh_exec_diag_cannot_execute(name)
+            status = 126
+            dealloc(script_path)
+        end
+        hash_vars = msh_hash_record_external(native_status_result.vars, name)
+        if native_status_result.fatal == 1 then
+            fatal_external = msh_control_set(hash_vars, "exit", status)
+            dealloc(hash_vars)
+            hash_vars = fatal_external
+        end
+        restored_hash_vars = msh_eval_restore_assign_names(field_result.vars, hash_vars, assigns)
+        msh_field_array_destroy(field_result.fields)
+        dealloc(name, assigns, field_result.vars, external_assign2.vars, native_status_result.vars, hash_vars)
+        return new MshEvalResult(status, restored_hash_vars)
+        end
+    end
+    if msh_is_special_builtin(name) == 1 then
+        assign_result = msh_eval_apply_assigns_state(field_result.vars, assigns)
+        if assign_result.status != 0 then
+            status = assign_result.status
+        end
+        out_vars = "" + assign_result.vars
+        dealloc(assign_result.vars)
+    else
+        out_vars = "" + field_result.vars
+    end
+    msh_field_array_destroy(field_result.fields)
+    dealloc(field_result.vars, name, assigns)
+    return new MshEvalResult(status, out_vars)
+end
+def msh_eval_record_status(result: MshEvalResult): MshEvalResult
+    status_text = str(result.status)
+    synced_vars = msh_exec_fds_sync_live_offsets(result.vars)
+    out_vars = msh_state_set(synced_vars, "__last_status", status_text)
+    dealloc(status_text)
+    dealloc(result.vars, synced_vars)
+    return new MshEvalResult(result.status, out_vars)
+end
+def msh_eval_ast_state_raw(ast: string, vars: string): MshEvalResult
+    if ast == "EMPTY" then
+        return new MshEvalResult(0, "" + vars)
+    end
+    if msh_option_get(vars, "noexec") == 1 then
+        return new MshEvalResult(0, "" + vars)
+    end
+    if startswith(ast, "CMD(") == 1 then
+        return msh_eval_command_state(ast, vars)
+    elsif startswith(ast, "SEQ(") == 1 then
+        return msh_eval_binary_state(ast, "SEQ", vars)
+    elsif startswith(ast, "AND(") == 1 then
+        return msh_eval_binary_state(ast, "AND", vars)
+    elsif startswith(ast, "OR(") == 1 then
+        return msh_eval_binary_state(ast, "OR", vars)
+    elsif startswith(ast, "PIPE(") == 1 then
+        return msh_eval_binary_state(ast, "PIPE", vars)
+    elsif startswith(ast, "NOT(") == 1 then
+        result = msh_eval_wrapped_state(ast, "NOT", vars)
+        if msh_control_active(result.vars) == 1 then
+            return result
+        end
+        status = result.status
+        if status == 0 then
+            status = 1
+        else
+            status = 0
+        end
+        return new MshEvalResult(status, result.vars)
+    elsif startswith(ast, "BACKGROUND(") == 1 then
+        bg_inner = msh_eval_call_inner(ast, "BACKGROUND")
+        bg_pid = msh_eval_background_direct_pid(bg_inner, vars)
+        if bg_pid == 0 then
+            bg_pid = msh_eval_background_shell_ast_spawn(bg_inner, vars)
+        end
+        if bg_pid > 0 then
+            bg_vars = msh_job_record_background_running(vars, bg_pid, bg_inner)
+        else
+            bg_status = 126
+            if bg_pid < 0 then
+                bg_status = 0 - bg_pid
+            end
+            bg_vars = msh_job_record_completed(vars, bg_status, bg_inner)
+        end
+        dealloc(bg_inner)
+        return new MshEvalResult(0, bg_vars)
+    elsif startswith(ast, "SUBSHELL(") == 1 then
+        return msh_eval_compound_state(ast, "SUBSHELL", vars)
+    elsif startswith(ast, "GROUP(") == 1 then
+        return msh_eval_compound_state(ast, "GROUP", vars)
+    elsif startswith(ast, "IF(") == 1 then
+        return msh_eval_if_state(ast, vars)
+    elsif startswith(ast, "WHILE(") == 1 then
+        return msh_eval_loop_state(ast, "WHILE", vars)
+    elsif startswith(ast, "UNTIL(") == 1 then
+        return msh_eval_loop_state(ast, "UNTIL", vars)
+    elsif startswith(ast, "FOR(") == 1 then
+        return msh_eval_for_state(ast, vars)
+    elsif startswith(ast, "CASE(") == 1 then
+        return msh_eval_case_state(ast, vars)
+    elsif startswith(ast, "FUNC(") == 1 then
+        return msh_eval_func_state(ast, vars)
+    elsif startswith(ast, "REDIRECT(") == 1 then
+        return msh_eval_redirect_state(ast, vars)
+    end
+    return new MshEvalResult(2, "" + vars)
+end
+def msh_eval_ast_state(ast: string, vars: string): MshEvalResult
+    raw = msh_eval_ast_state_raw(ast, vars)
+    recorded = msh_eval_record_status(raw)
+    return msh_eval_deliver_pending_signal(recorded)
+end
+def msh_eval_source_state_internal(source: string, vars: string): MshEvalResult
+    clean_vars = msh_state_unset(vars, "__parse_error")
+    if msh_verbose_source_needed(source, clean_vars) == 1 then
+        result_verbose = msh_eval_source_state_verbose_units(source, clean_vars)
+        dealloc(clean_vars)
+        return result_verbose
+    end
+    expanded_source = msh_alias_expand_source_read_units(source, clean_vars)
+    tokens = msh_lex(expanded_source)
+    result = msh_parse_script(tokens)
+    if result.ok == 0 then
+        msh_parse_diag_emit(result.node, expanded_source, clean_vars)
+        parse_vars = msh_state_set(clean_vars, "__parse_error", "1")
+        dealloc(result.node, tokens, expanded_source, clean_vars)
+        return new MshEvalResult(2, parse_vars)
+    end
+    eval_result = msh_eval_ast_state(result.node, clean_vars)
+    out_vars = "" + eval_result.vars
+    status = eval_result.status
+    dealloc(result.node, tokens, expanded_source, eval_result.vars, clean_vars)
+    return new MshEvalResult(status, out_vars)
+end

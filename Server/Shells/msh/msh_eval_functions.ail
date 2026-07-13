@@ -1,0 +1,162 @@
+// msh_eval_functions.ail
+// Function lookup/execution helpers for POSIX command-search order.
+
+import msh_eval_result
+import msh_eval_assigns
+import msh_exec_fdrestore
+import msh_exec_fds
+import msh_exec_redirs
+import msh_fields
+import msh_fd_scope
+import msh_phase_state
+import msh_redirs
+import msh_state
+import msh_control
+
+extern fn msh_eval_ast_state(ast: string, vars: string): MshEvalResult
+
+int msh_eval_function_defined(vars: string, name: string):
+    fn_key = "__fn_" + name
+    fn_body = msh_state_get(vars, fn_key)
+    ok = 0
+    if strlen(fn_body) > 0 then
+        ok = 1
+    end
+    dealloc(fn_key, fn_body)
+    return ok
+end
+
+def msh_eval_function_call_state(name: string, fields: str_array, vars: string): MshEvalResult
+    fn_key = "__fn_" + name
+    fn_body = msh_state_get(vars, fn_key)
+    saved_pos = msh_state_positionals_only(vars)
+    caller_loop_depth = msh_loop_depth(vars)
+    fn_vars = msh_state_set_positionals(vars, fields, 1)
+    fn_loop_vars = msh_loop_set(fn_vars, 0)
+    fn_scoped = msh_function_push(fn_loop_vars)
+    fn_result = msh_eval_ast_state(fn_body, fn_scoped)
+    if msh_control_is(fn_result.vars, "return") == 1 then
+        status = msh_control_status(fn_result.vars)
+        cleared = msh_control_clear(fn_result.vars)
+        unscoped = msh_function_pop(cleared)
+        loop_restored = msh_loop_set(unscoped, caller_loop_depth)
+        restored_vars = msh_state_restore_positionals(loop_restored, saved_pos)
+        dealloc(cleared, unscoped, loop_restored)
+    else
+        unscoped2 = msh_function_pop(fn_result.vars)
+        loop_restored2 = msh_loop_set(unscoped2, caller_loop_depth)
+        restored_vars = msh_state_restore_positionals(loop_restored2, saved_pos)
+        status = fn_result.status
+        dealloc(unscoped2, loop_restored2)
+    end
+    dealloc(fn_key, fn_body, saved_pos, fn_vars, fn_loop_vars, fn_scoped, fn_result.vars)
+    return new MshEvalResult(status, restored_vars)
+end
+
+def msh_eval_function_call_with_redirs(name: string, ast: string, fields: str_array, vars: string): MshEvalResult
+    if msh_exec_command_has_redirs(ast) == 0 then
+        return msh_eval_function_call_state(name, fields, vars)
+    end
+
+    scope = msh_fd_scope_save()
+    frame = msh_redir_save_stdio()
+    if frame.ok == 0 then
+        msh_redir_restore_stdio(frame)
+        msh_fd_scope_restore(scope)
+        dealloc(scope.pairs, scope.originals, scope.copies)
+        return new MshEvalResult(1, "" + vars)
+    end
+
+    redir_result = msh_redir_apply_ast_state(ast, vars)
+    redir_status = redir_result.status
+    if redir_status == 0 then
+        meta_result = msh_exec_fds_apply_command_redirs(ast, redir_result.vars)
+        if meta_result.status == 0 then
+            fn_result = msh_eval_function_call_state(name, fields, meta_result.vars)
+            status = fn_result.status
+            out_vars = msh_exec_fdrestore_ast_redirs(fn_result.vars, vars, ast)
+            dealloc(fn_result.vars)
+        else
+            status = meta_result.status
+            out_vars = "" + vars
+        end
+        dealloc(meta_result.vars)
+    else
+        status = redir_status
+        out_vars = "" + vars
+    end
+    dealloc(redir_result.vars)
+
+    restore_status = msh_redir_restore_stdio(frame)
+    if status == 0 and restore_status != 0 then
+        status = restore_status
+    end
+    fd_restore_status = msh_fd_scope_restore(scope)
+    if status == 0 and fd_restore_status != 0 then
+        status = fd_restore_status
+    end
+    dealloc(scope.pairs, scope.originals, scope.copies)
+    return new MshEvalResult(status, out_vars)
+end
+
+def msh_eval_function_call_with_assigns_redirs(name: string, ast: string, fields: str_array, vars: string, assigns: string): MshEvalResult
+    if msh_exec_command_has_redirs(ast) == 0 then
+        fn_assign = msh_eval_apply_assigns_state(vars, assigns)
+        if fn_assign.status != 0 then
+            return fn_assign
+        end
+        fn_result = msh_eval_function_call_state(name, fields, fn_assign.vars)
+        out_vars = msh_eval_restore_assign_names(vars, fn_result.vars, assigns)
+        status = fn_result.status
+        dealloc(fn_assign.vars, fn_result.vars)
+        return new MshEvalResult(status, out_vars)
+    end
+
+    scope = msh_fd_scope_save()
+    frame = msh_redir_save_stdio()
+    if frame.ok == 0 then
+        msh_redir_restore_stdio(frame)
+        msh_fd_scope_restore(scope)
+        dealloc(scope.pairs, scope.originals, scope.copies)
+        return new MshEvalResult(1, "" + vars)
+    end
+
+    redir_result2 = msh_redir_apply_ast_state(ast, vars)
+    redir_status = redir_result2.status
+    if redir_status == 0 then
+        meta_result = msh_exec_fds_apply_command_redirs(ast, redir_result2.vars)
+        if meta_result.status == 0 then
+            fn_assign2 = msh_eval_apply_assigns_state(meta_result.vars, assigns)
+            if fn_assign2.status == 0 then
+                fn_result2 = msh_eval_function_call_state(name, fields, fn_assign2.vars)
+                restored_assigns = msh_eval_restore_assign_names(meta_result.vars, fn_result2.vars, assigns)
+                out_vars = msh_exec_fdrestore_ast_redirs(restored_assigns, vars, ast)
+                status = fn_result2.status
+                dealloc(fn_result2.vars, restored_assigns)
+            else
+                out_vars = "" + fn_assign2.vars
+                status = fn_assign2.status
+            end
+            dealloc(fn_assign2.vars)
+        else
+            status = meta_result.status
+            out_vars = "" + vars
+        end
+        dealloc(meta_result.vars)
+    else
+        status = redir_status
+        out_vars = "" + vars
+    end
+    dealloc(redir_result2.vars)
+
+    restore_status = msh_redir_restore_stdio(frame)
+    if status == 0 and restore_status != 0 then
+        status = restore_status
+    end
+    fd_restore_status = msh_fd_scope_restore(scope)
+    if status == 0 and fd_restore_status != 0 then
+        status = fd_restore_status
+    end
+    dealloc(scope.pairs, scope.originals, scope.copies)
+    return new MshEvalResult(status, out_vars)
+end

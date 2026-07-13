@@ -1,0 +1,3 @@
+ARCHIVE=/home/vxz/mixtar-lab/ssh-backups/thinkpad-ssh-config-20260628T201024Z.tar.gz
+MANIFEST=/home/vxz/mixtar-lab/ssh-backups/thinkpad-ssh-config-20260628T201024Z.manifest.txt
+TAR_STDERR=/home/vxz/mixtar-lab/ssh-backups/thinkpad-ssh-config-20260628T201024Z.tar.stderr

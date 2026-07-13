@@ -1,0 +1,19 @@
+// msh_eval_phase_builtins.ail
+// Eval glue for stateful output-producing shell builtins.
+
+import msh_eval_result
+import msh_fields
+import msh_phase_builtins
+
+def msh_eval_phase_builtin_result(name: string, assigns: string, fields: str_array, vars: string): MshEvalResult
+    if name == "umask" then
+        phase_result = msh_umask_state(fields, vars)
+    else
+        phase_result = msh_times_state(fields, vars)
+    end
+    out_vars = "" + phase_result.vars
+    status = phase_result.status
+    msh_field_array_destroy(fields)
+    dealloc(name, assigns, vars, phase_result.vars)
+    return new MshEvalResult(status, out_vars)
+end

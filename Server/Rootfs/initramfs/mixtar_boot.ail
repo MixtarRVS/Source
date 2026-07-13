@@ -1,0 +1,280 @@
+import mixtar_init_defs
+
+record MiBootBuffer then
+    [byte;8192] bytes
+end
+
+const string MI_BOOT_ROOT_KEY = "mixtar.root="
+const string MI_BOOT_ROOTFS_KEY = "mixtar.rootfstype="
+const string MI_BOOT_ROOTFS_EXT4 = "ext4"
+const string MI_BOOT_DEVICE_PREFIX = "/System/Devices/"
+const string MI_BOOT_PROCESS = "/System/Process"
+const string MI_BOOT_HARDWARE = "/System/Hardware"
+const string MI_BOOT_RUNTIME = "/System/Runtime"
+const string MI_BOOT_NEW_ROOT = "/System/Runtime/Root"
+const string MI_BOOT_RUNTIME_INIT = "/System/Init/MixtarRVS"
+const string MI_BOOT_RUNTIME_CONFIG = "/System/Configuration/MixtarRVS.config"
+const string MI_BOOT_ENV_PATH = "PATH=/System/Userland:/System/Shells"
+const string MI_BOOT_ENV_HOME = "HOME=/"
+const string MI_BOOT_ENV_TERM = "TERM=linux"
+const string MI_BOOT_START = "MixtarBoot: early handoff started"
+const string MI_BOOT_ROOT_MISSING = "MixtarBoot: missing or unsafe mixtar.root"
+const string MI_BOOT_ROOTFS_MISSING = "MixtarBoot: mixtar.rootfstype must be ext4"
+const string MI_BOOT_MOUNT_FAILED = "MixtarBoot: root mount failed"
+const string MI_BOOT_RUNTIME_MISSING = "MixtarBoot: runtime PID1 or configuration missing"
+const string MI_BOOT_MOVE_FAILED = "MixtarBoot: kernel-view move failed"
+const string MI_BOOT_SWITCH_FAILED = "MixtarBoot: root switch failed"
+const string MI_BOOT_EXEC = "MixtarBoot: executing /System/Init/MixtarRVS"
+const string MI_BOOT_EXEC_FAILED = "MixtarBoot: runtime PID1 exec failed"
+
+@effect(syscall)
+void mi_boot_write(text: string):
+    syscall(MI_SYS_WRITE, 1, text, strlen(text))
+    syscall(MI_SYS_WRITE, 1, "\n", 1)
+end
+
+string mi_boot_buffer_string(buf: int, used: int):
+    value = "" + ""
+    i = 0
+    while i < used then
+        ch = peek8(buf, i)
+        if ch != 0 then
+            piece = chr(ch)
+            next_value = value + piece
+            dealloc(value, piece)
+            value = next_value
+        end
+        i++
+    end
+    return value
+end
+
+@effect(syscall)
+string mi_boot_read(path: string):
+    MiBootBuffer storage = new MiBootBuffer(0)
+    buffer = addressof(storage)
+    fd = syscall(MI_SYS_OPEN, path, MI_O_RDONLY + MI_O_CLOEXEC, 0)
+    if fd < 0 then
+        return "" + ""
+    end
+    used = syscall(MI_SYS_READ, fd, buffer, 8191)
+    syscall(MI_SYS_CLOSE, fd)
+    if used <= 0 then
+        return "" + ""
+    end
+    return mi_boot_buffer_string(buffer, used)
+end
+
+int mi_boot_starts_with(text: string, prefix: string):
+    if strlen(text) < strlen(prefix) then
+        return 0
+    end
+    raw_text = reinterpret(i64, text)
+    raw_prefix = reinterpret(i64, prefix)
+    i = 0
+    while i < strlen(prefix) then
+        if peek8(raw_text, i) != peek8(raw_prefix, i) then
+            return 0
+        end
+        i++
+    end
+    return 1
+end
+
+string mi_boot_argument(cmdline: string, key: string):
+    raw = reinterpret(i64, cmdline)
+    raw_key = reinterpret(i64, key)
+    length = strlen(cmdline)
+    key_length = strlen(key)
+    i = 0
+    while i + key_length <= length then
+        boundary = 0
+        if i == 0 then
+            boundary = 1
+        else
+            if peek8(raw, i - 1) == 32 then
+                boundary = 1
+            end
+        end
+        if boundary != 0 then
+            matched = 1
+            j = 0
+            while j < key_length then
+                if peek8(raw, i + j) != peek8(raw_key, j) then
+                    matched = 0
+                    j = key_length
+                else
+                    j++
+                end
+            end
+            if matched != 0 then
+                start = i + key_length
+                finish = start
+                while finish < length and peek8(raw, finish) != 32 and peek8(raw, finish) != 10 then
+                    finish++
+                end
+                return substr(cmdline, start, finish - start)
+            end
+        end
+        i++
+    end
+    return "" + ""
+end
+
+@effect(syscall)
+void mi_boot_mkdir(path: string):
+    syscall(MI_SYS_MKDIR, path, MODE_DIR)
+end
+
+@effect(syscall)
+int mi_boot_mount(source: string, target: string, fstype: string, flags: int):
+    return syscall(MI_SYS_MOUNT, source, target, fstype, flags, "")
+end
+
+@effect(syscall)
+void mi_boot_console():
+    fd = syscall(MI_SYS_OPEN, MI_DEVICE_CONSOLE, MI_O_RDWR, 0)
+    if fd >= 0 then
+        syscall(MI_SYS_DUP2, fd, 0)
+        syscall(MI_SYS_DUP2, fd, 1)
+        syscall(MI_SYS_DUP2, fd, 2)
+        if fd > 2 then
+            syscall(MI_SYS_CLOSE, fd)
+        end
+    end
+end
+
+@effect(syscall)
+int mi_boot_kernel_views():
+    mi_boot_mkdir("/System")
+    mi_boot_mkdir(MI_SYSTEM_DEVICES)
+    mi_boot_mkdir(MI_BOOT_PROCESS)
+    mi_boot_mkdir(MI_BOOT_HARDWARE)
+    mi_boot_mkdir(MI_BOOT_RUNTIME)
+    mi_boot_mkdir(MI_BOOT_NEW_ROOT)
+    if mi_boot_mount(MI_FSTYPE_DEVTMPFS, MI_SYSTEM_DEVICES, MI_FSTYPE_DEVTMPFS, 0) != 0 then
+        return 1
+    end
+    mi_boot_console()
+    if mi_boot_mount("proc", MI_BOOT_PROCESS, "proc", 0) != 0 then
+        return 1
+    end
+    if mi_boot_mount("sysfs", MI_BOOT_HARDWARE, "sysfs", 0) != 0 then
+        return 1
+    end
+    return 0
+end
+
+@effect(syscall)
+int mi_boot_prepare_runtime_root(root_device: string, rootfs: string):
+    if mi_boot_mount(root_device, MI_BOOT_NEW_ROOT, rootfs, 0) != 0 then
+        return 1
+    end
+    devices = MI_BOOT_NEW_ROOT + MI_SYSTEM_DEVICES
+    process = MI_BOOT_NEW_ROOT + MI_BOOT_PROCESS
+    hardware = MI_BOOT_NEW_ROOT + MI_BOOT_HARDWARE
+    mi_boot_mkdir(devices)
+    mi_boot_mkdir(process)
+    mi_boot_mkdir(hardware)
+    init = MI_BOOT_NEW_ROOT + MI_BOOT_RUNTIME_INIT
+    config = MI_BOOT_NEW_ROOT + MI_BOOT_RUNTIME_CONFIG
+    ready = 1
+    if syscall(MI_SYS_ACCESS, init, MODE_EXEC) != 0 then
+        ready = 0
+    end
+    if syscall(MI_SYS_ACCESS, config, MODE_EXISTS) != 0 then
+        ready = 0
+    end
+    dealloc(init, config)
+    if ready == 0 then
+        dealloc(devices, process, hardware)
+        return 2
+    end
+    if mi_boot_mount(MI_SYSTEM_DEVICES, devices, "", MI_MS_MOVE) != 0 then
+        dealloc(devices, process, hardware)
+        return 3
+    end
+    if mi_boot_mount(MI_BOOT_PROCESS, process, "", MI_MS_MOVE) != 0 then
+        dealloc(devices, process, hardware)
+        return 3
+    end
+    if mi_boot_mount(MI_BOOT_HARDWARE, hardware, "", MI_MS_MOVE) != 0 then
+        dealloc(devices, process, hardware)
+        return 3
+    end
+    dealloc(devices, process, hardware)
+    return 0
+end
+
+@effect(syscall)
+int mi_boot_should_hold():
+    return 1
+end
+
+@effect(syscall)
+void mi_boot_hold():
+    while mi_boot_should_hold() != 0 then
+        syscall(MI_SYS_PAUSE)
+    end
+end
+
+@effect(syscall)
+int main():
+    mi_boot_write(MI_BOOT_START)
+    if mi_boot_kernel_views() != 0 then
+        mi_boot_write(MI_BOOT_MOUNT_FAILED)
+        mi_boot_hold()
+        return 1
+    end
+    cmdline = mi_boot_read(MI_PROC_CMDLINE)
+    root_device = mi_boot_argument(cmdline, MI_BOOT_ROOT_KEY)
+    rootfs = mi_boot_argument(cmdline, MI_BOOT_ROOTFS_KEY)
+    if strlen(root_device) == 0 or mi_boot_starts_with(root_device, MI_BOOT_DEVICE_PREFIX) == 0 then
+        mi_boot_write(MI_BOOT_ROOT_MISSING)
+        mi_boot_hold()
+        return 1
+    end
+    if rootfs != MI_BOOT_ROOTFS_EXT4 then
+        mi_boot_write(MI_BOOT_ROOTFS_MISSING)
+        mi_boot_hold()
+        return 1
+    end
+    prepare_rc = mi_boot_prepare_runtime_root(root_device, rootfs)
+    if prepare_rc == 1 then
+        mi_boot_write(MI_BOOT_MOUNT_FAILED)
+        mi_boot_hold()
+        return 1
+    end
+    if prepare_rc == 2 then
+        mi_boot_write(MI_BOOT_RUNTIME_MISSING)
+        mi_boot_hold()
+        return 1
+    end
+    if prepare_rc != 0 then
+        mi_boot_write(MI_BOOT_MOVE_FAILED)
+        mi_boot_hold()
+        return 1
+    end
+    if syscall(MI_SYS_CHDIR, MI_BOOT_NEW_ROOT) != 0 then
+        mi_boot_write(MI_BOOT_SWITCH_FAILED)
+        mi_boot_hold()
+        return 1
+    end
+    if mi_boot_mount(".", "/", "", MI_MS_MOVE) != 0 then
+        mi_boot_write(MI_BOOT_SWITCH_FAILED)
+        mi_boot_hold()
+        return 1
+    end
+    if syscall(MI_SYS_CHROOT, ".") != 0 or syscall(MI_SYS_CHDIR, "/") != 0 then
+        mi_boot_write(MI_BOOT_SWITCH_FAILED)
+        mi_boot_hold()
+        return 1
+    end
+    mi_boot_write(MI_BOOT_EXEC)
+    argv = ptr_array(MI_BOOT_RUNTIME_INIT)
+    envp = ptr_array(MI_BOOT_ENV_PATH, MI_BOOT_ENV_HOME, MI_BOOT_ENV_TERM)
+    syscall(MI_SYS_EXECVE, MI_BOOT_RUNTIME_INIT, argv, envp)
+    mi_boot_write(MI_BOOT_EXEC_FAILED)
+    mi_boot_hold()
+    return 1
+end

@@ -1,0 +1,23 @@
+# msh-source: smoosh/tests/shell/semantics.return.if.test
+# msh-profile: posix
+# msh-run: eval
+# id:ce0c3ef7-66a9-08de-546f-d8ef8263b6da@gigawatt.nl
+# from Harald van Dijk
+
+f() {
+  if ! return 5
+  then echo fail then; exit
+  else echo fail else; exit
+  fi
+}
+f
+echo $?
+
+g() {
+  if return 6
+  then echo fail then2; exit
+  else echo fail else2; exit
+  fi     
+}
+g
+echo $?

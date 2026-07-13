@@ -1,0 +1,71 @@
+{
+  "name": "MixtarRVS Base Closure 0005",
+  "status": "non-activating-initramfs-contract-and-fallback-init-shim",
+  "created": "2026-06-29",
+  "purpose": "Define the MixtarRVS initramfs handoff contract and stage a safe fallback init shim without changing the active EFI loader, initramfs image, PID 1, OpenRC fallback, network services, or rollback profiles.",
+  "requires": [
+    "/System/Base/Closure/0001-audit/manifest.json",
+    "/System/Base/Closure/0002-mixtar-session-path/manifest.json",
+    "/System/Base/Closure/0003-shell-runtime-and-libraries-profile/manifest.json",
+    "/System/Base/Closure/0004-initramfs-loader-path-and-kernel-profile/manifest.json",
+    "/System/Kernel/Current",
+    "/System/Tools/Current/bin/sh",
+    "/System/Libraries/MixtarRVS/Runtime/0003/lib",
+    "/sbin/init"
+  ],
+  "initramfs_contract": {
+    "kernel_profile": "rt-7.1.2-mixtar-rt",
+    "cmdline_token": "mixtar.profile=rt-7.1.2-mixtar-rt",
+    "root_strategy": "Mount the selected root filesystem read-only first, then expose Mixtar runtime directories before init handoff.",
+    "native_mount_views": {
+      "/System/Devices": "/dev",
+      "/System/Process": "/proc",
+      "/System/Hardware": "/sys",
+      "/System/Runtime/run": "/run",
+      "/Temporary": "/tmp"
+    },
+    "runtime_path_order": [
+      "/System/Tools/Current/bin",
+      "/System/Tools/MixtarRVS/bin",
+      "/System/SystemTools",
+      "/sbin",
+      "/bin",
+      "/usr/sbin",
+      "/usr/bin"
+    ],
+    "library_roots": [
+      "/System/Libraries/MixtarRVS/Runtime/0003/lib",
+      "/lib",
+      "/usr/lib"
+    ],
+    "handoff": {
+      "primary": "/System/SystemTools/mixtar-fallback-init --exec",
+      "future_primary": "/System/SystemTools/init",
+      "fallback": "/sbin/init"
+    }
+  },
+  "service_fallbacks_kept": [
+    "OpenRC",
+    "sshd",
+    "dhcpcd",
+    "iwd",
+    "dbus",
+    "apk"
+  ],
+  "non_goals": [
+    "Do not rebuild initramfs.img.",
+    "Do not rewrite EFI loader entries.",
+    "Do not replace /sbin/init.",
+    "Do not stop OpenRC services.",
+    "Do not hide POSIX compatibility paths yet.",
+    "Do not remove Alpine packages or apk yet."
+  ],
+  "known_limitations": [
+    "The active initramfs image is still the pre-existing boot artifact.",
+    "The fallback init shim is staged and checkable, but not used by the current boot path.",
+    "/System/SystemTools/init currently resolves to /bin/busybox and is treated as compatibility fallback, not as a Mixtar-native init.",
+    "Mixtar-native service supervision is not implemented yet; OpenRC remains the live supervisor.",
+    "Network and SSH still come from the compatibility/bootstrap layer."
+  ],
+  "next_stage": "0006-service-and-network-closure-inventory"
+}

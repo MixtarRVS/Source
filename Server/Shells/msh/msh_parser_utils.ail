@@ -1,0 +1,20 @@
+// msh_parser_utils.ail
+// Parser helpers kept out of msh_parser.ail to preserve the line budget.
+
+import msh_tokens
+
+int msh_parse_skip_semi(tokens: string, pos: int):
+    cur = pos
+    n = msh_token_count(tokens)
+    while cur < n then
+        line = msh_token_at(tokens, cur)
+        if msh_line_is_kind(line, "SEMI") == 1 then
+            cur++
+        else
+            dealloc(line)
+            return cur
+        end
+        dealloc(line)
+    end
+    return cur
+end

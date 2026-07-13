@@ -1,0 +1,82 @@
+// unistd.ail
+// First real Mixtar LibC ABI slice implemented in AILang.
+//
+// Scope: Linux x86_64 syscall ABI proof. This file exports C-callable
+// symbols without taking over host libc headers yet.
+
+#cinclude <sys/types.h>
+
+const int SYS_READ = 0
+const int SYS_WRITE = 1
+const int SYS_CLOSE = 3
+const int SYS_GETPID = 39
+const int SYS_FSYNC = 74
+const int SYS_FDATASYNC = 75
+const int SYS_GETUID = 102
+const int SYS_GETGID = 104
+const int SYS_GETEUID = 107
+const int SYS_GETEGID = 108
+const int SYS_GETPPID = 110
+const int SYS_SETSID = 112
+const int SYS_GETPGID = 121
+const int SYS_GETTID = 186
+
+internal ssize_t read(fd: internal int, buf: internal pointer, count: internal size_t):
+    return syscall(SYS_READ, fd, buf, count)
+end
+
+internal ssize_t write(fd: internal int, buf: internal pointer, count: internal size_t):
+    return syscall(SYS_WRITE, fd, buf, count)
+end
+
+internal int close(fd: internal int):
+    return syscall(SYS_CLOSE, fd)
+end
+
+internal int fsync(fd: internal int):
+    return syscall(SYS_FSYNC, fd)
+end
+
+internal int fdatasync(fd: internal int):
+    return syscall(SYS_FDATASYNC, fd)
+end
+
+internal pid_t getpid():
+    return syscall(SYS_GETPID)
+end
+
+internal pid_t getppid():
+    return syscall(SYS_GETPPID)
+end
+
+internal uid_t getuid():
+    return syscall(SYS_GETUID)
+end
+
+internal uid_t geteuid():
+    return syscall(SYS_GETEUID)
+end
+
+internal gid_t getgid():
+    return syscall(SYS_GETGID)
+end
+
+internal gid_t getegid():
+    return syscall(SYS_GETEGID)
+end
+
+internal pid_t gettid():
+    return syscall(SYS_GETTID)
+end
+
+internal pid_t getpgid(pid: internal pid_t):
+    return syscall(SYS_GETPGID, pid)
+end
+
+internal pid_t getpgrp():
+    return getpgid(0)
+end
+
+internal pid_t setsid():
+    return syscall(SYS_SETSID)
+end

@@ -1,0 +1,70 @@
+// msh_token_selftest.ail
+// Focused regression tests for token source metadata.
+
+import msh_lexer
+import msh_tokens
+
+int msh_expect_token(tokens: string, index: int, kind: string, value: string, line_no: int, col_no: int):
+    line = msh_token_at(tokens, index)
+    got_kind = msh_token_kind(line)
+    got_value = msh_token_value(line)
+    got_line = msh_token_line(line)
+    got_col = msh_token_col(line)
+    ok = 0
+    if got_kind == kind and got_value == value and got_line == line_no and got_col == col_no then
+        ok = 1
+    end
+    if ok == 0 then
+        print "msh token location selftest failed"
+        msg = "token-index: " + str(index)
+        print msg
+        dealloc(msg)
+        got = "got: " + got_kind
+        got2 = got + " "
+        got3 = got2 + got_value
+        got4 = got3 + " @"
+        got5 = got4 + str(got_line)
+        got6 = got5 + ":"
+        got7 = got6 + str(got_col)
+        print got7
+        want = "want: " + kind
+        want2 = want + " "
+        want3 = want2 + value
+        want4 = want3 + " @"
+        want5 = want4 + str(line_no)
+        want6 = want5 + ":"
+        want7 = want6 + str(col_no)
+        print want7
+        dealloc(got, got2, got3, got4, got5, got6, got7)
+        dealloc(want, want2, want3, want4, want5, want6, want7)
+    end
+    dealloc(line)
+    dealloc(got_kind)
+    dealloc(got_value)
+    if ok == 1 then
+        return 0
+    end
+    return 1
+end
+
+int msh_token_location_selftest():
+    tokens = msh_lex("echo ok\n  cat < in")
+    if msh_expect_token(tokens, 0, "WORD", "echo", 1, 1) != 0 then
+        dealloc(tokens)
+        return 1
+    end
+    if msh_expect_token(tokens, 1, "WORD", "ok", 1, 6) != 0 then
+        dealloc(tokens)
+        return 1
+    end
+    if msh_expect_token(tokens, 3, "WORD", "cat", 2, 3) != 0 then
+        dealloc(tokens)
+        return 1
+    end
+    if msh_expect_token(tokens, 4, "REDIR_IN", "<", 2, 7) != 0 then
+        dealloc(tokens)
+        return 1
+    end
+    dealloc(tokens)
+    return 0
+end

@@ -1,0 +1,3 @@
+#ifndef MIXTAR_EMPTY_OHASH_H
+#define MIXTAR_EMPTY_OHASH_H
+#endif

@@ -1,0 +1,235 @@
+// msh_verbose.ail
+// POSIX verbose (-v) source read-unit evaluation.
+
+import msh_alias_expand
+import msh_control
+import msh_defs
+import msh_diagnostics
+import msh_eval_result
+import msh_fields
+import msh_lexer
+import msh_parser
+import msh_phase_state
+
+extern fn msh_eval_ast_state(ast: string, vars: string): MshEvalResult
+
+int msh_verbose_is_delim(c: int):
+    if c == MSH_CH_SPACE or c == MSH_CH_TAB or c == MSH_CH_LF then
+        return 1
+    end
+    if c == MSH_CH_SEMI or c == MSH_CH_PIPE or c == MSH_CH_AMP then
+        return 1
+    end
+    if c == MSH_CH_LPAREN or c == MSH_CH_RPAREN then
+        return 1
+    end
+    if c == MSH_CH_LBRACE or c == MSH_CH_RBRACE then
+        return 1
+    end
+    if c == MSH_CH_LT or c == MSH_CH_GT then
+        return 1
+    end
+    return 0
+end
+
+int msh_verbose_set_option_enables(word: string):
+    if word == "-o" then
+        return 2
+    end
+    if startswith(word, "-") == 1 and startswith(word, "--") == 0 then
+        if index_of(word, "v") != MSH_INDEX_NOT_FOUND then
+            return 1
+        end
+    end
+    return 0
+end
+
+int msh_verbose_source_has_set_verbose(source: string):
+    command_start = 1
+    in_single = 0
+    in_double = 0
+    i = 0
+    while i < strlen(source) then
+        c = char_at(source, i)
+        if in_single == 1 then
+            if c == MSH_CH_SQUOTE then
+                in_single = 0
+            end
+            i++
+        elsif in_double == 1 then
+            if c == MSH_CH_BACKSLASH and i + 1 < strlen(source) then
+                i = i + 2
+            else
+                if c == MSH_CH_DQUOTE then
+                    in_double = 0
+                end
+                i++
+            end
+        elsif c == MSH_CH_BACKSLASH and i + 1 < strlen(source) then
+            i = i + 2
+        elsif c == MSH_CH_SQUOTE then
+            in_single = 1
+            i++
+        elsif c == MSH_CH_DQUOTE then
+            in_double = 1
+            i++
+        elsif command_start == 1 and (c == MSH_CH_SPACE or c == MSH_CH_TAB or c == MSH_CH_LF) then
+            i++
+        elsif command_start == 1 and msh_verbose_is_delim(c) == 0 then
+            start = i
+            while i < strlen(source) and msh_verbose_is_delim(char_at(source, i)) == 0 then
+                i++
+            end
+            word = substr(source, start, i - start)
+            if word == "set" then
+                j = i
+                while j < strlen(source) and (char_at(source, j) == MSH_CH_SPACE or char_at(source, j) == MSH_CH_TAB) then
+                    j++
+                end
+                opt_start = j
+                while j < strlen(source) and msh_verbose_is_delim(char_at(source, j)) == 0 then
+                    j++
+                end
+                opt = substr(source, opt_start, j - opt_start)
+                option_kind = msh_verbose_set_option_enables(opt)
+                if option_kind == 1 then
+                    dealloc(word, opt)
+                    return 1
+                elsif option_kind == 2 then
+                    while j < strlen(source) and (char_at(source, j) == MSH_CH_SPACE or char_at(source, j) == MSH_CH_TAB) then
+                        j++
+                    end
+                    name_start = j
+                    while j < strlen(source) and msh_verbose_is_delim(char_at(source, j)) == 0 then
+                        j++
+                    end
+                    name = substr(source, name_start, j - name_start)
+                    if name == "verbose" then
+                        dealloc(word, opt, name)
+                        return 1
+                    end
+                    dealloc(name)
+                end
+                dealloc(opt)
+            end
+            dealloc(word)
+            command_start = 0
+        else
+            if c == MSH_CH_SEMI or c == MSH_CH_LF or c == MSH_CH_PIPE or c == MSH_CH_AMP then
+                command_start = 1
+            elsif c == MSH_CH_LBRACE or c == MSH_CH_LPAREN or c == MSH_CH_RPAREN then
+                command_start = 1
+            elsif c != MSH_CH_SPACE and c != MSH_CH_TAB then
+                command_start = 0
+            end
+            i++
+        end
+    end
+    return 0
+end
+
+int msh_verbose_source_needed(source: string, vars: string):
+    if msh_option_get(vars, "verbose") == 1 then
+        return 1
+    end
+    if msh_verbose_source_has_set_verbose(source) == 1 then
+        return 1
+    end
+    return 0
+end
+
+void msh_verbose_emit_unit(unit: string, vars: string):
+    if msh_option_get(vars, "verbose") == 0 then
+        return
+    end
+    fd_write(2, unit, strlen(unit))
+end
+
+def msh_verbose_eval_unit(unit: string, vars: string): MshEvalResult
+    expanded = msh_alias_expand_source(unit, vars)
+    tokens = msh_lex(expanded)
+    result = msh_parse_script(tokens)
+    if result.ok == 0 then
+        dealloc(result.node, tokens, expanded)
+        return new MshEvalResult(2, "" + vars)
+    end
+    eval_result = msh_eval_ast_state(result.node, vars)
+    out_vars = "" + eval_result.vars
+    status = eval_result.status
+    dealloc(result.node, tokens, expanded, eval_result.vars)
+    return new MshEvalResult(status, out_vars)
+end
+
+def msh_verbose_finish_unit(unit_parts: str_array, vars: string): MshEvalResult
+    unit = str_array_join(unit_parts, "")
+    msh_verbose_emit_unit(unit, vars)
+    result = msh_verbose_eval_unit(unit, vars)
+    dealloc(unit)
+    return result
+end
+
+def msh_eval_source_state_verbose_units(source: string, vars: string): MshEvalResult
+    current_vars = "" + vars
+    unit_parts = str_array_new(MSH_FIELD_CAP_DEFAULT)
+    depth = 0
+    in_single = 0
+    in_double = 0
+    status = 0
+    pos = 0
+    while pos < strlen(source) then
+        stop = index_of_from(source, "\n", pos)
+        has_lf = 1
+        if stop == MSH_INDEX_NOT_FOUND then
+            stop = strlen(source)
+            has_lf = 0
+        end
+        line = substr(source, pos, stop - pos)
+        line_started_quoted = 0
+        if in_single == 1 or in_double == 1 then
+            line_started_quoted = 1
+        end
+        if line_started_quoted == 0 and msh_alias_line_closes_compound(line) == 1 and depth > 0 then
+            depth--
+        end
+        if has_lf == 1 then
+            line_with_lf = line + "\n"
+            unit_parts = str_array_push(unit_parts, line_with_lf)
+            pos = stop + 1
+        else
+            unit_parts = str_array_push(unit_parts, "" + line)
+            pos = stop
+        end
+        next_single = msh_alias_line_quote_state_after(line, in_single, in_double, 1)
+        next_double = msh_alias_line_quote_state_after(line, in_single, in_double, 2)
+        in_single = next_single
+        in_double = next_double
+        if line_started_quoted == 0 and in_single == 0 and in_double == 0 and msh_alias_line_opens_compound(line) == 1 then
+            depth++
+        end
+        if depth == 0 and in_single == 0 and in_double == 0 then
+            result = msh_verbose_finish_unit(unit_parts, current_vars)
+            status = result.status
+            dealloc(current_vars)
+            current_vars = "" + result.vars
+            msh_field_array_destroy(unit_parts)
+            unit_parts = str_array_new(MSH_FIELD_CAP_DEFAULT)
+            if result.status != 0 or msh_control_active(result.vars) == 1 then
+                dealloc(result.vars, line)
+                pos = strlen(source)
+            else
+                dealloc(result.vars, line)
+            end
+        else
+            dealloc(line)
+        end
+    end
+    if str_array_len(unit_parts) > 0 then
+        result_tail = msh_verbose_finish_unit(unit_parts, current_vars)
+        status = result_tail.status
+        dealloc(current_vars)
+        current_vars = "" + result_tail.vars
+        dealloc(result_tail.vars)
+    end
+    msh_field_array_destroy(unit_parts)
+    return new MshEvalResult(status, current_vars)
+end

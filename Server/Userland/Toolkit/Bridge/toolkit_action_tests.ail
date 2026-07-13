@@ -1,0 +1,113 @@
+// toolkit_action_tests.ail
+// Cross-tool WSL action tests for the translated Toolkit.
+
+import toolkit_core
+
+string toolkit_action_test_path():
+    return "" + "Server/Userland/Generated/tests/toolkit-action-wsl.sh"
+end
+
+string toolkit_action_report_path():
+    return "" + "Server/Userland/Generated/reports/toolkit-action-wsl.md"
+end
+
+string toolkit_action_header():
+    return "" + "#!/usr/bin/env bash\nset +e\nexport LC_ALL=C\ncd /mnt/c/Users/V/source/repos/MixtarRVS || exit 99\nT=\"$PWD/Server/Userland/Generated/targets/linux-x64/bin\"\nreport=\"$PWD/Server/Userland/Generated/reports/toolkit-action-wsl.md\"\nroot=\"/tmp/mixtar-toolkit-action-$$\"\nfailures=0\nrm -rf \"$root\"\nmkdir -p \"$root\" \"$(dirname \"$report\")\"\ntrap 'rm -rf \"$root\"' EXIT\nprintf '# Toolkit WSL Action Test Report\\n\\n' > \"$report\"\nprintf 'Target dir: `%s`\\n\\n' \"$T\" >> \"$report\"\npass() { printf -- '- PASS %s\\n' \"$1\" >> \"$report\"; }\nfail() { printf -- '- FAIL %s\\n' \"$1\" >> \"$report\"; failures=$((failures + 1)); }\ncheck_file_eq() { label=\"$1\"; actual=\"$2\"; expected=\"$3\"; if cmp -s \"$actual\" \"$expected\"; then pass \"$label\"; else fail \"$label\"; printf '\\n## Diff for %s\\n\\n```diff\\n' \"$label\" >> \"$report\"; diff -u \"$expected\" \"$actual\" >> \"$report\" 2>&1; printf '\\n```\\n' >> \"$report\"; fi; }\ncheck_text_eq() { label=\"$1\"; actual=\"$2\"; expected=\"$3\"; if [ \"$actual\" = \"$expected\" ]; then pass \"$label\"; else fail \"$label expected=$expected actual=$actual\"; fi; }\nneed_tool() { if [ -x \"$T/$1\" ]; then pass \"target exists: $1\"; else fail \"missing target: $1\"; fi; }\n"
+end
+
+string toolkit_action_requirements():
+    return "" + "\nprintf '\\n## Requirements\\n\\n' >> \"$report\"\nfor name in printf cat grep sed sort uniq wc awk mkdir touch cp mv ln readlink realpath chmod find xargs diff patch cmp ps pkill rm rmdir; do\n    need_tool \"$name\"\ndone\nif [ \"$failures\" != 0 ]; then\n    printf '\\nResult: FAIL (%s failures before action tests)\\n' \"$failures\" >> \"$report\"\n    cat \"$report\"\n    exit \"$failures\"\nfi\n"
+end
+
+string toolkit_action_pipeline():
+    return "" + "\nprintf '\\n## Text Pipeline\\n\\n' >> \"$report\"\n\"$T/printf\" 'alpha\\nbeta\\nalpha\\ncarrot\\n' > \"$root/input.txt\"\n\"$T/cat\" \"$root/input.txt\" | \"$T/grep\" 'a' | \"$T/sed\" 's/a/A/g' | \"$T/sort\" | \"$T/uniq\" > \"$root/pipeline.out\"\ncat > \"$root/pipeline.expected\" <<'EOF'\nAlphA\nbetA\ncArrot\nEOF\ncheck_file_eq \"pipeline: cat grep sed sort uniq\" \"$root/pipeline.out\" \"$root/pipeline.expected\"\n\"$T/wc\" -l \"$root/pipeline.out\" | \"$T/awk\" '{print $1}' > \"$root/pipeline-count.out\"\nprintf '3\\n' > \"$root/pipeline-count.expected\"\ncheck_file_eq \"pipeline: wc awk\" \"$root/pipeline-count.out\" \"$root/pipeline-count.expected\"\n"
+end
+
+string toolkit_action_filesystem():
+    return "" + "\nprintf '\\n## Filesystem Mutation\\n\\n' >> \"$report\"\n\"$T/mkdir\" -p \"$root/fs/a/b\"\n\"$T/printf\" 'payload\\n' > \"$root/fs/a/b/file.txt\"\n\"$T/cp\" \"$root/fs/a/b/file.txt\" \"$root/fs/a/copy.txt\"\n\"$T/mv\" \"$root/fs/a/copy.txt\" \"$root/fs/a/moved.txt\"\n\"$T/ln\" -s moved.txt \"$root/fs/a/link.txt\"\n\"$T/readlink\" \"$root/fs/a/link.txt\" > \"$root/readlink.out\"\nprintf 'moved.txt\\n' > \"$root/readlink.expected\"\ncheck_file_eq \"filesystem: readlink symlink target\" \"$root/readlink.out\" \"$root/readlink.expected\"\n\"$T/realpath\" \"$root/fs/a/link.txt\" > \"$root/realpath.out\"\nprintf '%s\\n' \"$root/fs/a/moved.txt\" > \"$root/realpath.expected\"\ncheck_file_eq \"filesystem: realpath symlink\" \"$root/realpath.out\" \"$root/realpath.expected\"\n\"$T/chmod\" 600 \"$root/fs/a/moved.txt\"\nmode=$(stat -c '%a' \"$root/fs/a/moved.txt\" 2>/dev/null)\ncheck_text_eq \"filesystem: chmod mode\" \"$mode\" \"600\"\n"
+end
+
+string toolkit_action_find_xargs():
+    return "" + "\nprintf '\\n## Find And Xargs\\n\\n' >> \"$report\"\n\"$T/mkdir\" -p \"$root/findset\"\n\"$T/printf\" 'one\\n' > \"$root/findset/one.txt\"\n\"$T/printf\" 'two\\n' > \"$root/findset/two.txt\"\n\"$T/printf\" 'ignored\\n' > \"$root/findset/skip.log\"\n\"$T/find\" -- \"$root/findset\" -name '*.txt' | \"$T/sort\" > \"$root/find.out\"\n\"$T/wc\" -l \"$root/find.out\" | \"$T/awk\" '{print $1}' > \"$root/find-count.out\"\nprintf '2\\n' > \"$root/find-count.expected\"\ncheck_file_eq \"find: txt count\" \"$root/find-count.out\" \"$root/find-count.expected\"\n\"$T/find\" -- \"$root/findset\" -name '*.txt' | \"$T/sort\" | \"$T/xargs\" \"$T/cat\" > \"$root/xargs-cat.out\"\nprintf 'one\\ntwo\\n' > \"$root/xargs-cat.expected\"\ncheck_file_eq \"xargs: cat discovered files\" \"$root/xargs-cat.out\" \"$root/xargs-cat.expected\"\n"
+end
+
+string toolkit_action_patch_process():
+    return "" + "\nprintf '\\n## Patch And Process\\n\\n' >> \"$report\"\n\"$T/mkdir\" -p \"$root/patch\"\nprintf 'one\\ntwo\\n' > \"$root/patch/old.txt\"\nprintf 'one\\nthree\\n' > \"$root/patch/new.txt\"\n\"$T/diff\" -u \"$root/patch/old.txt\" \"$root/patch/new.txt\" > \"$root/patch/change.patch\"\ndiff_rc=$?\nif [ \"$diff_rc\" = 1 ]; then pass \"diff: reports changed files\"; else fail \"diff: expected rc=1 got rc=$diff_rc\"; fi\n\"$T/cp\" \"$root/patch/old.txt\" \"$root/patch/patched.txt\"\n(cd \"$root/patch\" && \"$T/patch\" -s patched.txt change.patch >/dev/null 2>&1)\npatch_rc=$?\nif [ \"$patch_rc\" = 0 ]; then pass \"patch: applies unified diff\"; else fail \"patch: failed rc=$patch_rc\"; fi\n\"$T/cmp\" -s \"$root/patch/patched.txt\" \"$root/patch/new.txt\"\ncmp_rc=$?\nif [ \"$cmp_rc\" = 0 ]; then pass \"cmp: patched file equals expected\"; else fail \"cmp: patched file differs\"; fi\n/bin/sleep 30 & child=$!\n\"$T/ps\" -ax -o pid,comm > \"$root/ps.out\"\nif \"$T/grep\" -q 'sleep' \"$root/ps.out\"; then pass \"ps: sees live process\"; else fail \"ps: did not show sleep process\"; fi\n\"$T/pkill\" -0 -x sleep >/dev/null 2>&1\npkill_rc=$?\nif [ \"$pkill_rc\" = 0 ]; then pass \"pkill: probe mode finds sleep\"; else fail \"pkill: probe mode failed rc=$pkill_rc\"; fi\nkill \"$child\" >/dev/null 2>&1\nwait \"$child\" >/dev/null 2>&1\n"
+end
+
+string toolkit_action_footer():
+    return "" + "\nprintf '\\n## Summary\\n\\n' >> \"$report\"\nif [ \"$failures\" = 0 ]; then\n    printf 'Result: PASS\\n' >> \"$report\"\nelse\n    printf 'Result: FAIL (%s failures)\\n' \"$failures\" >> \"$report\"\nfi\ncat \"$report\"\nexit \"$failures\"\n"
+end
+
+string toolkit_action_test_script():
+    body = toolkit_action_header()
+    part = toolkit_action_requirements()
+    next = body + part
+    dealloc(body, part)
+    body = next
+
+    part = toolkit_action_pipeline()
+    next = body + part
+    dealloc(body, part)
+    body = next
+
+    part = toolkit_action_filesystem()
+    next = body + part
+    dealloc(body, part)
+    body = next
+
+    part = toolkit_action_find_xargs()
+    next = body + part
+    dealloc(body, part)
+    body = next
+
+    part = toolkit_action_patch_process()
+    next = body + part
+    dealloc(body, part)
+    body = next
+
+    part = toolkit_action_footer()
+    next = body + part
+    dealloc(body, part)
+    return next
+end
+
+int toolkit_write_action_test_script():
+    toolkit_ensure_dirs_for("action-wsl")
+    script = toolkit_action_test_script()
+    path = toolkit_action_test_path()
+    rc = write_file(path, script)
+    dealloc(script, path)
+    if rc == 0 then
+        return 1
+    end
+    return 0
+end
+
+string toolkit_action_wsl_command():
+    path = toolkit_action_test_path()
+    prefix = "" + "wsl.exe -d Debian -- bash "
+    cmd = prefix + path
+    dealloc(prefix, path)
+    return cmd
+end
+
+int toolkit_action_test_wsl():
+    script_rc = toolkit_write_action_test_script()
+    if script_rc != 0 then
+        print "toolkit-build: failed to write action test script"
+        return script_rc
+    end
+
+    print "toolkit-build: running WSL action tests"
+    cmd = toolkit_action_wsl_command()
+    rc = system(cmd)
+    dealloc(cmd)
+    if rc != 0 then
+        print "toolkit-build: WSL action tests failed"
+        return rc
+    end
+
+    print "toolkit-build: WSL action tests ok"
+    return 0
+end

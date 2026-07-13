@@ -1,0 +1,7 @@
+name=network
+title=DHCP network backend
+role=network_addressing
+backend=openrc
+backend_name=dhcpcd
+runlevel=default
+enabled=true

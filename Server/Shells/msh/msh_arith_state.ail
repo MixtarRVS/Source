@@ -1,0 +1,593 @@
+// msh_arith_state.ail
+// Stateful POSIX-sh arithmetic expansion evaluator for $((...)).
+
+import msh_defs
+import msh_state
+import msh_arith
+import msh_arith_state_text
+import msh_diagnostics
+import msh_expand_diag
+import msh_phase_state
+
+record MshArithStateValueResult then
+    int value
+    string vars
+    int ok
+    int status
+end
+
+record MshArithStateResult then
+    string text
+    string vars
+    int status
+end
+
+record MshArithStateParseResult then
+    int value
+    int pos
+    string vars
+    int ok
+end
+
+def msh_arith_state_ok(value: int, vars: string): MshArithStateValueResult
+    return new MshArithStateValueResult(value, "" + vars, 1, 0)
+end
+def msh_arith_state_parse_ok(value: int, pos: int, vars: string): MshArithStateParseResult
+    return new MshArithStateParseResult(value, pos, "" + vars, 1)
+end
+string msh_arith_state_set_int(vars: string, name: string, value: int):
+    text = str(value)
+    out = msh_state_set(vars, name, text)
+    dealloc(text)
+    return out
+end
+
+int msh_arith_state_can_assign(vars: string, name: string):
+    if msh_state_is_readonly(vars, name) == 1 then
+        detail_left = name + ": "
+        detail = detail_left + "is read only"
+        msh_expand_diag_context(vars, detail)
+        dealloc(detail_left, detail)
+        return 0
+    end
+    return 1
+end
+
+int msh_arith_state_nounset_error(vars: string, name: string):
+    if msh_option_get(vars, "nounset") == 0 then
+        return 0
+    end
+    if msh_param_is_set(vars, name) == 0 then
+        return 1
+    end
+    return 0
+end
+
+void msh_arith_state_diag_parameter(name: string):
+    msg = name + ": parameter not set"
+    msh_diag(msg)
+    dealloc(msg)
+end
+
+void msh_arith_state_diag_expect_eof(expr: string):
+    left = "arithmetic expression: expecting EOF: \""
+    partial = left + expr
+    msg = partial + "\""
+    msh_diag(msg)
+    dealloc(partial, msg)
+end
+
+def msh_arith_state_parse_number(expr: string, pos: int, vars: string): MshArithStateParseResult
+    parsed = msh_arith_parse_number(expr, pos)
+    return new MshArithStateParseResult(parsed.value, parsed.pos, "" + vars, parsed.ok)
+end
+def msh_arith_state_parse_name(expr: string, pos: int, vars: string): MshArithStateParseResult
+    end_pos = msh_arith_name_end(expr, pos)
+    name = substr(expr, pos, end_pos - pos)
+    parsed = msh_arith_state_named_numeric(vars, name)
+    if parsed.ok == 0 then
+        dealloc(name)
+        return new MshArithStateParseResult(0, end_pos, "" + vars, 0)
+    end
+    value = parsed.value
+    dealloc(name)
+    return new MshArithStateParseResult(value, end_pos, "" + vars, 1)
+end
+
+def msh_arith_state_parse_param(expr: string, pos: int, vars: string): MshArithStateParseResult
+    if pos + 1 >= strlen(expr) then
+        return new MshArithStateParseResult(0, pos, "" + vars, 0)
+    end
+    next = char_at(expr, pos + 1)
+    if next == MSH_CH_LBRACE then
+        close = msh_arith_brace_param_end(expr, pos + 2)
+        if close == MSH_INDEX_NOT_FOUND then
+            return new MshArithStateParseResult(0, pos, "" + vars, 0)
+        end
+        name = substr(expr, pos + 2, close - pos - 2)
+        if msh_arith_state_nounset_error(vars, name) == 1 then
+            msh_arith_state_diag_parameter(name)
+            dealloc(name)
+            return new MshArithStateParseResult(0, close + 1, "" + vars, 0)
+        end
+        value = msh_arith_param_numeric_value(vars, name)
+        dealloc(name)
+        return new MshArithStateParseResult(value, close + 1, "" + vars, 1)
+    elsif next == MSH_CH_LPAREN and pos + 2 < strlen(expr) and char_at(expr, pos + 2) == MSH_CH_LPAREN then
+        parsed_nested = msh_arith_parse_nested_arith(expr, pos, vars)
+        return new MshArithStateParseResult(parsed_nested.value, parsed_nested.pos, "" + vars, parsed_nested.ok)
+    elsif next == MSH_CH_LPAREN then
+        parsed_cmd = msh_arith_parse_command_sub(expr, pos, vars)
+        return new MshArithStateParseResult(parsed_cmd.value, parsed_cmd.pos, "" + vars, parsed_cmd.ok)
+    elsif msh_arith_is_name_start(next) == 1 then
+        end_pos = msh_arith_name_end(expr, pos + 1)
+        name2 = substr(expr, pos + 1, end_pos - pos - 1)
+        if msh_arith_state_nounset_error(vars, name2) == 1 then
+            msh_arith_state_diag_parameter(name2)
+            dealloc(name2)
+            return new MshArithStateParseResult(0, end_pos, "" + vars, 0)
+        end
+        value2 = msh_arith_param_numeric_value(vars, name2)
+        dealloc(name2)
+        return new MshArithStateParseResult(value2, end_pos, "" + vars, 1)
+    else
+        name3 = chr(next)
+        if msh_arith_state_nounset_error(vars, name3) == 1 then
+            msh_arith_state_diag_parameter(name3)
+            dealloc(name3)
+            return new MshArithStateParseResult(0, pos + 2, "" + vars, 0)
+        end
+        value3 = msh_arith_param_numeric_value(vars, name3)
+        dealloc(name3)
+        return new MshArithStateParseResult(value3, pos + 2, "" + vars, 1)
+    end
+    return new MshArithStateParseResult(0, pos, "" + vars, 0)
+end
+
+def msh_arith_state_parse_expr(expr: string, pos: int, vars: string): MshArithStateParseResult
+    return msh_arith_state_parse_assignment(expr, pos, vars)
+end
+def msh_arith_state_parse_primary(expr: string, pos: int, vars: string): MshArithStateParseResult
+    i = msh_arith_skip_ws(expr, pos)
+    if i >= strlen(expr) then
+        return new MshArithStateParseResult(0, i, "" + vars, 0)
+    end
+    c = char_at(expr, i)
+    if c == MSH_CH_LPAREN then
+        inner = msh_arith_state_parse_expr(expr, i + 1, vars)
+        close_pos = msh_arith_skip_ws(expr, inner.pos)
+        if inner.ok == 0 or close_pos >= strlen(expr) or char_at(expr, close_pos) != MSH_CH_RPAREN then
+            return new MshArithStateParseResult(inner.value, close_pos, inner.vars, 0)
+        end
+        return new MshArithStateParseResult(inner.value, close_pos + 1, inner.vars, 1)
+    end
+    if c == MSH_CH_DOLLAR then
+        return msh_arith_state_parse_param(expr, i, vars)
+    end
+    if msh_arith_is_digit(c) == 1 then
+        return msh_arith_state_parse_number(expr, i, vars)
+    end
+    if msh_arith_is_name_start(c) == 1 then
+        return msh_arith_state_parse_name(expr, i, vars)
+    end
+    return new MshArithStateParseResult(0, i, "" + vars, 0)
+end
+def msh_arith_state_parse_postfix(expr: string, pos: int, vars: string): MshArithStateParseResult
+    return msh_arith_state_parse_primary(expr, pos, vars)
+end
+def msh_arith_state_parse_factor(expr: string, pos: int, vars: string): MshArithStateParseResult
+    i = msh_arith_skip_ws(expr, pos)
+    if i >= strlen(expr) then
+        return new MshArithStateParseResult(0, i, "" + vars, 0)
+    end
+    c = char_at(expr, i)
+    if c == MSH_CH_PLUS then
+        return msh_arith_state_parse_factor(expr, i + 1, vars)
+    end
+    if c == MSH_CH_MINUS then
+        inner = msh_arith_state_parse_factor(expr, i + 1, vars)
+        return new MshArithStateParseResult(0 - inner.value, inner.pos, inner.vars, inner.ok)
+    end
+    if c == MSH_CH_BANG then
+        inner2 = msh_arith_state_parse_factor(expr, i + 1, vars)
+        return new MshArithStateParseResult(1 - msh_arith_bool(inner2.value), inner2.pos, inner2.vars, inner2.ok)
+    end
+    if c == MSH_CH_TILDE then
+        inner_tilde = msh_arith_state_parse_factor(expr, i + 1, vars)
+        return new MshArithStateParseResult(0 - inner_tilde.value - 1, inner_tilde.pos, inner_tilde.vars, inner_tilde.ok)
+    end
+    return msh_arith_state_parse_postfix(expr, pos, vars)
+end
+def msh_arith_state_parse_term(expr: string, pos: int, vars: string): MshArithStateParseResult
+    left = msh_arith_state_parse_factor(expr, pos, vars)
+    if left.ok == 0 then
+        return left
+    end
+    cur = msh_arith_skip_ws(expr, left.pos)
+    while cur < strlen(expr) then
+        op = char_at(expr, cur)
+        if op != MSH_CH_STAR and op != MSH_CH_SLASH and op != MSH_CH_PERCENT then
+            break
+        end
+        right = msh_arith_state_parse_factor(expr, cur + 1, left.vars)
+        if right.ok == 0 then
+            dealloc(left.vars)
+            return right
+        end
+        value = left.value * right.value
+        if op == MSH_CH_SLASH then
+            if right.value == 0 then
+                msh_expand_diag_arith_divzero(right.vars, expr)
+                dealloc(left.vars, right.vars)
+                return new MshArithStateParseResult(0, right.pos, "" + vars, 0)
+            end
+            value = left.value / right.value
+        elsif op == MSH_CH_PERCENT then
+            if right.value == 0 then
+                msh_expand_diag_arith_divzero(right.vars, expr)
+                dealloc(left.vars, right.vars)
+                return new MshArithStateParseResult(0, right.pos, "" + vars, 0)
+            end
+            value = left.value % right.value
+        end
+        out_vars = "" + right.vars
+        dealloc(left.vars, right.vars)
+        left = new MshArithStateParseResult(value, right.pos, out_vars, 1)
+        cur = msh_arith_skip_ws(expr, left.pos)
+    end
+    return left
+end
+def msh_arith_state_parse_sum(expr: string, pos: int, vars: string): MshArithStateParseResult
+    left = msh_arith_state_parse_term(expr, pos, vars)
+    if left.ok == 0 then
+        return left
+    end
+    cur = msh_arith_skip_ws(expr, left.pos)
+    while cur < strlen(expr) then
+        op = char_at(expr, cur)
+        if op != MSH_CH_PLUS and op != MSH_CH_MINUS then
+            break
+        end
+        right = msh_arith_state_parse_term(expr, cur + 1, left.vars)
+        if right.ok == 0 then
+            dealloc(left.vars)
+            return right
+        end
+        value = left.value + right.value
+        if op == MSH_CH_MINUS then
+            value = left.value - right.value
+        end
+        out_vars = "" + right.vars
+        dealloc(left.vars, right.vars)
+        left = new MshArithStateParseResult(value, right.pos, out_vars, 1)
+        cur = msh_arith_skip_ws(expr, left.pos)
+    end
+    return left
+end
+def msh_arith_state_parse_shift(expr: string, pos: int, vars: string): MshArithStateParseResult
+    left = msh_arith_state_parse_sum(expr, pos, vars)
+    if left.ok == 0 then return left end
+    cur = msh_arith_skip_ws(expr, left.pos)
+    while cur + 1 < strlen(expr) then
+        op = char_at(expr, cur)
+        if (op != MSH_CH_LT and op != MSH_CH_GT) or char_at(expr, cur + 1) != op then break end
+        right = msh_arith_state_parse_sum(expr, cur + 2, left.vars)
+        if right.ok == 0 then
+            dealloc(left.vars)
+            return right
+        end
+        value = left.value << right.value
+        if op == MSH_CH_GT then value = left.value >> right.value end
+        out_vars = "" + right.vars
+        dealloc(left.vars, right.vars)
+        left = new MshArithStateParseResult(value, right.pos, out_vars, 1)
+        cur = msh_arith_skip_ws(expr, left.pos)
+    end
+    return left
+end
+def msh_arith_state_parse_relational(expr: string, pos: int, vars: string): MshArithStateParseResult
+    left = msh_arith_state_parse_shift(expr, pos, vars)
+    if left.ok == 0 then
+        return left
+    end
+    cur = msh_arith_skip_ws(expr, left.pos)
+    while cur < strlen(expr) then
+        op = char_at(expr, cur)
+        op_len = 1
+        if op != MSH_CH_LT and op != MSH_CH_GT then
+            break
+        end
+        if cur + 1 < strlen(expr) and char_at(expr, cur + 1) == op then
+            break
+        end
+        if msh_arith_match2(expr, cur, op, MSH_CH_EQUAL) == 1 then
+            op_len = 2
+        end
+        right = msh_arith_state_parse_shift(expr, cur + op_len, left.vars)
+        if right.ok == 0 then
+            dealloc(left.vars)
+            return right
+        end
+        value = 0
+        if op == MSH_CH_LT then
+            if op_len == 2 and left.value <= right.value then value = 1 end
+            if op_len == 1 and left.value < right.value then value = 1 end
+        else
+            if op_len == 2 and left.value >= right.value then value = 1 end
+            if op_len == 1 and left.value > right.value then value = 1 end
+        end
+        out_vars = "" + right.vars
+        dealloc(left.vars, right.vars)
+        left = new MshArithStateParseResult(value, right.pos, out_vars, 1)
+        cur = msh_arith_skip_ws(expr, left.pos)
+    end
+    return left
+end
+def msh_arith_state_parse_equality(expr: string, pos: int, vars: string): MshArithStateParseResult
+    left = msh_arith_state_parse_relational(expr, pos, vars)
+    if left.ok == 0 then
+        return left
+    end
+    cur = msh_arith_skip_ws(expr, left.pos)
+    while cur + 1 < strlen(expr) then
+        is_equal = msh_arith_match2(expr, cur, MSH_CH_EQUAL, MSH_CH_EQUAL)
+        is_not_equal = msh_arith_match2(expr, cur, MSH_CH_BANG, MSH_CH_EQUAL)
+        if is_equal == 0 and is_not_equal == 0 then
+            break
+        end
+        right = msh_arith_state_parse_relational(expr, cur + 2, left.vars)
+        if right.ok == 0 then
+            dealloc(left.vars)
+            return right
+        end
+        value = 0
+        if is_equal == 1 and left.value == right.value then value = 1 end
+        if is_not_equal == 1 and left.value != right.value then value = 1 end
+        out_vars = "" + right.vars
+        dealloc(left.vars, right.vars)
+        left = new MshArithStateParseResult(value, right.pos, out_vars, 1)
+        cur = msh_arith_skip_ws(expr, left.pos)
+    end
+    return left
+end
+def msh_arith_state_parse_bit_and(expr: string, pos: int, vars: string): MshArithStateParseResult
+    left = msh_arith_state_parse_equality(expr, pos, vars)
+    if left.ok == 0 then return left end
+    cur = msh_arith_skip_ws(expr, left.pos)
+    while cur < strlen(expr) and char_at(expr, cur) == MSH_CH_AMP and msh_arith_match2(expr, cur, MSH_CH_AMP, MSH_CH_AMP) == 0 then
+        right = msh_arith_state_parse_equality(expr, cur + 1, left.vars)
+        if right.ok == 0 then
+            dealloc(left.vars)
+            return right
+        end
+        out_vars = "" + right.vars
+        value = left.value & right.value
+        dealloc(left.vars, right.vars)
+        left = new MshArithStateParseResult(value, right.pos, out_vars, 1)
+        cur = msh_arith_skip_ws(expr, left.pos)
+    end
+    return left
+end
+def msh_arith_state_parse_bit_xor(expr: string, pos: int, vars: string): MshArithStateParseResult
+    left = msh_arith_state_parse_bit_and(expr, pos, vars)
+    if left.ok == 0 then return left end
+    cur = msh_arith_skip_ws(expr, left.pos)
+    while cur < strlen(expr) and char_at(expr, cur) == MSH_CH_CARET then
+        right = msh_arith_state_parse_bit_and(expr, cur + 1, left.vars)
+        if right.ok == 0 then
+            dealloc(left.vars)
+            return right
+        end
+        out_vars = "" + right.vars
+        value = left.value bxor right.value
+        dealloc(left.vars, right.vars)
+        left = new MshArithStateParseResult(value, right.pos, out_vars, 1)
+        cur = msh_arith_skip_ws(expr, left.pos)
+    end
+    return left
+end
+def msh_arith_state_parse_bit_or(expr: string, pos: int, vars: string): MshArithStateParseResult
+    left = msh_arith_state_parse_bit_xor(expr, pos, vars)
+    if left.ok == 0 then return left end
+    cur = msh_arith_skip_ws(expr, left.pos)
+    while cur < strlen(expr) and char_at(expr, cur) == MSH_CH_PIPE and msh_arith_match2(expr, cur, MSH_CH_PIPE, MSH_CH_PIPE) == 0 then
+        right = msh_arith_state_parse_bit_xor(expr, cur + 1, left.vars)
+        if right.ok == 0 then
+            dealloc(left.vars)
+            return right
+        end
+        out_vars = "" + right.vars
+        value = left.value | right.value
+        dealloc(left.vars, right.vars)
+        left = new MshArithStateParseResult(value, right.pos, out_vars, 1)
+        cur = msh_arith_skip_ws(expr, left.pos)
+    end
+    return left
+end
+def msh_arith_state_parse_logic_and(expr: string, pos: int, vars: string): MshArithStateParseResult
+    left = msh_arith_state_parse_bit_or(expr, pos, vars)
+    if left.ok == 0 then
+        return left
+    end
+    cur = msh_arith_skip_ws(expr, left.pos)
+    while msh_arith_match2(expr, cur, MSH_CH_AMP, MSH_CH_AMP) == 1 then
+        right = msh_arith_state_parse_bit_or(expr, cur + 2, left.vars)
+        if right.ok == 0 then
+            dealloc(left.vars)
+            return right
+        end
+        value = 0
+        if msh_arith_bool(left.value) == 1 and msh_arith_bool(right.value) == 1 then value = 1 end
+        out_vars = "" + right.vars
+        dealloc(left.vars, right.vars)
+        left = new MshArithStateParseResult(value, right.pos, out_vars, 1)
+        cur = msh_arith_skip_ws(expr, left.pos)
+    end
+    return left
+end
+def msh_arith_state_parse_logic_or(expr: string, pos: int, vars: string): MshArithStateParseResult
+    left = msh_arith_state_parse_logic_and(expr, pos, vars)
+    if left.ok == 0 then
+        return left
+    end
+    cur = msh_arith_skip_ws(expr, left.pos)
+    while msh_arith_match2(expr, cur, MSH_CH_PIPE, MSH_CH_PIPE) == 1 then
+        right = msh_arith_state_parse_logic_and(expr, cur + 2, left.vars)
+        if right.ok == 0 then
+            dealloc(left.vars)
+            return right
+        end
+        value = 0
+        if msh_arith_bool(left.value) == 1 or msh_arith_bool(right.value) == 1 then value = 1 end
+        out_vars = "" + right.vars
+        dealloc(left.vars, right.vars)
+        left = new MshArithStateParseResult(value, right.pos, out_vars, 1)
+        cur = msh_arith_skip_ws(expr, left.pos)
+    end
+    return left
+end
+def msh_arith_state_parse_conditional(expr: string, pos: int, vars: string): MshArithStateParseResult
+    condition = msh_arith_state_parse_logic_or(expr, pos, vars)
+    if condition.ok == 0 then
+        return condition
+    end
+    cur = msh_arith_skip_ws(expr, condition.pos)
+    if cur >= strlen(expr) or char_at(expr, cur) != MSH_CH_QUESTION then
+        return condition
+    end
+    true_part = msh_arith_state_parse_expr(expr, cur + 1, condition.vars)
+    colon = msh_arith_skip_ws(expr, true_part.pos)
+    if true_part.ok == 0 or colon >= strlen(expr) or char_at(expr, colon) != MSH_CH_COLON then
+        dealloc(condition.vars)
+        return new MshArithStateParseResult(condition.value, colon, true_part.vars, 0)
+    end
+    false_part = msh_arith_state_parse_conditional(expr, colon + 1, true_part.vars)
+    if false_part.ok == 0 then
+        dealloc(condition.vars, true_part.vars)
+        return false_part
+    end
+    value = false_part.value
+    if msh_arith_bool(condition.value) == 1 then
+        value = true_part.value
+    end
+    out_vars = "" + false_part.vars
+    dealloc(condition.vars, true_part.vars, false_part.vars)
+    return new MshArithStateParseResult(value, false_part.pos, out_vars, 1)
+end
+def msh_arith_state_parse_assignment(expr: string, pos: int, vars: string): MshArithStateParseResult
+    start = msh_arith_skip_ws(expr, pos)
+    if start < strlen(expr) and msh_arith_is_name_start(char_at(expr, start)) == 1 then
+        name_end = msh_arith_name_end(expr, start)
+        after_name = msh_arith_skip_ws(expr, name_end)
+        if msh_arith_is_assign_op(expr, after_name) == 1 then
+            op = char_at(expr, after_name)
+            op_len = msh_arith_assignment_op_len(expr, after_name)
+            rhs = msh_arith_state_parse_assignment(expr, after_name + op_len, vars)
+            if rhs.ok == 0 then
+                return rhs
+            end
+            name = substr(expr, start, name_end - start)
+            new_value = rhs.value
+            if op != MSH_CH_EQUAL then
+                parsed_old = msh_arith_state_named_numeric(rhs.vars, name)
+                if parsed_old.ok == 0 then
+                    dealloc(rhs.vars, name)
+                    return new MshArithStateParseResult(0, rhs.pos, "" + vars, 0)
+                end
+                old_value = parsed_old.value
+                if op == MSH_CH_PLUS then new_value = old_value + rhs.value end
+                if op == MSH_CH_MINUS then new_value = old_value - rhs.value end
+                if op == MSH_CH_STAR then new_value = old_value * rhs.value end
+                if op == MSH_CH_SLASH then
+                    if rhs.value == 0 then
+                        msh_expand_diag_arith_divzero(rhs.vars, expr)
+                        dealloc(rhs.vars, name)
+                        return new MshArithStateParseResult(0, rhs.pos, "" + vars, 0)
+                    end
+                    new_value = old_value / rhs.value
+                end
+                if op == MSH_CH_PERCENT then
+                    if rhs.value == 0 then
+                        msh_expand_diag_arith_divzero(rhs.vars, expr)
+                        dealloc(rhs.vars, name)
+                        return new MshArithStateParseResult(0, rhs.pos, "" + vars, 0)
+                    end
+                    new_value = old_value % rhs.value
+                end
+                if op == MSH_CH_AMP then new_value = old_value & rhs.value end
+                if op == MSH_CH_CARET then new_value = old_value bxor rhs.value end
+                if op == MSH_CH_PIPE then new_value = old_value | rhs.value end
+                if op == MSH_CH_LT then new_value = old_value << rhs.value end
+                if op == MSH_CH_GT then new_value = old_value >> rhs.value end
+            end
+            if msh_arith_state_can_assign(rhs.vars, name) == 0 then
+                dealloc(rhs.vars, name)
+                return new MshArithStateParseResult(0, rhs.pos, "" + vars, 0)
+            end
+            out_vars = msh_arith_state_set_int(rhs.vars, name, new_value)
+            dealloc(rhs.vars, name)
+            return new MshArithStateParseResult(new_value, rhs.pos, out_vars, 1)
+        end
+    end
+    return msh_arith_state_parse_conditional(expr, pos, vars)
+end
+def msh_arith_state_parse_comma(expr: string, pos: int, vars: string): MshArithStateParseResult
+    left = msh_arith_state_parse_assignment(expr, pos, vars)
+    if left.ok == 0 then
+        return left
+    end
+    cur = msh_arith_skip_ws(expr, left.pos)
+    while cur < strlen(expr) and char_at(expr, cur) == MSH_CH_COMMA then
+        right = msh_arith_state_parse_assignment(expr, cur + 1, left.vars)
+        if right.ok == 0 then
+            dealloc(left.vars)
+            return right
+        end
+        out_vars = "" + right.vars
+        dealloc(left.vars, right.vars)
+        left = new MshArithStateParseResult(right.value, right.pos, out_vars, 1)
+        cur = msh_arith_skip_ws(expr, left.pos)
+    end
+    return left
+end
+
+def msh_arith_eval_state_value(expr: string, vars: string): MshArithStateValueResult
+    if msh_arith_state_needs_text_expand(expr) == 0 then
+        result_plain = msh_arith_state_parse_expr(expr, 0, vars)
+        end_plain = msh_arith_skip_ws(expr, result_plain.pos)
+        if result_plain.ok == 0 or end_plain != strlen(expr) then
+            if result_plain.ok == 1 then
+                msh_arith_state_diag_expect_eof(expr)
+            end
+            dealloc(result_plain.vars)
+            return new MshArithStateValueResult(0, "" + vars, 0, 2)
+        end
+        return new MshArithStateValueResult(result_plain.value, result_plain.vars, 1, 0)
+    end
+    expanded = msh_arith_state_expand_text(expr, vars)
+    result = msh_arith_state_parse_expr(expanded, 0, vars)
+    end_pos = msh_arith_skip_ws(expanded, result.pos)
+    if result.ok == 0 or end_pos != strlen(expanded) then
+        if result.ok == 1 then
+            msh_arith_state_diag_expect_eof(expanded)
+        end
+        dealloc(expanded)
+        dealloc(result.vars)
+        return new MshArithStateValueResult(0, "" + vars, 0, 2)
+    end
+    dealloc(expanded)
+    return new MshArithStateValueResult(result.value, result.vars, 1, 0)
+end
+
+def msh_arith_expand_state(expr: string, vars: string): MshArithStateResult
+    result = msh_arith_eval_state_value(expr, vars)
+    if result.ok == 0 then
+        status = result.status
+        dealloc(result.vars)
+        return new MshArithStateResult("" + "0", "" + vars, status)
+    end
+    text = str(result.value)
+    out_vars = "" + result.vars
+    dealloc(result.vars)
+    return new MshArithStateResult(text, out_vars, 0)
+end

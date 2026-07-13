@@ -1,0 +1,62 @@
+{
+  "name": "MixtarRVS Base Closure 0009",
+  "status": "non-activating-mixtar-remote-access-policy",
+  "created": "2026-06-29",
+  "purpose": "Install the first MixtarRVS remote-access policy layer under /System, exposing SSH service, listener, configured port, user key inventory, network dependency, and backend status through a Mixtar-owned command while keeping OpenSSH and OpenRC unchanged.",
+  "requires": [
+    "/System/Base/Closure/0001-audit/manifest.json",
+    "/System/Base/Closure/0002-mixtar-session-path/manifest.json",
+    "/System/Base/Closure/0003-shell-runtime-and-libraries-profile/manifest.json",
+    "/System/Base/Closure/0004-initramfs-loader-path-and-kernel-profile/manifest.json",
+    "/System/Base/Closure/0005-initramfs-contract-and-fallback-init-shim/manifest.json",
+    "/System/Base/Closure/0006-service-and-network-closure-inventory/manifest.json",
+    "/System/Base/Closure/0007-mixtar-service-runner-skeleton/manifest.json",
+    "/System/Base/Closure/0008-mixtar-network-profile-layer/manifest.json",
+    "/System/SystemTools/mixtar-service",
+    "/System/SystemTools/mixtar-network",
+    "/usr/sbin/sshd",
+    "/usr/bin/ssh-keygen"
+  ],
+  "installed_paths": [
+    "/System/SystemTools/mixtar-remote",
+    "/System/Config/RemoteAccess/current.remote"
+  ],
+  "commands": [
+    "mixtar-remote contract",
+    "mixtar-remote check",
+    "mixtar-remote status",
+    "mixtar-remote profile",
+    "mixtar-remote config",
+    "mixtar-remote keys",
+    "mixtar-remote listeners",
+    "mixtar-remote backend"
+  ],
+  "backend_model": {
+    "transport": "ssh",
+    "service": "sshd",
+    "service_backend": "mixtar-service over OpenRC",
+    "network_backend": "mixtar-network over dhcpcd+iwd",
+    "config": "/etc/ssh/sshd_config",
+    "authorized_keys": "/Users/vxz/.ssh/authorized_keys",
+    "user": "vxz",
+    "host": "192.168.99.110",
+    "port": 22
+  },
+  "non_goals": [
+    "Do not restart sshd.",
+    "Do not rewrite /etc/ssh/sshd_config.",
+    "Do not add or remove SSH authorized keys.",
+    "Do not read or expose private host keys.",
+    "Do not change network configuration.",
+    "Do not replace OpenSSH or OpenRC yet."
+  ],
+  "known_limitations": [
+    "mixtar-remote is a policy/status layer, not a native remote access daemon.",
+    "OpenSSH remains the live remote access backend.",
+    "OpenRC remains the service backend.",
+    "Key management is inventory-only in this stage.",
+    "Listener audit confirms TCP LISTEN state through /proc/net/tcp and /proc/net/tcp6; PID/program ownership is not required without root.",
+    "The profile records the current user and address observed during staging, not a full multi-user remote access policy."
+  ],
+  "next_stage": "0010-mixtar-package-generation-backend-boundary"
+}

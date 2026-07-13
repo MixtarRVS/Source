@@ -1,0 +1,654 @@
+// msh_io_builtins.ail
+// Minimal shell-local I/O builtins for in-process pipeline dataflow.
+
+import msh_defs
+import msh_bytes
+import msh_diagnostics
+import msh_exec_fds
+import msh_output
+import msh_path
+import msh_pipeio
+import msh_printf
+import msh_split
+import msh_state
+
+record MshIoResult then
+    int handled
+    int status
+    string vars
+end
+
+record MshReadLine then
+    string text
+    int status
+end
+
+record MshReadFileLine then
+    string text
+    int status
+    int next_pos
+end
+
+record MshReadAssignResult then
+    int status
+    string vars
+end
+
+def msh_io_printf_state(fields: str_array, vars: string): MshIoResult
+    if str_array_len(fields) < 2 then
+        return new MshIoResult(1, 0, "" + vars)
+    end
+    format = "" + str_array_get(fields, 1)
+    rendered = msh_io_printf_render_result(format, fields)
+    encoded = "" + rendered.text
+    if msh_exec_fds_stdout_active(vars) == 1 then
+        write_result = msh_exec_fds_write_stdout_encoded_state(vars, encoded)
+        status = write_result.status
+        if status == 0 then
+            status = rendered.status
+        else
+            msh_diag_builtin("printf", "printf: I/O error")
+        end
+        out_vars = "" + write_result.vars
+        dealloc(write_result.vars)
+    else
+        if msh_pipeio_stdout_capture_enabled(vars) == 1 then
+            out_vars = msh_pipeio_append_output_encoded(vars, encoded)
+            status = rendered.status
+        else
+            write_status2 = msh_byte_write_fd(1, encoded)
+            status = rendered.status
+            if write_status2 != 0 then
+                msh_diag_builtin("printf", "printf: I/O error")
+                status = 1
+            end
+            out_vars = "" + vars
+        end
+    end
+    if rendered.status != 0 then
+        detail = rendered.invalid + ": invalid directive"
+        msh_diag_builtin("printf", detail)
+        dealloc(detail)
+    end
+    numeric_problem = msh_io_printf_first_numeric_problem(format, fields)
+    if rendered.status == 0 and status == 0 and strlen(numeric_problem) > 0 then
+        numeric_detail = numeric_problem + ": expected numeric value"
+        msh_diag_builtin("printf", numeric_detail)
+        dealloc(numeric_detail)
+        status = 1
+    end
+    dealloc(numeric_problem)
+    dealloc(format, encoded)
+    dealloc(rendered.text, rendered.invalid)
+    return new MshIoResult(1, status, out_vars)
+end
+
+string msh_io_echo_join(fields: str_array, start: int):
+    out = "" + ""
+    i = start
+    while i < str_array_len(fields) then
+        arg = str_array_get(fields, i)
+        old = out
+        if i > start then
+            with_space = out + " "
+            out = with_space + arg
+            dealloc(with_space)
+        else
+            out = out + arg
+        end
+        dealloc(old)
+        i++
+    end
+    return out
+end
+
+def msh_io_echo_state(fields: str_array, vars: string): MshIoResult
+    first = 1
+    newline = 1
+    if str_array_len(fields) > 1 and str_array_get(fields, 1) == "-n" then
+        newline = 0
+        first = 2
+    end
+    raw = msh_io_echo_join(fields, first)
+    decoded = msh_io_decode_printf_state(raw)
+    if newline == 1 and decoded.stop == 0 then
+        text = decoded.text + "\n"
+    else
+        text = "" + decoded.text
+    end
+    if msh_exec_fds_stdout_active(vars) == 1 then
+        write_result = msh_exec_fds_write_stdout_state(vars, text)
+        status = write_result.status
+        if status != 0 then
+            msh_diag_builtin("echo", "echo: I/O error")
+            status = 1
+        end
+        out_vars = "" + write_result.vars
+        dealloc(write_result.vars)
+    else
+        output_result = msh_output_text_result(vars, text)
+        out_vars = "" + output_result.vars
+        status = output_result.status
+        if status != 0 then
+            msh_diag_builtin("echo", "echo: I/O error")
+            status = 1
+        end
+        dealloc(output_result.vars)
+    end
+    dealloc(raw, decoded.text, text)
+    return new MshIoResult(1, status, out_vars)
+end
+
+string msh_io_emit_text(vars: string, text: string):
+    return msh_output_text(vars, text)
+end
+
+int msh_io_pwd_options_valid(fields: str_array):
+    i = 1
+    while i < str_array_len(fields) then
+        arg = str_array_get(fields, i)
+        if arg == "--" then
+            return 1
+        end
+        if startswith(arg, "-") == 1 and arg != "-L" and arg != "-P" then
+            return 0
+        end
+        i++
+    end
+    return 1
+end
+
+string msh_io_pwd_invalid_option(fields: str_array):
+    i = 1
+    while i < str_array_len(fields) then
+        arg = str_array_get(fields, i)
+        if arg == "--" then
+            return "" + ""
+        end
+        if startswith(arg, "-") == 1 and arg != "-L" and arg != "-P" then
+            if strlen(arg) > 1 then
+                return substr(arg, 0, 2)
+            end
+            return "" + arg
+        end
+        i++
+    end
+    return "" + ""
+end
+
+def msh_io_pwd_state(fields: str_array, vars: string): MshIoResult
+    invalid = msh_io_pwd_invalid_option(fields)
+    if strlen(invalid) > 0 then
+        detail = "Illegal option " + invalid
+        msh_diag_builtin("pwd", detail)
+        dealloc(invalid, detail)
+        return new MshIoResult(1, 2, "" + vars)
+    end
+    dealloc(invalid)
+    use_physical = 0
+    i = 1
+    while i < str_array_len(fields) then
+        arg = str_array_get(fields, i)
+        if arg == "-P" then
+            use_physical = 1
+        elsif arg == "-L" then
+            use_physical = 0
+        end
+        i++
+    end
+    if use_physical == 1 then
+        cwd = current_dir()
+        shown = msh_path_slashify(cwd)
+        dealloc(cwd)
+    else
+        pwd = msh_state_get(vars, "PWD")
+        if strlen(pwd) > 0 then
+            shown = msh_path_slashify(pwd)
+        else
+            cwd = current_dir()
+            shown = msh_path_slashify(cwd)
+            dealloc(cwd)
+        end
+        dealloc(pwd)
+    end
+    line = shown + "\n"
+    output_result = msh_output_text_result(vars, line)
+    out_vars = "" + output_result.vars
+    status = output_result.status
+    if status != 0 then
+        msh_diag_builtin("pwd", "pwd: I/O error")
+        status = 1
+    end
+    dealloc(output_result.vars)
+    dealloc(shown, line)
+    return new MshIoResult(1, status, out_vars)
+end
+
+def msh_io_read_stdin_line(raw_mode: int): MshReadLine
+    buf = alloc(1)
+    out = "" + ""
+    status = 1
+    saw_newline = 0
+    done = 0
+    limit = 4096
+    while done == 0 and limit > 0 then
+        got = fd_read(0, buf, 1)
+        if got == 1 then
+            c = peek8(buf, 0)
+            if c == MSH_CH_LF then
+                saw_newline = 1
+                done = 1
+            elsif raw_mode == 0 and c == MSH_CH_BACKSLASH then
+                got2 = fd_read(0, buf, 1)
+                if got2 == 1 then
+                    next = peek8(buf, 0)
+                    if next == MSH_CH_LF then
+                        saw_newline = 0
+                    else
+                        old_esc = out
+                        with_backslash = msh_io_append_char(out, c)
+                        out = msh_io_append_char(with_backslash, next)
+                        dealloc(with_backslash)
+                        dealloc(old_esc)
+                    end
+                else
+                    old_bslash = out
+                    out = msh_io_append_char(out, c)
+                    dealloc(old_bslash)
+                    done = 1
+                end
+            else
+                old = out
+                out = msh_io_append_char(out, c)
+                dealloc(old)
+            end
+        else
+            done = 1
+        end
+        limit--
+    end
+    if saw_newline == 1 then
+        status = 0
+    end
+    dealloc(buf)
+    return new MshReadLine(out, status)
+end
+
+def msh_io_capture_line(input: string, raw_mode: int): MshReadLine
+    out = "" + ""
+    status = 1
+    saw_newline = 0
+    i = 0
+    done = 0
+    while i < strlen(input) and done == 0 then
+        c = char_at(input, i)
+        if c == MSH_CH_LF then
+            saw_newline = 1
+            done = 1
+        elsif raw_mode == 0 and c == MSH_CH_BACKSLASH and i + 1 < strlen(input) then
+            next = char_at(input, i + 1)
+            if next != MSH_CH_LF then
+                old = out
+                with_backslash = msh_io_append_char(out, c)
+                out = msh_io_append_char(with_backslash, next)
+                dealloc(with_backslash)
+                dealloc(old)
+            end
+            i++
+        else
+            old2 = out
+            out = msh_io_append_char(out, c)
+            dealloc(old2)
+        end
+        i++
+    end
+    if saw_newline == 1 then
+        status = 0
+    end
+    return new MshReadLine(out, status)
+end
+
+def msh_io_capture_line_at(input: string, raw_mode: int, start_pos: int): MshReadFileLine
+    out = "" + ""
+    status = 1
+    saw_newline = 0
+    i = start_pos
+    done = 0
+    while i < strlen(input) and done == 0 then
+        c = char_at(input, i)
+        if c == MSH_CH_LF then
+            saw_newline = 1
+            done = 1
+        elsif raw_mode == 0 and c == MSH_CH_BACKSLASH and i + 1 < strlen(input) then
+            next = char_at(input, i + 1)
+            if next != MSH_CH_LF then
+                old = out
+                with_backslash = msh_io_append_char(out, c)
+                out = msh_io_append_char(with_backslash, next)
+                dealloc(with_backslash)
+                dealloc(old)
+            end
+            i++
+        else
+            old2 = out
+            out = msh_io_append_char(out, c)
+            dealloc(old2)
+        end
+        i++
+    end
+    if saw_newline == 1 then
+        status = 0
+    end
+    return new MshReadFileLine(out, status, i)
+end
+
+string msh_io_read_ifs(vars: string):
+    if msh_state_name_pos(vars, "IFS") != MSH_INDEX_NOT_FOUND then
+        return msh_state_get(vars, "IFS")
+    end
+    return "" + " \t\n"
+end
+
+int msh_io_first_read_var(fields: str_array):
+    i = 1
+    while i < str_array_len(fields) then
+        arg = str_array_get(fields, i)
+        if arg == "--" then
+            return i + 1
+        end
+        if arg == "-r" then
+            i++
+        elsif startswith(arg, "-") == 1 then
+            return i
+        else
+            return i
+        end
+    end
+    return i
+end
+
+int msh_io_read_raw_mode(fields: str_array):
+    i = 1
+    while i < str_array_len(fields) then
+        arg = str_array_get(fields, i)
+        if arg == "--" then
+            return 0
+        end
+        if arg == "-r" then
+            return 1
+        end
+        if startswith(arg, "-") == 1 then
+            return 0
+        end
+        return 0
+    end
+    return 0
+end
+
+int msh_io_read_options_valid(fields: str_array):
+    invalid = msh_io_read_invalid_option(fields)
+    if strlen(invalid) > 0 then
+        dealloc(invalid)
+        return 0
+    end
+    dealloc(invalid)
+    return 1
+end
+
+string msh_io_read_invalid_option(fields: str_array):
+    i = 1
+    while i < str_array_len(fields) then
+        arg = str_array_get(fields, i)
+        if arg == "--" then
+            return "" + ""
+        end
+        if arg == "-r" then
+            i++
+        elsif startswith(arg, "-") == 1 then
+            return "" + arg
+        else
+            return "" + ""
+        end
+    end
+    return "" + ""
+end
+
+string msh_io_first_invalid_read_name(fields: str_array, first_var: int):
+    i = first_var
+    while i < str_array_len(fields) then
+        name = str_array_get(fields, i)
+        if msh_state_name_valid(name) == 0 then
+            return "" + name
+        end
+        i++
+    end
+    return "" + ""
+end
+
+int msh_io_read_names_valid(fields: str_array, first_var: int):
+    i = first_var
+    while i < str_array_len(fields) then
+        name = str_array_get(fields, i)
+        if msh_state_name_valid(name) == 0 then
+            return 0
+        end
+        i++
+    end
+    return 1
+end
+
+int msh_io_char_escaped(line: string, pos: int):
+    count = 0
+    i = pos - 1
+    while i >= 0 and char_at(line, i) == MSH_CH_BACKSLASH then
+        count++
+        i--
+    end
+    if count % 2 == 1 then
+        return 1
+    end
+    return 0
+end
+
+int msh_io_skip_ifs_white(line: string, ifs: string, pos: int):
+    i = pos
+    while i < strlen(line) and msh_ifs_is_white_delim(ifs, char_at(line, i)) == 1 and msh_io_char_escaped(line, i) == 0 then
+        i++
+    end
+    return i
+end
+
+int msh_io_next_ifs(line: string, ifs: string, pos: int):
+    i = pos
+    while i < strlen(line) and (msh_ifs_contains_char(ifs, char_at(line, i)) == 0 or msh_io_char_escaped(line, i) == 1) then
+        i++
+    end
+    return i
+end
+
+string msh_io_trim_read_tail(line: string, ifs: string, start: int):
+    end_pos = strlen(line)
+    while end_pos > start and msh_ifs_contains_char(ifs, char_at(line, end_pos - 1)) == 1 and msh_io_char_escaped(line, end_pos - 1) == 0 then
+        end_pos--
+    end
+    return substr(line, start, end_pos - start)
+end
+
+int msh_io_after_delim(line: string, ifs: string, pos: int):
+    i = pos
+    if i < strlen(line) then
+        if msh_ifs_is_nonwhite_delim(ifs, char_at(line, i)) == 1 then
+            i++
+        else
+            i = msh_io_skip_ifs_white(line, ifs, i)
+        end
+    end
+    i = msh_io_skip_ifs_white(line, ifs, i)
+    return i
+end
+
+string msh_io_unescape_read_value(value: string, raw_mode: int):
+    if raw_mode == 1 then
+        return "" + value
+    end
+    out = "" + ""
+    i = 0
+    while i < strlen(value) then
+        c = char_at(value, i)
+        if c == MSH_CH_BACKSLASH and i + 1 < strlen(value) then
+            i++
+            next = char_at(value, i)
+            old_esc = out
+            out = msh_io_append_char(out, next)
+            dealloc(old_esc)
+        else
+            old = out
+            out = msh_io_append_char(out, c)
+            dealloc(old)
+        end
+        i++
+    end
+    return out
+end
+
+def msh_io_assign_read_vars(fields: str_array, vars: string, line: string, first_var: int, raw_mode: int): MshReadAssignResult
+    var_count = str_array_len(fields) - first_var
+    ifs = msh_io_read_ifs(vars)
+    out = "" + vars
+    status = 0
+    pos = msh_io_skip_ifs_white(line, ifs, 0)
+    j = 0
+    while j < var_count and status == 0 then
+        name = str_array_get(fields, first_var + j)
+        if j + 1 == var_count then
+            value = msh_io_trim_read_tail(line, ifs, pos)
+        elsif pos >= strlen(line) then
+            value = "" + ""
+        elsif msh_ifs_is_nonwhite_delim(ifs, char_at(line, pos)) == 1 then
+            value = "" + ""
+            pos = msh_io_after_delim(line, ifs, pos)
+        else
+            end_pos = msh_io_next_ifs(line, ifs, pos)
+            value = substr(line, pos, end_pos - pos)
+            pos = msh_io_after_delim(line, ifs, end_pos)
+        end
+        if msh_state_is_readonly(out, name) == 1 then
+            detail = name + ": is read only"
+            msh_diag_builtin("read", detail)
+            status = 2
+            dealloc(detail, value)
+        else
+            assign_value = msh_io_unescape_read_value(value, raw_mode)
+            old = out
+            out = msh_state_set(out, name, assign_value)
+            dealloc(old, value, assign_value)
+        end
+        j++
+    end
+    dealloc(ifs)
+    return new MshReadAssignResult(status, out)
+end
+
+def msh_io_read_state(fields: str_array, vars: string): MshIoResult
+    invalid_option = msh_io_read_invalid_option(fields)
+    if strlen(invalid_option) > 0 then
+        detail = "Illegal option " + invalid_option
+        msh_diag_builtin("read", detail)
+        dealloc(invalid_option, detail)
+        return new MshIoResult(1, 2, "" + vars)
+    end
+    dealloc(invalid_option)
+    first_var = msh_io_first_read_var(fields)
+    if str_array_len(fields) <= first_var then
+        msh_diag_builtin("read", "arg count")
+        return new MshIoResult(1, 2, "" + vars)
+    end
+    invalid_name = msh_io_first_invalid_read_name(fields, first_var)
+    if strlen(invalid_name) > 0 then
+        detail2 = invalid_name + ": bad variable name"
+        msh_diag_builtin("read", detail2)
+        dealloc(invalid_name, detail2)
+        return new MshIoResult(1, 2, "" + vars)
+    end
+    dealloc(invalid_name)
+    raw_mode = msh_io_read_raw_mode(fields)
+    if msh_pipeio_capture_active(vars) == 1 then
+        input = msh_pipeio_input(vars)
+        offset = msh_pipeio_input_offset(vars)
+        file_line = msh_io_capture_line_at(input, raw_mode, offset)
+        line = "" + file_line.text
+        status = file_line.status
+        source_vars = msh_pipeio_set_input_offset(vars, file_line.next_pos)
+        dealloc(file_line.text)
+    else
+        input_path = msh_exec_fds_stdin_path(vars)
+        if strlen(input_path) > 0 then
+            if target_os() != "windows" then
+                read_line = msh_io_read_stdin_line(raw_mode)
+                input = "" + read_line.text
+                line = "" + read_line.text
+                status = read_line.status
+                live_offset = fd_tell(0)
+                if live_offset >= 0 then
+                    source_vars = msh_exec_fds_set_stdin_offset(vars, live_offset)
+                else
+                    source_vars = "" + vars
+                end
+                dealloc(read_line.text)
+            elsif target_os() == "windows" and input_path == "/dev/null" then
+                input = "" + ""
+                offset = msh_exec_fds_stdin_offset(vars)
+                file_line = msh_io_capture_line_at(input, raw_mode, offset)
+                line = "" + file_line.text
+                status = file_line.status
+                source_vars = msh_exec_fds_set_stdin_offset(vars, file_line.next_pos)
+                dealloc(file_line.text)
+            else
+                stdin_text = msh_exec_fds_stdin_text(vars)
+                if strlen(stdin_text) > 0 then
+                    input = "" + stdin_text
+                else
+                    input = read_file(input_path)
+                end
+                offset = msh_exec_fds_stdin_offset(vars)
+                file_line = msh_io_capture_line_at(input, raw_mode, offset)
+                line = "" + file_line.text
+                status = file_line.status
+                source_vars = msh_exec_fds_set_stdin_offset(vars, file_line.next_pos)
+                dealloc(file_line.text)
+                dealloc(stdin_text)
+            end
+        else
+            read_line = msh_io_read_stdin_line(raw_mode)
+            input = "" + read_line.text
+            line = "" + read_line.text
+            status = read_line.status
+            source_vars = "" + vars
+            dealloc(read_line.text)
+        end
+        dealloc(input_path)
+    end
+    assign_result = msh_io_assign_read_vars(fields, source_vars, line, first_var, raw_mode)
+    out_vars = "" + assign_result.vars
+    if assign_result.status != 0 then
+        status = assign_result.status
+    end
+    dealloc(source_vars, input, line, assign_result.vars)
+    return new MshIoResult(1, status, out_vars)
+end
+
+def msh_io_builtin_state(name: string, fields: str_array, vars: string): MshIoResult
+    if name == "echo" then
+        return msh_io_echo_state(fields, vars)
+    end
+    if name == "printf" then
+        return msh_io_printf_state(fields, vars)
+    end
+    if name == "pwd" then
+        return msh_io_pwd_state(fields, vars)
+    end
+    if name == "read" then
+        return msh_io_read_state(fields, vars)
+    end
+    return new MshIoResult(0, 127, "" + vars)
+end

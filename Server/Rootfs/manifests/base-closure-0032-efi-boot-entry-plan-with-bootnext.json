@@ -1,0 +1,29 @@
+{
+  "stage": "0032-efi-boot-entry-plan-with-bootnext",
+  "status": "plan_only",
+  "mutates_efi_variables": false,
+  "creates_boot_entry": false,
+  "sets_bootnext": false,
+  "reboots": false,
+  "candidate": {
+    "source": "/System/Initramfs/Candidates/0029-initramfs-handoff-boot-command-no-install/initramfs.img",
+    "esp_path": "EFI/mixtarrvs-rt/initrd-mixtar-candidate-0029.img",
+    "uefi_initrd_path": "\\EFI\\mixtarrvs-rt\\initrd-mixtar-candidate-0029.img",
+    "sha256": "4880325f92e6912b67c2c5003de14907f6cbde5a0bd700392386db0443496bfb"
+  },
+  "loader": {
+    "disk": "/dev/nvme0n1",
+    "partition": 1,
+    "esp_device": "/dev/nvme0n1p1",
+    "uefi_kernel_path": "\\EFI\\mixtarrvs-rt\\vmlinuz.efi",
+    "fallback_bootnum": "0006",
+    "candidate_label": "MixtarRVS RT Candidate 0029"
+  },
+  "future_activation_policy": {
+    "create_candidate_entry_first": true,
+    "restore_existing_bootorder_after_create": true,
+    "use_bootnext_only_for_one_shot_test": true,
+    "preserve_existing_fallback": true
+  },
+  "next_required_stage": "0033-create-candidate-efi-entry-preserve-bootorder"
+}

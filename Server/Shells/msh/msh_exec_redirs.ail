@@ -1,0 +1,431 @@
+// msh_exec_redirs.ail
+// Redirection AST parsing and preflight helpers for msh execution paths.
+
+import msh_ast
+import msh_defs
+import msh_expand_state
+import msh_expansion
+import msh_fields
+import msh_heredoc_expand
+import msh_phase_state
+import msh_redir_errors
+import msh_redir_validate
+import msh_state
+
+record MshRedirTargetsResult then
+    str_array targets
+    string vars
+    int status
+end
+
+record MshRedirApplyResult then
+    int status
+    int fatal
+end
+
+def msh_redir_targets_result_targets(result: MshRedirTargetsResult): str_array
+    return result.targets
+end
+
+string msh_exec_redir_section(ast: string, start_marker: string, end_marker: string):
+    start = index_of(ast, start_marker)
+    if start == MSH_INDEX_NOT_FOUND then
+        return "" + ""
+    end
+    start = start + strlen(start_marker)
+    stop = index_of_from(ast, end_marker, start)
+    if stop == MSH_INDEX_NOT_FOUND then
+        return "" + ""
+    end
+    return substr(ast, start, stop - start)
+end
+
+int msh_exec_command_has_redirs(ast: string):
+    redirs = msh_exec_redir_section(ast, "redirs=[", "])")
+    has = 0
+    if index_of(redirs, "REDIR(") != MSH_INDEX_NOT_FOUND then
+        has = 1
+    end
+    dealloc(redirs)
+    return has
+end
+
+int msh_exec_redir_is_heredoc(op: string):
+    i = 0
+    while i < strlen(op) and char_at(op, i) >= MSH_CH_DIGIT_0 and char_at(op, i) <= MSH_CH_DIGIT_9 then
+        i++
+    end
+    if i + 1 < strlen(op) and char_at(op, i) == MSH_CH_LT and char_at(op, i + 1) == MSH_CH_LT then
+        return 1
+    end
+    return 0
+end
+
+string msh_exec_redir_base_op(op: string):
+    i = 0
+    while i < strlen(op) and char_at(op, i) >= MSH_CH_DIGIT_0 and char_at(op, i) <= MSH_CH_DIGIT_9 then
+        i++
+    end
+    return substr(op, i, strlen(op) - i)
+end
+
+int msh_exec_redir_open_flags(base_op: string):
+    if base_op == "<" then
+        return 1
+    end
+    if base_op == ">" or base_op == ">|" then
+        return 2 + 4 + 8
+    end
+    if base_op == ">>" then
+        return 2 + 4 + 16
+    end
+    if base_op == "<>" then
+        return 1 + 2 + 4
+    end
+    return 0
+end
+
+int msh_exec_redir_noclobber_blocks(vars: string, base_op: string, target: string):
+    if base_op != ">" then
+        return 0
+    end
+    if msh_option_get(vars, "noclobber") == 0 then
+        return 0
+    end
+    if target == "/dev/null" or target == "NUL" then
+        return 0
+    end
+    if file_exists(target) == 1 then
+        return 1
+    end
+    return 0
+end
+
+int msh_exec_redir_target_is_digits(text: string):
+    if strlen(text) == 0 then
+        return 0
+    end
+    i = 0
+    while i < strlen(text) then
+        c = char_at(text, i)
+        if c < MSH_CH_DIGIT_0 or c > MSH_CH_DIGIT_9 then
+            return 0
+        end
+        i++
+    end
+    return 1
+end
+
+string msh_exec_redir_fd_key(fd: int, suffix: string):
+    fd_text = str(fd)
+    left = "__exec_fd_" + fd_text
+    out = left + suffix
+    dealloc(fd_text, left)
+    return out
+end
+
+int msh_exec_redir_fd_metadata_exists(vars: string, fd: int, base_op: string):
+    if fd < 3 then
+        return 0
+    end
+    closed_key = msh_exec_redir_fd_key(fd, "_closed")
+    closed = msh_state_get(vars, closed_key)
+    if closed == "1" then
+        dealloc(closed_key, closed)
+        return -1
+    end
+    if base_op == ">&" then
+        path_key = msh_exec_redir_fd_key(fd, "_stdout_path")
+    else
+        path_key = msh_exec_redir_fd_key(fd, "_stdin_path")
+    end
+    path = msh_state_get(vars, path_key)
+    exists = 0
+    if strlen(path) > 0 then
+        exists = 1
+    end
+    dealloc(closed_key, closed, path_key, path)
+    return exists
+end
+
+int msh_exec_redir_dup_source_status(vars: string, base_op: string, target: string, target_fd: int):
+    if target == "-" then
+        return 0
+    end
+    if msh_exec_redir_target_is_digits(target) == 0 then
+        return msh_redir_bad_fd_number_status_context(vars)
+    end
+    source_fd = parse_int(target)
+    meta = msh_exec_redir_fd_metadata_exists(vars, source_fd, base_op)
+    if meta < 0 then
+        return msh_redir_bad_fd_status_context_for_fd(target, vars, target_fd)
+    end
+    if meta == 1 then
+        return 0
+    end
+    copy = fd_dup(source_fd)
+    if copy < 0 then
+        return msh_redir_bad_fd_status_context_for_fd(target, vars, target_fd)
+    end
+    fd_close(copy)
+    return 0
+end
+
+string msh_exec_heredoc_join_backslash_newline(text: string):
+    out = "" + ""
+    i = 0
+    while i < strlen(text) then
+        c = char_at(text, i)
+        if c == MSH_CH_BACKSLASH and i + 1 < strlen(text) and char_at(text, i + 1) == MSH_CH_LF then
+            i = i + 2
+        else
+            ch = chr(c)
+            old = out
+            out = old + ch
+            dealloc(old, ch)
+            i++
+        end
+    end
+    return out
+end
+
+string msh_exec_decode_heredoc_target(raw: string, vars: string):
+    result = msh_exec_decode_heredoc_target_state(raw, vars)
+    out = "" + result.text
+    dealloc(result.text, result.vars)
+    return out
+end
+
+def msh_exec_decode_heredoc_target_state(raw: string, vars: string): MshWordExpandResult
+    out = "" + ""
+    quoted = 0
+    i = 0
+    if strlen(raw) > 0 then
+        first = char_at(raw, 0)
+        if first == MSH_Q_DOUBLE then
+            quoted = 1
+            i = 1
+        elsif first == MSH_Q_SINGLE then
+            i = 1
+        end
+    end
+    while i < strlen(raw) then
+        c = char_at(raw, i)
+        if c == MSH_CH_SOH then
+            ch = chr(MSH_CH_DQUOTE)
+        elsif c == MSH_CH_CR then
+            ch = chr(MSH_CH_LF)
+        else
+            ch = chr(c)
+        end
+        old = out
+        out = out + ch
+        dealloc(old)
+        dealloc(ch)
+        i++
+    end
+    if quoted == 1 then
+        return new MshWordExpandResult(out, "" + vars, 0)
+    end
+    joined = msh_exec_heredoc_join_backslash_newline(out)
+    last_text = msh_state_get(vars, "__last_status")
+    last_status = parse_int(last_text)
+    result = msh_heredoc_expand_text_state(joined, vars, last_status)
+    expanded = "" + result.text
+    out_vars = "" + result.vars
+    status = result.status
+    dealloc(result.text, result.vars, last_text)
+    dealloc(out, joined)
+    return new MshWordExpandResult(expanded, out_vars, status)
+end
+
+def msh_exec_redir_ops_array(ast: string): str_array
+    redirs = msh_exec_redir_section(ast, "redirs=[", "])")
+    marker = "" + "REDIR(\""
+    pos = index_of(redirs, marker)
+    out = str_array_new(2)
+    while pos != MSH_INDEX_NOT_FOUND then
+        op_start = pos + strlen(marker)
+        op_end = msh_ast_string_end(redirs, op_start)
+        if op_end == MSH_INDEX_NOT_FOUND then
+            pos = MSH_INDEX_NOT_FOUND
+        else
+            encoded_op = substr(redirs, op_start, op_end - op_start)
+            op = msh_ast_unescape(encoded_op)
+            out = str_array_push(out, op)
+            dealloc(encoded_op)
+            pos = index_of_from(redirs, marker, op_end + 1)
+        end
+    end
+    dealloc(redirs)
+    dealloc(marker)
+    return out
+end
+
+def msh_exec_redir_targets_array(ast: string, vars: string): str_array
+    redirs = msh_exec_redir_section(ast, "redirs=[", "])")
+    marker = "" + "REDIR(\""
+    pos = index_of(redirs, marker)
+    out = str_array_new(2)
+    while pos != MSH_INDEX_NOT_FOUND then
+        op_start = pos + strlen(marker)
+        op_end = msh_ast_string_end(redirs, op_start)
+        if op_end == MSH_INDEX_NOT_FOUND then
+            pos = MSH_INDEX_NOT_FOUND
+        else
+            target_start = op_end + 3
+            target_end = msh_ast_string_end(redirs, target_start)
+            if target_end == MSH_INDEX_NOT_FOUND then
+                pos = MSH_INDEX_NOT_FOUND
+            else
+                encoded_op = substr(redirs, op_start, op_end - op_start)
+                encoded_raw = substr(redirs, target_start, target_end - target_start)
+                op = msh_ast_unescape(encoded_op)
+                raw = msh_ast_unescape(encoded_raw)
+                if msh_exec_redir_is_heredoc(op) == 1 then
+                    target = msh_exec_decode_heredoc_target(raw, vars)
+                else
+                    target = msh_expand_word(raw, vars, 0)
+                end
+                out = str_array_push(out, target)
+                dealloc(encoded_op, encoded_raw, op, raw)
+                pos = index_of_from(redirs, marker, target_end + 1)
+            end
+        end
+    end
+    dealloc(redirs)
+    dealloc(marker)
+    return out
+end
+
+def msh_exec_redir_targets_array_state(ast: string, vars: string): MshRedirTargetsResult
+    redirs = msh_exec_redir_section(ast, "redirs=[", "])")
+    marker = "" + "REDIR(\""
+    pos = index_of(redirs, marker)
+    out = str_array_new(2)
+    current_vars = "" + vars
+    status = 0
+    while pos != MSH_INDEX_NOT_FOUND and status == 0 then
+        op_start = pos + strlen(marker)
+        op_end = msh_ast_string_end(redirs, op_start)
+        if op_end == MSH_INDEX_NOT_FOUND then
+            pos = MSH_INDEX_NOT_FOUND
+        else
+            target_start = op_end + 3
+            target_end = msh_ast_string_end(redirs, target_start)
+            if target_end == MSH_INDEX_NOT_FOUND then
+                pos = MSH_INDEX_NOT_FOUND
+            else
+                encoded_op = substr(redirs, op_start, op_end - op_start)
+                encoded_raw = substr(redirs, target_start, target_end - target_start)
+                op = msh_ast_unescape(encoded_op)
+                raw = msh_ast_unescape(encoded_raw)
+                if msh_exec_redir_is_heredoc(op) == 1 then
+                    doc_result = msh_exec_decode_heredoc_target_state(raw, current_vars)
+                    status = doc_result.status
+                    target = "" + doc_result.text
+                    next_doc_vars = "" + doc_result.vars
+                    dealloc(current_vars)
+                    current_vars = next_doc_vars
+                    dealloc(doc_result.text, doc_result.vars)
+                else
+                    last_text = msh_state_get(current_vars, "__last_status")
+                    last_status = parse_int(last_text)
+                    word_result = msh_expand_word_state(raw, current_vars, last_status)
+                    status = word_result.status
+                    target = "" + word_result.text
+                    next_vars = "" + word_result.vars
+                    dealloc(current_vars)
+                    current_vars = next_vars
+                    dealloc(last_text, word_result.text, word_result.vars)
+                end
+                if status == 0 then
+                    out = str_array_push(out, target)
+                    pos = index_of_from(redirs, marker, target_end + 1)
+                else
+                    dealloc(target)
+                    pos = MSH_INDEX_NOT_FOUND
+                end
+                dealloc(encoded_op, encoded_raw, op, raw)
+            end
+        end
+    end
+    dealloc(redirs, marker)
+    return new MshRedirTargetsResult(out, current_vars, status)
+end
+
+int msh_exec_redir_targets_status(ast: string, vars: string):
+    redirs = msh_exec_redir_section(ast, "redirs=[", "])")
+    status = msh_redir_targets_status_from_text(redirs, vars)
+    dealloc(redirs)
+    return status
+end
+
+
+def msh_exec_apply_redirs_only_result(ast: string, vars: string): MshRedirApplyResult
+    target_status = msh_exec_redir_targets_status(ast, vars)
+    if target_status != 0 then
+        return new MshRedirApplyResult(target_status, 0)
+    end
+    ops = msh_exec_redir_ops_array(ast)
+    targets_result = msh_exec_redir_targets_array_state(ast, vars)
+    if targets_result.status != 0 then
+        status_failed = targets_result.status
+        msh_field_array_destroy(ops)
+        msh_field_array_destroy(targets_result.targets)
+        dealloc(targets_result.vars)
+        return new MshRedirApplyResult(status_failed, 1)
+    end
+    targets = msh_redir_targets_result_targets(targets_result)
+    current_vars = "" + targets_result.vars
+    dealloc(targets_result.vars)
+    status = 0
+    i = 0
+    while i < str_array_len(ops) and status == 0 then
+        op = str_array_get(ops, i)
+        target = str_array_get(targets, i)
+        base_op = msh_exec_redir_base_op(op)
+        if msh_exec_redir_is_heredoc(op) == 1 then
+            status = 0
+        elsif base_op == "<&" or base_op == ">&" then
+            fallback = msh_redir_target_fd(base_op)
+            target_fd = msh_redir_fd(op, fallback)
+            status = msh_exec_redir_dup_source_status(current_vars, base_op, target, target_fd)
+        elsif msh_exec_redir_noclobber_blocks(current_vars, base_op, target) == 1 then
+            status = msh_redir_file_exists_status_context(target, current_vars)
+        else
+            flags = msh_exec_redir_open_flags(base_op)
+            if flags == 0 then
+                status = msh_redir_bad_operator_status(base_op)
+            else
+                open_target = "" + target
+                if target == "/dev/null" then
+                    dealloc(open_target)
+                    open_target = "" + "NUL"
+                end
+        fd = fd_open(open_target, flags, MSH_MODE_FILE_CREATE)
+                if fd < 0 then
+                    status = msh_redir_open_failure_status_context(base_op, target, current_vars)
+                else
+                    close_rc = fd_close(fd)
+                    if close_rc != 0 then
+                        status = 1
+                    end
+                end
+                dealloc(open_target)
+            end
+        end
+        dealloc(base_op)
+        i++
+    end
+    msh_field_array_destroy(ops)
+    msh_field_array_destroy(targets)
+    dealloc(current_vars)
+    return new MshRedirApplyResult(status, 0)
+end
+
+int msh_exec_apply_redirs_only(ast: string, vars: string):
+    result = msh_exec_apply_redirs_only_result(ast, vars)
+    status = result.status
+    return status
+end

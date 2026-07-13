@@ -1,0 +1,45 @@
+{
+  "name": "MixtarRVS Base Closure 0020",
+  "id": "0020-switch-plan-no-activation",
+  "status": "planned-non-activating-switch-plan",
+  "purpose": "Create a concrete switch plan for the first rootfs image without changing /System/Current, bootloader state, initramfs state, mounts, or fallback generations.",
+  "requires": [
+    "/System/Base/Closure/0015-rootfs-image-build-first-file-no-activation/manifest.json",
+    "/System/Base/Closure/0019-rootfs-image-content-hash-sample-and-switch-readiness/rootfs-image-content-hash-sample-and-switch-readiness-status.txt",
+    "/System/SystemTools/mixtar-rootfs-image",
+    "/System/Generations/0015-rootfs-image-first-file/rootfs.squashfs",
+    "/System/Generations/0015-rootfs-image-first-file/manifest.json",
+    "/System/Generations/0015-rootfs-image-first-file/activation.plan"
+  ],
+  "commands": [
+    "mixtar-rootfs-image switch-plan",
+    "mixtar-rootfs-image switch-readiness"
+  ],
+  "non_goals": [
+    "do not switch /System/Current",
+    "do not write bootloader entries",
+    "do not rebuild initramfs",
+    "do not mount the image as rootfs",
+    "do not delete previous generations",
+    "do not mark the image bootable"
+  ],
+  "must_report": [
+    "rootfs image path, size, and sha256",
+    "current fallback generation",
+    "target current generation",
+    "activation_allowed=false",
+    "future_switch_ready=false",
+    "would_switch_current=false",
+    "would_change_bootloader=false",
+    "would_rebuild_initramfs=false",
+    "next required stage"
+  ],
+  "postconditions": [
+    "switch plan exists",
+    "switch plan is explicitly non-activating",
+    "/System/Current is unchanged",
+    "rootfs inspection mountpoint is unmounted",
+    "fallback generation is preserved"
+  ],
+  "next_stage": "0021-initramfs-image-root-handoff-plan"
+}

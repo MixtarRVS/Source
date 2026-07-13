@@ -1,0 +1,787 @@
+// msh_command.ail
+// POSIX command utility support for the current evaluator slice.
+import msh_builtins
+import msh_cd
+import msh_command_special
+import msh_control
+import msh_diagnostics
+import msh_eval_export
+import msh_eval_result
+import msh_exec
+import msh_exec_errors
+import msh_exec_fdrestore
+import msh_exec_lookup
+import msh_exec_redirs
+import msh_fields
+import msh_fd_scope
+import msh_getopts
+import msh_hash
+import msh_io_builtins
+import msh_output
+import msh_pipeio
+import msh_phase_builtins
+import msh_phase_control
+import msh_phase_builtin_helpers
+import msh_phase_state
+import msh_process_builtins
+import msh_redirs
+import msh_reserved
+import msh_script
+import msh_state
+import msh_test_builtin
+extern fn msh_exec_fields_slice(fields: str_array, skip: int): str_array
+extern fn msh_eval_clean_file_text(text: string): string
+extern fn msh_eval_source_state_internal(source: string, vars: string): MshEvalResult
+record MshCommandResult then
+    int status
+    string vars
+end
+string msh_command_emit_line(vars: string, text: string):
+    return msh_output_line(vars, text)
+end
+int msh_command_lookup_explicit_path_visible(name: string):
+    if msh_exec_name_has_path_sep(name) == 0 then
+        return 0
+    end
+    if msh_exec_lookup_candidate_is_directory(name) == 1 then
+        return 1
+    end
+    if file_exists(name) == 0 then
+        return 0
+    end
+    return 1
+end
+def msh_command_lookup_state(name: string, vars: string): MshCommandResult
+    return msh_command_lookup_state_mode(name, vars, 0)
+end
+def msh_command_lookup_state_mode(name: string, vars: string, verbose: int): MshCommandResult
+    return msh_command_lookup_state_mode_path(name, vars, verbose, 0)
+end
+int msh_command_execute_index(fields: str_array):
+    option_pos = 1
+    while str_array_len(fields) > option_pos then
+        opt = str_array_get(fields, option_pos)
+        if startswith(opt, "-") == 1 and opt != "--" and strlen(opt) > 1 then
+            j = 1
+            has_lookup = 0
+            valid = 1
+            while j < strlen(opt) then
+                opt_ch = substr(opt, j, 1)
+                if opt_ch == "p" then
+                    valid = valid
+                elsif opt_ch == "v" or opt_ch == "V" then
+                    has_lookup = 1
+                else
+                    valid = 0
+                end
+                dealloc(opt_ch)
+                j++
+            end
+            if valid == 0 or has_lookup == 1 then
+                return MSH_INDEX_NOT_FOUND
+            end
+            option_pos++
+        elsif opt == "--" then
+            return option_pos + 1
+        else
+            return option_pos
+        end
+    end
+    return str_array_len(fields)
+end
+string msh_command_lookup_text(name: string, kind: string, verbose: int):
+    if verbose == 0 then
+        return "" + name
+    end
+    if kind == "function" then
+        return name + " is a shell function"
+    end
+    if kind == "special" then
+        return name + " is a special shell builtin"
+    end
+    if kind == "builtin" then
+        return name + " is a shell builtin"
+    end
+    if kind == "reserved" then
+        return name + " is a shell keyword"
+    end
+    return "" + name
+end
+string msh_command_alias_lookup_text(name: string, value: string, verbose: int):
+    if verbose == 1 then
+        left = name + " is an alias for "
+        out = left + value
+        dealloc(left)
+        return out
+    end
+    quoted = msh_phase_shell_quote(value)
+    left2 = "alias " + name
+    mid = left2 + "="
+    out2 = mid + quoted
+    dealloc(quoted, left2, mid)
+    return out2
+end
+string msh_command_path_lookup_text(name: string, path: string, verbose: int):
+    if verbose == 0 then
+        return "" + path
+    end
+    left = name + " is "
+    out = left + path
+    dealloc(left)
+    return out
+end
+def msh_command_enoexec_script_result(name: string, fields: str_array, vars: string): MshCommandResult
+    script_path = msh_script_resolve(name, vars)
+    if strlen(script_path) > 0 then
+        raw_script_text = read_file(script_path)
+        script_text = msh_eval_clean_file_text(raw_script_text)
+        script_vars = msh_state_set_positionals(vars, fields, 1)
+        script_result = msh_eval_source_state_internal(script_text, script_vars)
+        out_vars = "" + vars
+        status = script_result.status
+        dealloc(script_path, raw_script_text, script_text, script_vars, script_result.vars)
+        return new MshCommandResult(status, out_vars)
+    end
+    msh_exec_diag_cannot_execute(name)
+    dealloc(script_path)
+    return new MshCommandResult(126, "" + vars)
+end
+string msh_command_script_candidate(name: string, vars: string, default_path: int):
+    if default_path == 0 or msh_exec_name_has_path_sep(name) == 1 then
+        return msh_script_resolve(name, vars)
+    end
+    return "" + ""
+end
+def msh_command_script_result(ast: string, name: string, fields: str_array, vars: string): MshCommandResult
+    script_path = msh_script_resolve(name, vars)
+    raw_script_text = read_file(script_path)
+    script_text = msh_eval_clean_file_text(raw_script_text)
+    if msh_exec_command_has_redirs(ast) == 0 then
+        script_vars = msh_state_set_positionals(vars, fields, 1)
+        script_result = msh_eval_source_state_internal(script_text, script_vars)
+        status = script_result.status
+        out_vars = "" + vars
+        dealloc(script_result.vars, script_vars)
+    else
+        scope = msh_fd_scope_save()
+        frame = msh_redir_save_stdio()
+        if frame.ok == 0 then
+            msh_redir_restore_stdio(frame)
+            msh_fd_scope_restore(scope)
+            status = 1
+            out_vars = "" + vars
+        else
+            redir_status = msh_redir_apply_ast(ast, vars)
+            if redir_status == 0 then
+                meta_result = msh_exec_fds_apply_command_redirs(ast, vars)
+                if meta_result.status == 0 then
+                    redir_script_vars = msh_state_set_positionals(meta_result.vars, fields, 1)
+                    script_result2 = msh_eval_source_state_internal(script_text, redir_script_vars)
+                    status = script_result2.status
+                    out_vars = msh_exec_fdrestore_ast_redirs(vars, vars, ast)
+                    dealloc(script_result2.vars, redir_script_vars)
+                else
+                    status = meta_result.status
+                    out_vars = "" + vars
+                end
+                dealloc(meta_result.vars)
+            else
+                status = redir_status
+                out_vars = "" + vars
+            end
+            restore_status = msh_redir_restore_stdio(frame)
+            if status == 0 and restore_status != 0 then
+                status = restore_status
+            end
+            fd_restore_status = msh_fd_scope_restore(scope)
+            if status == 0 and fd_restore_status != 0 then
+                status = fd_restore_status
+            end
+        end
+        dealloc(scope.pairs, scope.originals, scope.copies)
+    end
+    dealloc(script_path, raw_script_text, script_text)
+    return new MshCommandResult(status, out_vars)
+end
+def msh_command_lookup_state_mode_path(name: string, vars: string, verbose: int, default_path: int): MshCommandResult
+    out_vars = "" + vars
+    fn_key = "__fn_" + name
+    fn_body = msh_state_get(vars, fn_key)
+    alias_body = msh_alias_get(vars, name)
+    if strlen(name) == 0 then
+        status = 1
+    elsif msh_command_is_reserved_word(name) == 1 then
+        reserved_text = msh_command_lookup_text(name, "reserved", verbose)
+        old_reserved = out_vars
+        out_vars = msh_command_emit_line(out_vars, reserved_text)
+        dealloc(old_reserved, reserved_text)
+        status = 0
+    elsif strlen(alias_body) > 0 then
+        alias_text = msh_command_alias_lookup_text(name, alias_body, verbose)
+        old_alias = out_vars
+        out_vars = msh_command_emit_line(out_vars, alias_text)
+        dealloc(old_alias, alias_text)
+        status = 0
+    elsif strlen(fn_body) > 0 then
+        text = msh_command_lookup_text(name, "function", verbose)
+        old = out_vars
+        out_vars = msh_command_emit_line(out_vars, text)
+        dealloc(old, text)
+        status = 0
+    elsif msh_is_special_builtin(name) == 1 then
+        text2 = msh_command_lookup_text(name, "special", verbose)
+        old2 = out_vars
+        out_vars = msh_command_emit_line(out_vars, text2)
+        dealloc(old2, text2)
+        status = 0
+    elsif msh_is_regular_builtin(name) == 1 then
+        text3 = msh_command_lookup_text(name, "builtin", verbose)
+        old_builtin = out_vars
+        out_vars = msh_command_emit_line(out_vars, text3)
+        dealloc(old_builtin, text3)
+        status = 0
+    elsif name == "fc" then
+        if verbose == 1 then
+            missing_fc = name + ": not found"
+            old_fc = out_vars
+            out_vars = msh_command_emit_line(out_vars, missing_fc)
+            dealloc(old_fc, missing_fc)
+        end
+        status = 127
+    elsif msh_command_lookup_explicit_path_visible(name) == 1 then
+        explicit_text = msh_command_path_lookup_text(name, name, verbose)
+        old_explicit = out_vars
+        out_vars = msh_command_emit_line(out_vars, explicit_text)
+        dealloc(old_explicit, explicit_text)
+        status = 0
+    else
+        if default_path == 1 then
+            script_path = "" + ""
+        else
+            script_path = msh_script_resolve(name, vars)
+        end
+        if strlen(script_path) > 0 then
+            path_text = msh_command_path_lookup_text(name, script_path, verbose)
+            old3 = out_vars
+            out_vars = msh_command_emit_line(out_vars, path_text)
+            dealloc(old3, path_text)
+            status = 0
+        else
+            if default_path == 1 then
+                exec_path = msh_exec_command_resolve_default_lookup_path(name)
+            else
+                exec_path = msh_exec_command_resolve_vars(name, vars)
+            end
+            if strlen(exec_path) > 0 then
+                exec_text = msh_command_path_lookup_text(name, exec_path, verbose)
+                old4 = out_vars
+                out_vars = msh_command_emit_line(out_vars, exec_text)
+                dealloc(old4, exec_text)
+                status = 0
+            else
+                if verbose == 1 then
+                    missing_text = name + ": not found"
+                    old_missing = out_vars
+                    out_vars = msh_command_emit_line(out_vars, missing_text)
+                    dealloc(old_missing, missing_text)
+                end
+                status = 127
+            end
+            dealloc(exec_path)
+        end
+        dealloc(script_path)
+    end
+    dealloc(fn_key, fn_body, alias_body)
+    return new MshCommandResult(status, out_vars)
+end
+def msh_command_lookup_state_mode_path_with_redirs(ast: string, name: string, vars: string, verbose: int, default_path: int): MshCommandResult
+    if msh_exec_command_has_redirs(ast) == 0 then
+        return msh_command_lookup_state_mode_path(name, vars, verbose, default_path)
+    end
+    scope = msh_fd_scope_save()
+    frame = msh_redir_save_stdio()
+    if frame.ok == 0 then
+        msh_redir_restore_stdio(frame)
+        msh_fd_scope_restore(scope)
+        dealloc(scope.pairs, scope.originals, scope.copies)
+        return new MshCommandResult(1, "" + vars)
+    end
+    redir_status = msh_redir_apply_ast(ast, vars)
+    if redir_status == 0 then
+        meta_result = msh_exec_fds_apply_command_redirs(ast, vars)
+        if meta_result.status == 0 then
+            lookup_result = msh_command_lookup_state_mode_path(name, meta_result.vars, verbose, default_path)
+            status = lookup_result.status
+            out_vars = msh_exec_fdrestore_ast_redirs(lookup_result.vars, vars, ast)
+            dealloc(lookup_result.vars)
+        else
+            status = meta_result.status
+            out_vars = "" + vars
+        end
+        dealloc(meta_result.vars)
+    else
+        status = redir_status
+        out_vars = "" + vars
+    end
+    restore_status = msh_redir_restore_stdio(frame)
+    if status == 0 and restore_status != 0 then
+        status = restore_status
+    end
+    fd_restore_status = msh_fd_scope_restore(scope)
+    if status == 0 and fd_restore_status != 0 then
+        status = fd_restore_status
+    end
+    dealloc(scope.pairs, scope.originals, scope.copies)
+    return new MshCommandResult(status, out_vars)
+end
+def msh_hash_state(fields: str_array, vars: string): MshCommandResult
+    i = 1
+    parsing = 1
+    status = 0
+    reset = 0
+    while parsing == 1 and i < str_array_len(fields) then
+        arg = "" + str_array_get(fields, i)
+        if arg == "--" then
+            i++
+            parsing = 0
+        elsif startswith(arg, "-") == 1 and strlen(arg) > 1 then
+            if arg == "-r" then
+                reset = 1
+                i++
+            else
+                opt_ch = substr(arg, 1, 1)
+                bad = "-" + opt_ch
+                detail = "Illegal option " + bad
+                msh_diag_builtin("hash", detail)
+                dealloc(arg, opt_ch, bad, detail)
+                return new MshCommandResult(2, "" + vars)
+            end
+        else
+            parsing = 0
+        end
+        dealloc(arg)
+    end
+    if reset == 1 then
+        cleared = msh_hash_clear(vars)
+        return new MshCommandResult(0, cleared)
+    end
+    if i >= str_array_len(fields) then
+        listed = msh_hash_emit_entries(vars)
+        return new MshCommandResult(0, listed)
+    end
+    out_hash_vars = "" + vars
+    while i < str_array_len(fields) then
+        name = "" + str_array_get(fields, i)
+        if msh_hash_name_found(name, vars) == 0 then
+            detail2 = name + ": not found"
+            msh_diag_builtin("hash", detail2)
+            status = 1
+            dealloc(detail2)
+        else
+            old_hash_vars = out_hash_vars
+            out_hash_vars = msh_hash_record_external(out_hash_vars, name)
+            dealloc(old_hash_vars)
+        end
+        dealloc(name)
+        i++
+    end
+    return new MshCommandResult(status, out_hash_vars)
+end
+def msh_command_run_supported_builtin(fields: str_array, vars: string): MshCommandResult
+    name = str_array_get(fields, 0)
+    if msh_builtin_is_pure_status(name) == 1 then
+        if name == "times" then
+            times_result = msh_times_state(fields, vars)
+            out_times = "" + times_result.vars
+            status_times = times_result.status
+            dealloc(times_result.vars)
+            return new MshCommandResult(status_times, out_times)
+        end
+        if name == "trap" then
+            trap_result = msh_trap_state(fields, vars)
+            out_trap = "" + trap_result.vars
+            status_trap = trap_result.status
+            dealloc(trap_result.vars)
+            return new MshCommandResult(status_trap, out_trap)
+        end
+        return new MshCommandResult(msh_builtin_status(name), "" + vars)
+    end
+    if name == "alias" then
+        alias_result = msh_alias_state(fields, vars)
+        out_alias = "" + alias_result.vars
+        status_alias = alias_result.status
+        dealloc(alias_result.vars)
+        return new MshCommandResult(status_alias, out_alias)
+    end
+    if name == "unalias" then
+        unalias_result = msh_unalias_state(fields, vars)
+        out_unalias = "" + unalias_result.vars
+        status_unalias = unalias_result.status
+        dealloc(unalias_result.vars)
+        return new MshCommandResult(status_unalias, out_unalias)
+    end
+    if name == "command" then
+        return msh_command_state("", fields, vars)
+    end
+    if name == "type" then
+        return msh_type_state(fields, vars)
+    end
+    if name == "test" or name == "[" then
+        test_result = msh_test_state(fields)
+        return new MshCommandResult(test_result.status, "" + vars)
+    end
+    if name == "export" or name == "readonly" then
+        export_result = msh_eval_export_readonly_state(name, fields, vars)
+        out_export = "" + export_result.vars
+        status_export = export_result.status
+        dealloc(export_result.vars)
+        return new MshCommandResult(status_export, out_export)
+    end
+    if name == "set" then
+        if str_array_len(fields) > 1 and str_array_get(fields, 1) == "--" then
+            out_set = msh_state_set_positionals(vars, fields, 2)
+            return new MshCommandResult(0, out_set)
+        end
+        if str_array_len(fields) > 1 then
+            set_result = msh_set_options_state(fields, vars)
+            out_set2 = "" + set_result.vars
+            status_set = set_result.status
+            dealloc(set_result.vars)
+            return new MshCommandResult(status_set, out_set2)
+        end
+        out_set3 = msh_set_print_state(vars)
+        status_set3 = msh_phase_output_status("set", 0, out_set3)
+        if status_set3 != 0 then
+            clean_set3 = msh_output_error_clear(out_set3)
+            dealloc(out_set3)
+            return new MshCommandResult(status_set3, clean_set3)
+        end
+        return new MshCommandResult(0, out_set3)
+    end
+    if name == "unset" then
+        unset_result = msh_unset_state(fields, vars)
+        out_unset = "" + unset_result.vars
+        status_unset = unset_result.status
+        dealloc(unset_result.vars)
+        return new MshCommandResult(status_unset, out_unset)
+    end
+    if name == "shift" then
+        shift_result = msh_shift_state(fields, vars)
+        out_shift = "" + shift_result.vars
+        status_shift = shift_result.status
+        dealloc(shift_result.vars)
+        return new MshCommandResult(status_shift, out_shift)
+    end
+    if name == "wait" then
+        wait_result = msh_wait_state(fields, vars)
+        out_wait = "" + wait_result.vars
+        status_wait = wait_result.status
+        dealloc(wait_result.vars)
+        return new MshCommandResult(status_wait, out_wait)
+    end
+    if name == "umask" then
+        umask_result = msh_umask_state(fields, vars)
+        out_umask = "" + umask_result.vars
+        status_umask = umask_result.status
+        dealloc(umask_result.vars)
+        return new MshCommandResult(status_umask, out_umask)
+    end
+    if name == "ulimit" then
+        ulimit_result = msh_ulimit_state(fields, vars)
+        out_ulimit = "" + ulimit_result.vars
+        status_ulimit = ulimit_result.status
+        dealloc(ulimit_result.vars)
+        return new MshCommandResult(status_ulimit, out_ulimit)
+    end
+    if name == "getopts" then
+        getopts_result = msh_getopts_state(fields, vars)
+        out_getopts = "" + getopts_result.vars
+        status_getopts = getopts_result.status
+        dealloc(getopts_result.vars)
+        return new MshCommandResult(status_getopts, out_getopts)
+    end
+    if name == "hash" then
+        return msh_hash_state(fields, vars)
+    end
+    if name == "fc" then
+        msh_exec_diag_not_found("fc")
+        return new MshCommandResult(127, "" + vars)
+    end
+    if name == "jobs" then
+        jobs_result = msh_jobs_state(fields, vars)
+        out_jobs = "" + jobs_result.vars
+        status_jobs = jobs_result.status
+        dealloc(jobs_result.vars)
+        return new MshCommandResult(status_jobs, out_jobs)
+    end
+    if name == "bg" then
+        bg_result = msh_bg_state(fields, vars)
+        out_bg = "" + bg_result.vars
+        status_bg = bg_result.status
+        dealloc(bg_result.vars)
+        return new MshCommandResult(status_bg, out_bg)
+    end
+    if name == "fg" then
+        fg_result = msh_fg_state(fields, vars)
+        out_fg = "" + fg_result.vars
+        status_fg = fg_result.status
+        dealloc(fg_result.vars)
+        return new MshCommandResult(status_fg, out_fg)
+    end
+    if name == "kill" then
+        kill_result = msh_kill_state(fields, vars)
+        out_kill = "" + kill_result.vars
+        status_kill = kill_result.status
+        dealloc(kill_result.vars)
+        return new MshCommandResult(status_kill, out_kill)
+    end
+    if name == "break" or name == "continue" then
+        if msh_control_loop_level_arg_valid(fields) == 0 then
+            msh_control_diag_illegal_number(name, fields, vars)
+            return new MshCommandResult(2, "" + vars)
+        end
+        if msh_loop_depth(vars) <= 0 then
+            return new MshCommandResult(0, "" + vars)
+        end
+        last_loop_value = msh_state_get(vars, "__last_status")
+        last_loop_status = parse_int(last_loop_value)
+        loop_result = msh_control_builtin_state(name, fields, vars, last_loop_status)
+        out_loop = "" + loop_result.vars
+        status_loop = loop_result.status
+        dealloc(loop_result.vars, last_loop_value)
+        return new MshCommandResult(status_loop, out_loop)
+    end
+    if name == "return" then
+        last_return_value = msh_state_get(vars, "__last_status")
+        last_return_status = parse_int(last_return_value)
+        if msh_control_status_arg_valid(fields) == 0 then
+            msh_control_diag_illegal_number(name, fields, vars)
+            dealloc(last_return_value)
+            return new MshCommandResult(2, "" + vars)
+        end
+        if msh_source_depth(vars) <= 0 and msh_function_depth(vars) <= 0 then
+            status_return = msh_control_status_arg(fields, last_return_status)
+            out_return = msh_control_set(vars, "exit", status_return)
+            dealloc(last_return_value)
+            return new MshCommandResult(status_return, out_return)
+        end
+        return_result = msh_control_builtin_state(name, fields, vars, last_return_status)
+        out_return2 = "" + return_result.vars
+        status_return2 = return_result.status
+        dealloc(return_result.vars, last_return_value)
+        return new MshCommandResult(status_return2, out_return2)
+    end
+    if name == "exit" then
+        last_value = msh_state_get(vars, "__last_status")
+        last_status = parse_int(last_value)
+        if msh_control_status_arg_valid(fields) == 0 then
+            msh_control_diag_illegal_number(name, fields, vars)
+            dealloc(last_value)
+            return new MshCommandResult(2, "" + vars)
+        end
+        control_result = msh_control_builtin_state(name, fields, vars, last_status)
+        out_control = "" + control_result.vars
+        status_control = control_result.status
+        dealloc(control_result.vars, last_value)
+        return new MshCommandResult(status_control, out_control)
+    end
+    if name == "cd" then
+        cd_result = msh_cd_state(fields, vars)
+        out_vars = "" + cd_result.vars
+        status = cd_result.status
+        dealloc(cd_result.vars)
+        return new MshCommandResult(status, out_vars)
+    end
+    if name == "printf" or name == "read" or name == "pwd" or name == "echo" then
+        io_result = msh_io_builtin_state(name, fields, vars)
+        out_io = "" + io_result.vars
+        status_io = io_result.status
+        dealloc(io_result.vars)
+        return new MshCommandResult(status_io, out_io)
+    end
+    return new MshCommandResult(127, "" + vars)
+end
+def msh_command_run_supported_builtin_with_redirs(ast: string, fields: str_array, vars: string): MshCommandResult
+    if msh_exec_command_has_redirs(ast) == 0 then
+        return msh_command_run_supported_builtin(fields, vars)
+    end
+    scope = msh_fd_scope_save()
+    frame = msh_redir_save_stdio()
+    if frame.ok == 0 then
+        msh_redir_restore_stdio(frame)
+        msh_fd_scope_restore(scope)
+        dealloc(scope.pairs, scope.originals, scope.copies)
+        return new MshCommandResult(1, "" + vars)
+    end
+    redir_status = msh_redir_apply_ast(ast, vars)
+    if redir_status == 0 then
+        meta_result = msh_exec_fds_apply_command_redirs(ast, vars)
+        if meta_result.status == 0 then
+            builtin_result = msh_command_run_supported_builtin(fields, meta_result.vars)
+            status = builtin_result.status
+            out_vars = msh_exec_fdrestore_ast_redirs(builtin_result.vars, vars, ast)
+            dealloc(builtin_result.vars)
+        else
+            status = meta_result.status
+            out_vars = "" + vars
+        end
+        dealloc(meta_result.vars)
+    else
+        status = redir_status
+        out_vars = "" + vars
+    end
+    restore_status = msh_redir_restore_stdio(frame)
+    if status == 0 and restore_status != 0 then
+        status = restore_status
+    end
+    fd_restore_status = msh_fd_scope_restore(scope)
+    if status == 0 and fd_restore_status != 0 then
+        status = fd_restore_status
+    end
+    dealloc(scope.pairs, scope.originals, scope.copies)
+    return new MshCommandResult(status, out_vars)
+end
+def msh_type_state(fields: str_array, vars: string): MshCommandResult
+    out_vars = "" + vars
+    status = 0
+    i = 1
+    while i < str_array_len(fields) then
+        query = "" + str_array_get(fields, i)
+        lookup = msh_command_lookup_state_mode(query, out_vars, 1)
+        dealloc(out_vars)
+        out_vars = "" + lookup.vars
+        if lookup.status != 0 then
+            status = 127
+        end
+        dealloc(query, lookup.vars)
+        i++
+    end
+    if status == 0 and msh_output_error(out_vars) == 1 then
+        msh_diag_builtin("type", "type: I/O error")
+        clean_type = msh_output_error_clear(out_vars)
+        dealloc(out_vars)
+        out_vars = clean_type
+        status = 1
+    end
+    return new MshCommandResult(status, out_vars)
+end
+def msh_command_state(ast: string, fields: str_array, vars: string): MshCommandResult
+    option_pos = 1
+    default_path = 0
+    mode = "" + ""
+    parsing = 1
+    while parsing == 1 and str_array_len(fields) > option_pos then
+        opt = "" + str_array_get(fields, option_pos)
+        if startswith(opt, "-") == 1 and opt != "--" and strlen(opt) > 1 then
+            j = 1
+            bad_opt = "" + ""
+            while j < strlen(opt) and strlen(bad_opt) == 0 then
+                opt_ch = substr(opt, j, 1)
+                if opt_ch == "p" then
+                    default_path = 1
+                elsif opt_ch == "v" then
+                    if mode != "-V" then
+                        dealloc(mode)
+                        mode = "" + "-v"
+                    end
+                elsif opt_ch == "V" then
+                    dealloc(mode)
+                    mode = "" + "-V"
+                else
+                    old_bad = bad_opt
+                    dash = "-" + opt_ch
+                    bad_opt = "" + dash
+                    dealloc(old_bad, dash)
+                end
+                dealloc(opt_ch)
+                j++
+            end
+            if strlen(bad_opt) > 0 then
+                detail = "Illegal option " + bad_opt
+                msh_diag_builtin("command", detail)
+                dealloc(mode, opt, bad_opt, detail)
+                return new MshCommandResult(2, "" + vars)
+            end
+            dealloc(bad_opt)
+            option_pos++
+        elsif opt == "--" then
+            option_pos++
+            parsing = 0
+        else
+            parsing = 0
+        end
+        dealloc(opt)
+    end
+    if strlen(mode) > 0 then
+        if str_array_len(fields) <= option_pos then
+            dealloc(mode)
+            return new MshCommandResult(0, "" + vars)
+        end
+        query = "" + str_array_get(fields, option_pos)
+        if mode == "-V" then
+            lookup_result = msh_command_lookup_state_mode_path_with_redirs(ast, query, vars, 1, default_path)
+        else
+            lookup_result = msh_command_lookup_state_mode_path_with_redirs(ast, query, vars, 0, default_path)
+        end
+        status = lookup_result.status
+        out_vars = "" + lookup_result.vars
+        dealloc(lookup_result.vars)
+        if status == 0 and msh_output_error(out_vars) == 1 then
+            msh_diag_builtin("command", "command: I/O error")
+            clean_command = msh_output_error_clear(out_vars)
+            dealloc(out_vars)
+            out_vars = clean_command
+            status = 1
+        end
+        dealloc(mode, query)
+        return new MshCommandResult(status, out_vars)
+    end
+    if str_array_len(fields) <= option_pos then
+        dealloc(mode)
+        return new MshCommandResult(0, "" + vars)
+    end
+    skip = option_pos
+    run_fields = msh_exec_fields_slice(fields, skip)
+    if str_array_len(run_fields) == 0 then
+        status = 127
+        out_vars = "" + vars
+    else
+        name = str_array_get(run_fields, 0)
+        if name == "fc" then
+            msh_exec_diag_not_found("fc")
+            status = 127
+            out_vars = "" + vars
+        elsif msh_is_special_builtin(name) == 1 or msh_is_regular_builtin(name) == 1 then
+            builtin_result = msh_command_run_supported_builtin_with_redirs(ast, run_fields, vars)
+            status = builtin_result.status
+            out_vars = msh_command_apply_special_suppression(name, status, builtin_result.vars)
+            dealloc(builtin_result.vars)
+        else
+            script_candidate = msh_command_script_candidate(name, vars, default_path)
+            script_handled = 0
+            if strlen(script_candidate) > 0 then
+                script_result = msh_command_script_result(ast, name, run_fields, vars)
+                status = script_result.status
+                out_vars = "" + script_result.vars
+                script_handled = 1
+                dealloc(script_result.vars)
+            elsif default_path == 1 then
+                status = msh_exec_command_status_with_fields_from_default_path(ast, vars, fields, skip)
+            else
+                status = msh_exec_command_status_with_fields_from(ast, vars, fields, skip)
+            end
+            dealloc(script_candidate)
+            if script_handled == 0 and status == 127 and msh_exec_last_failure_was_enoexec() == 1 then
+                fallback_result = msh_command_enoexec_script_result(name, run_fields, vars)
+                status = fallback_result.status
+                out_vars = "" + fallback_result.vars
+                dealloc(fallback_result.vars)
+            else
+                out_vars = "" + vars
+            end
+        end
+    end
+    msh_field_array_destroy(run_fields)
+    dealloc(mode)
+    return new MshCommandResult(status, out_vars)
+end

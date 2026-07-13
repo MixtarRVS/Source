@@ -1,0 +1,88 @@
+// msh_output.ail
+// Shared shell-local stdout routing.
+
+import msh_exec_fds
+import msh_pipeio
+import msh_state
+
+record MshOutputResult then
+    int status
+    string vars
+end
+
+string msh_output_error_key():
+    return "" + "__msh_output_error"
+end
+
+string msh_output_error_mark(vars: string):
+    key = msh_output_error_key()
+    out = msh_state_set(vars, key, "1")
+    dealloc(key)
+    return out
+end
+
+string msh_output_error_clear(vars: string):
+    key = msh_output_error_key()
+    out = msh_state_set(vars, key, "0")
+    dealloc(key)
+    return out
+end
+
+int msh_output_error(vars: string):
+    key = msh_output_error_key()
+    value = msh_state_get(vars, key)
+    out = 0
+    if value == "1" then
+        out = 1
+    end
+    dealloc(key, value)
+    return out
+end
+
+def msh_output_text_result(vars: string, text: string): MshOutputResult
+    if strlen(text) == 0 then
+        return new MshOutputResult(0, "" + vars)
+    end
+    if msh_exec_fds_stdout_active(vars) == 1 then
+        result = msh_exec_fds_write_stdout_state(vars, text)
+        out = "" + result.vars
+        status = result.status
+        dealloc(result.vars)
+        if status != 0 then
+            marked = msh_output_error_mark(out)
+            dealloc(out)
+            out = marked
+        end
+        return new MshOutputResult(status, out)
+    end
+    if msh_pipeio_stdout_capture_enabled(vars) == 1 then
+        if msh_pipeio_broken_writer_active(vars) == 1 then
+            out_broken = msh_pipeio_mark_output_error(vars)
+            marked_broken = msh_output_error_mark(out_broken)
+            dealloc(out_broken)
+            return new MshOutputResult(1, marked_broken)
+        end
+        out_capture = msh_pipeio_append_output(vars, text)
+        return new MshOutputResult(0, out_capture)
+    end
+    wrote = fd_write(1, text, strlen(text))
+    if wrote != strlen(text) then
+        marked_host = msh_output_error_mark(vars)
+        return new MshOutputResult(1, marked_host)
+    end
+    return new MshOutputResult(0, "" + vars)
+end
+
+string msh_output_text(vars: string, text: string):
+    result = msh_output_text_result(vars, text)
+    out = "" + result.vars
+    dealloc(result.vars)
+    return out
+end
+
+string msh_output_line(vars: string, text: string):
+    line = text + "\n"
+    out = msh_output_text(vars, line)
+    dealloc(line)
+    return out
+end

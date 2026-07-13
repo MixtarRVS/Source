@@ -1,0 +1,245 @@
+// msh_phase4_core_selftest.ail
+// Core phase-4 shell-state regression helpers split from msh_phase4_selftest.
+
+import msh_eval
+import msh_eval_entry
+import msh_defs
+import msh_exec
+import msh_fields
+import msh_phase_state
+import msh_state
+import msh_pipeio
+import msh_umask
+
+void msh_phase4_make_executable(path: string):
+    if target_os() == "windows" then
+        return
+    end
+    args = str_array_new(3)
+    args = str_array_push(args, "chmod")
+    args = str_array_push(args, "755")
+    args = str_array_push(args, path)
+    process_run_argv(args)
+    dealloc_str_array(args)
+end
+
+int msh_expect_status_field_expansion():
+    ast = "CMD(assigns=[],words=[WORD(\"echo\"),WORD(\"$?\")],redirs=[])"
+    result = msh_exec_command_fields_state_from(ast, "__last_status=7\n", 0, 7)
+    text = str_array_join(result.fields, "|")
+    ok = 0
+    if result.status == 0 and text == "echo|7" then
+        ok = 1
+    end
+    if ok == 0 then
+        print "msh phase4 command-word status selftest failed"
+        got = "got: " + text
+        print got
+        dealloc(got)
+    end
+    msh_field_array_destroy(result.fields)
+    dealloc(result.vars)
+    dealloc(text)
+    if ok == 1 then
+        return 0
+    end
+    return 1
+end
+
+int msh_expect_eval_vars(source: string, expected_status: int, expected_vars: string):
+    result = msh_eval_source_state(source, "")
+    ok = 0
+    if result.status == expected_status and result.vars == expected_vars then
+        ok = 1
+    end
+    if ok == 0 then
+        print "msh phase4 selftest failed"
+        msg = "source: " + source
+        print msg
+        dealloc(msg)
+        got_status = "got status: " + str(result.status)
+        print got_status
+        dealloc(got_status)
+        got_vars = "got vars: " + result.vars
+        print got_vars
+        dealloc(got_vars)
+        want_status = "want status: " + str(expected_status)
+        print want_status
+        dealloc(want_status)
+        want_vars = "want vars: " + expected_vars
+        print want_vars
+        dealloc(want_vars)
+    end
+    dealloc(result.vars)
+    if ok == 1 then
+        return 0
+    end
+    return 1
+end
+
+int msh_expect_exported_env_process():
+    if target_os() == "windows" then
+        source = "export MSH_ENV_PROBE=works; cmd /C if %MSH_ENV_PROBE%==works exit /B 0 else exit /B 9"
+    else
+        source = "export MSH_ENV_PROBE=works; env | grep MSH_ENV_PROBE=works >/dev/null"
+    end
+    result = msh_eval_source_state(source, "")
+    ok = 0
+    if result.status == 0 then
+        ok = 1
+    end
+    if ok == 0 then
+        print "msh phase4 export environment selftest failed"
+        got_status = "got status: " + str(result.status)
+        print got_status
+        dealloc(got_status)
+        got_vars = "got vars: " + result.vars
+        print got_vars
+        dealloc(got_vars)
+    end
+    dealloc(result.vars)
+    if ok == 1 then
+        return 0
+    end
+    return 1
+end
+
+int msh_expect_status_only(source: string, expected_status: int):
+    result = msh_eval_source_state(source, "")
+    ok = 0
+    if result.status == expected_status then
+        ok = 1
+    end
+    if ok == 0 then
+        print "msh phase4 status-only selftest failed"
+        msg = "source: " + source
+        print msg
+        dealloc(msg)
+        got_status = "got status: " + str(result.status)
+        print got_status
+        dealloc(got_status)
+    end
+    dealloc(result.vars)
+    if ok == 1 then
+        return 0
+    end
+    return 1
+end
+
+int msh_expect_dot_source():
+    write_file("msh_dot_selftest.tmp", "A=dot\n")
+    result = msh_eval_source_state("PATH=.; . msh_dot_selftest.tmp; B=$A", "")
+    delete_file("msh_dot_selftest.tmp")
+    ok = 0
+    if result.status == 0 and result.vars == "PATH=.\nA=dot\nB=dot\n" then
+        ok = 1
+    end
+    if ok == 0 then
+        print "msh phase4 dot-source selftest failed"
+        got_status = "got status: " + str(result.status)
+        print got_status
+        dealloc(got_status)
+        got_vars = "got vars: " + result.vars
+        print got_vars
+        dealloc(got_vars)
+    end
+    dealloc(result.vars)
+    if ok == 1 then
+        return 0
+    end
+    return 1
+end
+
+int msh_expect_dot_return():
+    write_file("msh_dot_return_selftest.tmp", "A=before\nreturn 5\nA=bad\n")
+    result = msh_eval_source_state("PATH=.; . msh_dot_return_selftest.tmp; B=$?", "")
+    delete_file("msh_dot_return_selftest.tmp")
+    ok = 0
+    if result.status == 0 and result.vars == "PATH=.\nA=before\nB=5\n" then
+        ok = 1
+    end
+    if ok == 0 then
+        print "msh phase4 dot-return selftest failed"
+        got_status = "got status: " + str(result.status)
+        print got_status
+        got_vars = "got vars: " + result.vars
+        print got_vars
+        dealloc(got_status, got_vars)
+    end
+    dealloc(result.vars)
+    if ok == 1 then
+        return 0
+    end
+    return 1
+end
+
+int msh_expect_redirection_only():
+    delete_file("msh_redir_only_selftest.tmp")
+    result = msh_eval_source_state("> msh_redir_only_selftest.tmp", "")
+    exists = file_exists("msh_redir_only_selftest.tmp")
+    delete_file("msh_redir_only_selftest.tmp")
+    ok = 0
+    if result.status == 0 and exists == 1 and result.vars == "" then
+        ok = 1
+    end
+    if ok == 0 then
+        print "msh phase4 redirection-only selftest failed"
+    end
+    dealloc(result.vars)
+    if ok == 1 then
+        return 0
+    end
+    return 1
+end
+
+int msh_expect_exit_trap_execution():
+    path = "msh_exit_trap_selftest.tmp"
+    delete_file(path)
+    result = msh_eval_source_state("trap 'printf done > msh_exit_trap_selftest.tmp' EXIT; :", "")
+    text = ""
+    if file_exists(path) == 1 then
+        text = read_file(path)
+    end
+    delete_file(path)
+    ok = 0
+    if result.status == 0 and text == "done" then
+        ok = 1
+    end
+    if ok == 0 then
+        print "msh phase4 EXIT trap selftest failed"
+        got_status = "got status: " + str(result.status)
+        got_text = "got text: " + text
+        print got_status
+        print got_text
+        dealloc(got_status, got_text)
+    end
+    dealloc(result.vars, text)
+    if ok == 1 then
+        return 0
+    end
+    return 1
+end
+
+int msh_expect_background_execution():
+    path = "msh_background_selftest.tmp"
+    delete_file(path)
+    result = msh_eval_source_state("printf bg > msh_background_selftest.tmp &\nwait", "")
+    text = ""
+    if file_exists(path) == 1 then
+        text = read_file(path)
+    end
+    delete_file(path)
+    ok = 0
+    if result.status == 0 and text == "bg" then
+        ok = 1
+    end
+    if ok == 0 then
+        print "msh phase4 background selftest failed"
+    end
+    dealloc(result.vars, text)
+    if ok == 1 then
+        return 0
+    end
+    return 1
+end
+

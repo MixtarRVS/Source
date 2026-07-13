@@ -1,0 +1,113 @@
+{
+  "name": "MixtarRVS Base Closure 0006",
+  "status": "non-activating-service-and-network-closure-inventory",
+  "created": "2026-06-29",
+  "purpose": "Inventory the live service supervisor, networking, SSH, device, D-Bus, package, and compatibility dependencies that still come from the Alpine/OpenRC bootstrap layer, then define the MixtarRVS components required before Alpine can stop being the system identity.",
+  "requires": [
+    "/System/Base/Closure/0001-audit/manifest.json",
+    "/System/Base/Closure/0002-mixtar-session-path/manifest.json",
+    "/System/Base/Closure/0003-shell-runtime-and-libraries-profile/manifest.json",
+    "/System/Base/Closure/0004-initramfs-loader-path-and-kernel-profile/manifest.json",
+    "/System/Base/Closure/0005-initramfs-contract-and-fallback-init-shim/manifest.json",
+    "/System/SystemTools/mixtar-fallback-init",
+    "/System/Tools/Current/bin",
+    "/System/Kernel/Current"
+  ],
+  "observed_live_services": {
+    "default": [
+      "sshd",
+      "dbus",
+      "iwd",
+      "dhcpcd",
+      "mixtar-boot-profiler",
+      "mixtar-firstboot-report"
+    ],
+    "boot": [
+      "hostname",
+      "modules",
+      "localmount",
+      "sysctl",
+      "bootmisc",
+      "mixtar-realtime-tune"
+    ],
+    "sysinit": [
+      "devfs",
+      "procfs",
+      "sysfs",
+      "dmesg",
+      "mdev",
+      "hwdrivers"
+    ]
+  },
+  "observed_bootstrap_packages": [
+    "openrc-0.63.2-r0",
+    "busybox-1.37.0-r31",
+    "dhcpcd-10.3.2-r0",
+    "dhcpcd-openrc-10.3.2-r0",
+    "iwd-3.12-r0",
+    "iwd-openrc-3.12-r0",
+    "dbus-1.16.2-r2",
+    "dbus-openrc-1.16.2-r2",
+    "openssh-server-10.3_p1-r0",
+    "openssh-server-common-openrc-10.3_p1-r0",
+    "apk-tools-3.0.6-r0"
+  ],
+  "current_runtime_roles": {
+    "service_supervisor": "OpenRC plus BusyBox /sbin/init",
+    "device_mounts": "OpenRC sysinit services devfs, procfs, sysfs, mdev, hwdrivers",
+    "network_addressing": "dhcpcd",
+    "wifi": "iwd plus iwctl",
+    "name_resolution": "dhcpcd-generated /etc/resolv.conf",
+    "remote_access": "OpenSSH sshd",
+    "system_bus": "dbus-daemon",
+    "package_tool": "apk-tools",
+    "low_level_compat": "BusyBox applets and POSIX compatibility paths"
+  },
+  "mixtar_required_replacements": [
+    {
+      "component": "service_supervisor",
+      "minimum": "Mixtar service runner with list/start/stop/status, ordered startup, shutdown hooks, log capture, and explicit fallback to OpenRC while incomplete."
+    },
+    {
+      "component": "device_runtime",
+      "minimum": "Mixtar initramfs/runtime contract must own /dev, /proc, /sys, /run, /tmp and expose /System/Devices, /System/Process, /System/Hardware, /System/Runtime/run, /Temporary."
+    },
+    {
+      "component": "network_core",
+      "minimum": "Mixtar network profile reader, interface discovery, DHCP/static config handoff, route/resolver audit, and health check. dhcpcd can stay as backend until replaced."
+    },
+    {
+      "component": "wifi_core",
+      "minimum": "Mixtar Wi-Fi profile/state layer over iwd first, with backend boundary explicit. iwd can stay as backend until replaced."
+    },
+    {
+      "component": "remote_access",
+      "minimum": "Mixtar remote access policy and service manifest for sshd or a future Mixtar agent. OpenSSH can stay as backend until replaced."
+    },
+    {
+      "component": "package_and_generation_control",
+      "minimum": "Mixtar builder/generation manager owns installed system state. apk can stay as a compatibility backend but must not be the user-facing identity."
+    },
+    {
+      "component": "system_bus_policy",
+      "minimum": "Mixtar declares whether dbus is base, workstation-only, or backend dependency for iwd/desktop. Until then dbus remains bootstrap runtime."
+    }
+  ],
+  "non_goals": [
+    "Do not stop, restart, enable, or disable services.",
+    "Do not remove OpenRC, BusyBox, apk, dhcpcd, iwd, dbus, or OpenSSH.",
+    "Do not change network configuration.",
+    "Do not rewrite /etc/init.d scripts.",
+    "Do not replace PID 1.",
+    "Do not hide POSIX compatibility paths yet."
+  ],
+  "known_limitations": [
+    "Stage 0006 is an inventory and closure plan, not a service replacement.",
+    "OpenRC remains the live service supervisor.",
+    "BusyBox remains the live /sbin/init target.",
+    "dhcpcd and iwd remain live networking backends.",
+    "OpenSSH remains the live remote access path.",
+    "apk remains installed as bootstrap package tooling."
+  ],
+  "next_stage": "0007-mixtar-service-runner-skeleton"
+}

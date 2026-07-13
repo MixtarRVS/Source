@@ -1,0 +1,56 @@
+// msh_redir_syntax.ail
+// Syntax-level redirection checks that affect shell control flow.
+
+import msh_ast
+import msh_defs
+import msh_exec_redirs
+import msh_expansion
+
+int msh_redir_syntax_fd_target_is_bad(raw: string, vars: string):
+    target = msh_expand_word(raw, vars, 0)
+    bad = 0
+    if target != "-" and msh_exec_redir_target_is_digits(target) == 0 then
+        bad = 1
+    end
+    dealloc(target)
+    return bad
+end
+
+int msh_redir_syntax_has_bad_fd_number_text(redirs: string, vars: string):
+    marker = "" + "REDIR(\""
+    pos = index_of(redirs, marker)
+    bad = 0
+    while pos != MSH_INDEX_NOT_FOUND and bad == 0 then
+        op_start = pos + strlen(marker)
+        op_end = msh_ast_string_end(redirs, op_start)
+        if op_end == MSH_INDEX_NOT_FOUND then
+            pos = MSH_INDEX_NOT_FOUND
+        else
+            target_start = op_end + 3
+            target_end = msh_ast_string_end(redirs, target_start)
+            if target_end == MSH_INDEX_NOT_FOUND then
+                pos = MSH_INDEX_NOT_FOUND
+            else
+                encoded_op = substr(redirs, op_start, op_end - op_start)
+                encoded_raw = substr(redirs, target_start, target_end - target_start)
+                op = msh_ast_unescape(encoded_op)
+                raw = msh_ast_unescape(encoded_raw)
+                base_op = msh_exec_redir_base_op(op)
+                if base_op == "<&" or base_op == ">&" then
+                    bad = msh_redir_syntax_fd_target_is_bad(raw, vars)
+                end
+                dealloc(encoded_op, encoded_raw, op, raw, base_op)
+                pos = index_of_from(redirs, marker, target_end + 1)
+            end
+        end
+    end
+    dealloc(marker)
+    return bad
+end
+
+int msh_redir_syntax_has_bad_fd_number(ast: string, vars: string):
+    redirs = msh_exec_redir_section(ast, "redirs=[", "])")
+    bad = msh_redir_syntax_has_bad_fd_number_text(redirs, vars)
+    dealloc(redirs)
+    return bad
+end

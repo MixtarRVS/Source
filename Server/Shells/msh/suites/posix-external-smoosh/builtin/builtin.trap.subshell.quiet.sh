@@ -1,0 +1,9 @@
+# msh-source: smoosh/tests/shell/builtin.trap.subshell.quiet.test
+# msh-profile: posix
+# msh-run: eval
+# https://www.spinics.net/lists/dash/msg01755.html
+(trap '(! :) && echo BUG1' EXIT)
+(trap '(false) && echo BUG2' EXIT)
+(trap 'readonly foo=bar; (foo=baz) && echo BUG3' EXIT)
+(trap '(set -o bad@option) && echo BUG4' EXIT)
+exit 0

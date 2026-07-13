@@ -1,0 +1,50 @@
+{
+  "name": "MixtarRVS Base Closure 0030",
+  "id": "0030-esp-candidate-copy-plan-no-activation",
+  "status": "esp-copy-plan-generated-no-mount-no-copy",
+  "purpose": "Generate a non-mutating plan for copying the 0029 boot-capable candidate initramfs to the ESP and creating a future fallback-preserving EFI boot test entry.",
+  "requires": [
+    "/System/Base/Closure/0029-initramfs-handoff-boot-command-no-install/initramfs-handoff-boot-command-no-install-status.txt",
+    "/System/Initramfs/Candidates/0029-initramfs-handoff-boot-command-no-install/initramfs.img",
+    "read-only efibootmgr access",
+    "read-only blkid access"
+  ],
+  "installs_non_boot_tool": [
+    "/System/Initramfs/Prototypes/mixtar-esp-candidate-copy-plan.sh"
+  ],
+  "non_goals": [
+    "do not mount ESP",
+    "do not copy candidate to ESP",
+    "do not create EFI boot entry",
+    "do not change BootOrder",
+    "do not set BootNext",
+    "do not overwrite active initrd",
+    "do not switch /System/Current",
+    "do not boot candidate"
+  ],
+  "must_report": [
+    "BootCurrent",
+    "BootOrder",
+    "current EFI boot line",
+    "ESP PARTUUID",
+    "ESP device",
+    "ESP filesystem and UUID",
+    "candidate path, size, hash",
+    "planned ESP relative target",
+    "planned UEFI initrd path",
+    "planned kernel args with mixtar.handoff=boot",
+    "future copy and boot test steps",
+    "active initramfs hash before and after",
+    "current generation before and after"
+  ],
+  "postconditions": [
+    "copy plan exists",
+    "ESP remains unmounted by this stage",
+    "candidate is not copied to ESP",
+    "EFI boot entries are unchanged",
+    "active initramfs hash is unchanged",
+    "/System/Current is unchanged",
+    "rootfs inspection mountpoint is unmounted"
+  ],
+  "next_stage": "0031-esp-candidate-copy-no-bootentry"
+}

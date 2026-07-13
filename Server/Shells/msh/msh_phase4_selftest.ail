@@ -1,0 +1,545 @@
+// msh_phase4_selftest.ail
+// Focused shell-state regressions.
+
+import msh_eval
+import msh_eval_entry
+import msh_defs
+import msh_exec
+import msh_fields
+import msh_phase_state
+import msh_state
+import msh_pipeio
+import msh_umask
+import msh_phase4_core_selftest
+int msh_expect_alias_read_unit_timing():
+    return msh_expect_eval_vars("alias hi='false'\nhi", 1, "")
+end
+
+int msh_expect_exec_persistent_output():
+    path = "msh_exec_stdout_selftest.tmp"
+    delete_file(path)
+    source = "exec > msh_exec_stdout_selftest.tmp; printf ok"
+    result = msh_eval_source_state(source, "")
+    text = ""
+    if file_exists(path) == 1 then
+        text = read_file(path)
+    end
+    delete_file(path)
+    ok = 0
+    if result.status == 0 and result.vars == "" and text == "ok" then
+        ok = 1
+    end
+    if ok == 0 then
+        print "msh phase4 exec persistent stdout selftest failed"
+    end
+    dealloc(result.vars, text)
+    if ok == 1 then
+        return 0
+    end
+    return 1
+end
+
+int msh_expect_exec_persistent_input():
+    path = "msh_exec_stdin_selftest.tmp"
+    write_file(path, "one\ntwo\n")
+    source = "exec < msh_exec_stdin_selftest.tmp; read A; read B"
+    result = msh_eval_source_state(source, "")
+    delete_file(path)
+    ok = 0
+    if result.status == 0 and result.vars == "A=one\nB=two\n" then
+        ok = 1
+    end
+    if ok == 0 then
+        print "msh phase4 exec persistent stdin selftest failed"
+        got_status = "got status: " + str(result.status)
+        got_vars = "got vars: " + result.vars
+        print got_status
+        print got_vars
+        dealloc(got_status, got_vars)
+    end
+    dealloc(result.vars)
+    if ok == 1 then
+        return 0
+    end
+    return 1
+end
+
+int msh_expect_exec_external_stdout():
+    path = "msh_exec_external_stdout.tmp"
+    delete_file(path)
+    if target_os() == "windows" then
+        source = "exec > msh_exec_external_stdout.tmp; cmd /C echo ext"
+    else
+        source = "exec > msh_exec_external_stdout.tmp; echo ext"
+    end
+    result = msh_eval_source_state(source, "")
+    text = ""
+    if file_exists(path) == 1 then
+        text = read_file(path)
+    end
+    delete_file(path)
+    ok = 0
+    if result.status == 0 and index_of(text, "ext") != MSH_INDEX_NOT_FOUND then
+        ok = 1
+    end
+    if ok == 0 then
+        print "msh phase4 exec external stdout selftest failed"
+    end
+    dealloc(result.vars, text)
+    if ok == 1 then
+        return 0
+    end
+    return 1
+end
+
+int msh_expect_command_redir_overrides_exec_stdout():
+    path1 = "msh_exec_outer_stdout.tmp"
+    path2 = "msh_exec_inner_stdout.tmp"
+    delete_file(path1)
+    delete_file(path2)
+    source = "exec > msh_exec_outer_stdout.tmp; printf inner > msh_exec_inner_stdout.tmp"
+    result = msh_eval_source_state(source, "")
+    outer = ""
+    inner = ""
+    if file_exists(path1) == 1 then
+        outer = read_file(path1)
+    end
+    if file_exists(path2) == 1 then
+        inner = read_file(path2)
+    end
+    delete_file(path1)
+    delete_file(path2)
+    ok = 0
+    if result.status == 0 and outer == "" and inner == "inner" then
+        ok = 1
+    end
+    if ok == 0 then
+        print "msh phase4 command redirection override selftest failed"
+    end
+    dealloc(result.vars, outer, inner)
+    if ok == 1 then
+        return 0
+    end
+    return 1
+end
+
+int msh_expect_exec_pipeline_stdout():
+    path = "msh_exec_pipeline_stdout.tmp"
+    delete_file(path)
+    if target_os() == "windows" then
+        source = "exec > msh_exec_pipeline_stdout.tmp; cmd /C echo pipe | cmd /C more"
+    else
+        source = "exec > msh_exec_pipeline_stdout.tmp; echo pipe | cat"
+    end
+    result = msh_eval_source_state(source, "")
+    text = ""
+    if file_exists(path) == 1 then
+        text = read_file(path)
+    end
+    delete_file(path)
+    ok = 0
+    if result.status == 0 and index_of(text, "pipe") != MSH_INDEX_NOT_FOUND then
+        ok = 1
+    end
+    if ok == 0 then
+        print "msh phase4 exec pipeline stdout selftest failed"
+    end
+    dealloc(result.vars, text)
+    if ok == 1 then
+        return 0
+    end
+    return 1
+end
+
+int msh_expect_exec_pipeline_stdin():
+    input = "msh_exec_pipeline_stdin.tmp"
+    output = "msh_exec_pipeline_read.tmp"
+    write_file(input, "seed\n")
+    delete_file(output)
+    if target_os() == "windows" then
+        source = "exec < msh_exec_pipeline_stdin.tmp; cmd /C findstr seed | cmd /C more > msh_exec_pipeline_read.tmp"
+    else
+        source = "exec < msh_exec_pipeline_stdin.tmp; cat | cat > msh_exec_pipeline_read.tmp"
+    end
+    result = msh_eval_source_state(source, "")
+    text = ""
+    if file_exists(output) == 1 then
+        text = read_file(output)
+    end
+    delete_file(input)
+    delete_file(output)
+    ok = 0
+    if result.status == 0 and index_of(text, "seed") != MSH_INDEX_NOT_FOUND then
+        ok = 1
+    end
+    if ok == 0 then
+        print "msh phase4 exec pipeline stdin selftest failed"
+    end
+    dealloc(result.vars, text)
+    if ok == 1 then
+        return 0
+    end
+    return 1
+end
+
+int msh_expect_pipeline_redir_overrides_exec_stdout():
+    path1 = "msh_exec_pipeline_outer.tmp"
+    path2 = "msh_exec_pipeline_inner.tmp"
+    delete_file(path1)
+    delete_file(path2)
+    if target_os() == "windows" then
+        source = "exec > msh_exec_pipeline_outer.tmp; cmd /C echo inner | cmd /C more > msh_exec_pipeline_inner.tmp"
+    else
+        source = "exec > msh_exec_pipeline_outer.tmp; echo inner | cat > msh_exec_pipeline_inner.tmp"
+    end
+    result = msh_eval_source_state(source, "")
+    outer = ""
+    inner = ""
+    if file_exists(path1) == 1 then
+        outer = read_file(path1)
+    end
+    if file_exists(path2) == 1 then
+        inner = read_file(path2)
+    end
+    delete_file(path1)
+    delete_file(path2)
+    ok = 0
+    if result.status == 0 and outer == "" and index_of(inner, "inner") != MSH_INDEX_NOT_FOUND then
+        ok = 1
+    end
+    if ok == 0 then
+        print "msh phase4 pipeline redirection override selftest failed"
+    end
+    dealloc(result.vars, outer, inner)
+    if ok == 1 then
+        return 0
+    end
+    return 1
+end
+
+int msh_expect_path_script_execution():
+    write_file("msh_path_script_selftest", "A=inner\nexit 7\n")
+    msh_phase4_make_executable("msh_path_script_selftest")
+    result = msh_eval_source_state("A=outer; PATH=.; msh_path_script_selftest; C=$?; B=$A", "")
+    delete_file("msh_path_script_selftest")
+    ok = 0
+    if result.status == 0 and result.vars == "A=outer\nPATH=.\nC=7\nB=outer\n" then
+        ok = 1
+    end
+    if ok == 0 then
+        print "msh phase4 PATH script execution selftest failed"
+        got_status = "got status: " + str(result.status)
+        print got_status
+        got_vars = "got vars: " + result.vars
+        print got_vars
+        dealloc(got_status, got_vars)
+    end
+    dealloc(result.vars)
+    if ok == 1 then
+        return 0
+    end
+    return 1
+end
+
+int msh_expect_phase_state_metadata():
+    vars = "" + ""
+    old = vars
+    vars = msh_option_set(vars, "errexit", 1)
+    dealloc(old)
+
+    old = vars
+    vars = msh_alias_set(vars, "ll", "ls -l")
+    dealloc(old)
+
+    old = vars
+    vars = msh_trap_set(vars, "INT", "echo interrupted")
+    dealloc(old)
+
+    old = vars
+    vars = msh_job_set(vars, 1, 1234, 0, "sleep 1")
+    dealloc(old)
+
+    old = vars
+    vars = msh_source_push(vars, "outer.sh")
+    dealloc(old)
+
+    old = vars
+    vars = msh_source_push(vars, "inner.sh")
+    dealloc(old)
+
+    alias_value = msh_alias_get(vars, "ll")
+    trap_value = msh_trap_get(vars, "INT")
+    job_pid = msh_job_get(vars, 1, "pid")
+    top = msh_source_top(vars)
+    public_vars = msh_state_public(vars)
+
+    ok = 0
+    if msh_option_get(vars, "errexit") == 1 and alias_value == "ls -l" and trap_value == "echo interrupted" and job_pid == "1234" and top == "inner.sh" and public_vars == "" then
+        ok = 1
+    end
+
+    old = vars
+    vars = msh_source_pop(vars)
+    dealloc(old)
+    popped_top = msh_source_top(vars)
+    if popped_top != "outer.sh" then
+        ok = 0
+    end
+
+    old = vars
+    vars = msh_alias_unset(vars, "ll")
+    dealloc(old)
+    alias_after = msh_alias_get(vars, "ll")
+    if alias_after != "" then
+        ok = 0
+    end
+
+    old = vars
+    vars = msh_trap_unset(vars, "INT")
+    dealloc(old)
+    trap_after = msh_trap_get(vars, "INT")
+    if trap_after != "" then
+        ok = 0
+    end
+
+    if ok == 0 then
+        print "msh phase4 metadata state selftest failed"
+    end
+    dealloc(vars, alias_value, trap_value, job_pid, top, public_vars)
+    dealloc(popped_top, alias_after, trap_after)
+    if ok == 1 then
+        return 0
+    end
+    return 1
+end
+
+int msh_expect_phase_builtins():
+    result = msh_eval_source_state_internal("set -e; alias ll='ls -l'; trap 'echo int' INT; unalias ll; trap - INT", "")
+    opt_ok = msh_option_get(result.vars, "e")
+    alias_after = msh_alias_get(result.vars, "ll")
+    trap_after = msh_trap_get(result.vars, "INT")
+    ok = 0
+    if result.status == 0 and opt_ok == 1 and alias_after == "" and trap_after == "" then
+        ok = 1
+    end
+    if ok == 0 then
+        print "msh phase4 phase-builtin selftest failed"
+        got_status = "got status: " + str(result.status)
+        print got_status
+        dealloc(got_status)
+    end
+    dealloc(result.vars, alias_after, trap_after)
+    if ok == 1 then
+        return 0
+    end
+    return 1
+end
+
+int msh_expect_control_builtins():
+    if msh_expect_eval_vars("break; A=bad", 0, "A=bad\n") != 0 then
+        return 1
+    end
+    if msh_expect_eval_vars("continue; A=bad", 0, "A=bad\n") != 0 then
+        return 1
+    end
+    if msh_expect_eval_vars("return; A=bad", 0, "") != 0 then
+        return 1
+    end
+    if msh_expect_eval_vars("A=1; exit 4; A=2", 4, "A=1\n") != 0 then
+        return 1
+    end
+    if msh_expect_eval_vars("while true; do break; A=bad; done; A=ok", 0, "A=ok\n") != 0 then
+        return 1
+    end
+    if msh_expect_eval_vars("for x in a b; do continue; A=bad; done; A=ok", 0, "x=b\nA=ok\n") != 0 then
+        return 1
+    end
+    if msh_expect_eval_vars("for x in a b; do for y in 1 2; do A=$x$y; break 2; done; A=bad; done; B=$A", 0, "x=a\ny=1\nA=a1\nB=a1\n") != 0 then
+        return 1
+    end
+    if msh_expect_eval_vars("for x in a b; do A=$x; for y in 1 2; do continue 2; A=bad; done; A=bad2; done; B=$A", 0, "x=b\nA=b\ny=1\nB=b\n") != 0 then
+        return 1
+    end
+    if msh_expect_eval_vars("while true; do break bad; A=bad; done; A=bad2", 2, "") != 0 then
+        return 1
+    end
+    if msh_expect_eval_vars("while true; do continue 0; A=bad; done; A=bad2", 2, "") != 0 then
+        return 1
+    end
+    if msh_expect_eval_vars("f() { return 7; A=bad; }; f; A=$?", 0, "A=7\n") != 0 then
+        return 1
+    end
+    if msh_expect_status_only("wait", 0) != 0 then
+        return 1
+    end
+    if msh_expect_status_only("umask 022", 0) != 0 then
+        return 1
+    end
+    return 0
+end
+
+int msh_expect_errexit_option():
+    if msh_expect_eval_vars("set -e; false; A=bad", 1, "") != 0 then
+        return 1
+    end
+    if msh_expect_eval_vars("set +e; false; A=ok", 0, "A=ok\n") != 0 then
+        return 1
+    end
+    return 0
+end
+
+int msh_expect_option_and_umask_output():
+    cap = msh_pipeio_capture_on("")
+    result = msh_eval_source_state_internal("set -e; set -o; set +o; times; umask; umask 077; umask -S", cap)
+    output = msh_pipeio_output(result.vars)
+    mask = msh_umask_get(result.vars)
+    ok = 0
+    if result.status == 0 and mask == "0077" then
+        if index_of(output, "errexit on") != MSH_INDEX_NOT_FOUND and index_of(output, "set -o errexit") != MSH_INDEX_NOT_FOUND then
+            if index_of(output, "0m0.000000s 0m0.000000s") != MSH_INDEX_NOT_FOUND and index_of(output, "0022") != MSH_INDEX_NOT_FOUND then
+                if index_of(output, "u=rwx,g=,o=") != MSH_INDEX_NOT_FOUND then
+                    ok = 1
+                end
+            end
+        end
+    end
+    if ok == 0 then
+        print "msh phase4 option/umask/times output selftest failed"
+        got_status = "got status: " + str(result.status)
+        got_output = "got output: " + output
+        got_mask = "got mask: " + mask
+        print got_status
+        print got_output
+        print got_mask
+        dealloc(got_status, got_output, got_mask)
+    end
+    dealloc(cap, result.vars, output, mask)
+    if ok == 1 then
+        return 0
+    end
+    return 1
+end
+
+int msh_phase4_selftest():
+    if msh_expect_status_field_expansion() != 0 then
+        return 1
+    end
+    if msh_expect_eval_vars("false; A=$?", 0, "A=1\n") != 0 then
+        return 1
+    end
+    if msh_expect_eval_vars("true; A=$?", 0, "A=0\n") != 0 then
+        return 1
+    end
+    if msh_expect_eval_vars("export A=one", 0, "A=one\n") != 0 then
+        return 1
+    end
+    if msh_expect_eval_vars("readonly A=one; A=two", 2, "A=one\n") != 0 then
+        return 1
+    end
+    if msh_expect_eval_vars("readonly A; export A", 0, "") != 0 then
+        return 1
+    end
+    if msh_expect_eval_vars("set -- one two; A=$1; B=$#", 0, "__argc=2\n__arg_1=one\n__arg_2=two\nA=one\nB=2\n") != 0 then
+        return 1
+    end
+    if msh_expect_eval_vars("eval 'A=one'; B=$A", 0, "A=one\nB=one\n") != 0 then
+        return 1
+    end
+    if msh_expect_eval_vars("set -- outer; f() { A=$1; }; f inner; B=$1", 0, "A=inner\n__argc=1\n__arg_1=outer\nB=outer\n") != 0 then
+        return 1
+    end
+    if msh_expect_exported_env_process() != 0 then
+        return 1
+    end
+    if msh_expect_status_only("cd .", 0) != 0 then
+        return 1
+    end
+    if msh_expect_status_only("cd __definitely_missing_msh_dir__", 1) != 0 then
+        return 1
+    end
+    if msh_expect_status_only("command -- true", 0) != 0 then
+        return 1
+    end
+    if msh_expect_status_only("command -- false", 1) != 0 then
+        return 1
+    end
+    if msh_expect_status_only("command -- :", 0) != 0 then
+        return 1
+    end
+    if msh_expect_status_only("command -- cd .", 0) != 0 then
+        return 1
+    end
+    if msh_expect_status_only("command -- umask", 0) != 0 then
+        return 1
+    end
+    if msh_expect_status_only("{ false; } | true", 0) != 0 then
+        return 1
+    end
+    if msh_expect_status_only("f() { true; }; f | false", 1) != 0 then
+        return 1
+    end
+    if msh_expect_status_only("{ printf 'x\\n'; } | read A", 0) != 0 then
+        return 1
+    end
+    if msh_expect_eval_vars("A=outer; { printf 'x\\n'; } | read A; B=$A", 0, "A=outer\nB=outer\n") != 0 then
+        return 1
+    end
+    if msh_expect_dot_source() != 0 then
+        return 1
+    end
+    if msh_expect_dot_return() != 0 then
+        return 1
+    end
+    if msh_expect_redirection_only() != 0 then
+        return 1
+    end
+    if msh_expect_exit_trap_execution() != 0 then
+        return 1
+    end
+    if msh_expect_background_execution() != 0 then
+        return 1
+    end
+    if msh_expect_alias_read_unit_timing() != 0 then
+        return 1
+    end
+    if msh_expect_exec_persistent_output() != 0 then
+        return 1
+    end
+    if msh_expect_exec_persistent_input() != 0 then
+        return 1
+    end
+    if msh_expect_exec_external_stdout() != 0 then
+        return 1
+    end
+    if msh_expect_command_redir_overrides_exec_stdout() != 0 then
+        return 1
+    end
+    if msh_expect_exec_pipeline_stdout() != 0 then
+        return 1
+    end
+    if msh_expect_exec_pipeline_stdin() != 0 then
+        return 1
+    end
+    if msh_expect_pipeline_redir_overrides_exec_stdout() != 0 then
+        return 1
+    end
+    if msh_expect_path_script_execution() != 0 then
+        return 1
+    end
+    if msh_expect_phase_state_metadata() != 0 then
+        return 1
+    end
+    if msh_expect_phase_builtins() != 0 then
+        return 1
+    end
+    if msh_expect_control_builtins() != 0 then
+        return 1
+    end
+    if msh_expect_errexit_option() != 0 then
+        return 1
+    end
+    if msh_expect_option_and_umask_output() != 0 then
+        return 1
+    end
+    return 0
+end

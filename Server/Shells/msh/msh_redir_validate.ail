@@ -1,0 +1,63 @@
+// msh_redir_validate.ail
+// Redirection target expansion checks shared by native and shell-local paths.
+
+import msh_defs
+import msh_ast
+import msh_expansion
+import msh_fields
+import msh_redir_errors
+
+int msh_redir_validate_is_heredoc(op: string):
+    i = 0
+    while i < strlen(op) and char_at(op, i) >= MSH_CH_DIGIT_0 and char_at(op, i) <= MSH_CH_DIGIT_9 then
+        i++
+    end
+    base = substr(op, i, strlen(op) - i)
+    result = 0
+    if base == "<<" or base == "<<-" then
+        result = 1
+    end
+    dealloc(base)
+    if result == 1 then
+        return 1
+    end
+    return 0
+end
+
+int msh_redir_target_word_status(op: string, raw: string, vars: string):
+    if msh_redir_validate_is_heredoc(op) == 1 then
+        return 0
+    end
+    expanded = msh_expand_word(raw, vars, 0)
+    dealloc(expanded)
+    return 0
+end
+
+int msh_redir_targets_status_from_text(redirs: string, vars: string):
+    marker = "" + "REDIR(\""
+    pos = index_of(redirs, marker)
+    status = 0
+    while pos != MSH_INDEX_NOT_FOUND and status == 0 then
+        op_start = pos + strlen(marker)
+        op_end = msh_ast_string_end(redirs, op_start)
+        if op_end == MSH_INDEX_NOT_FOUND then
+            pos = MSH_INDEX_NOT_FOUND
+        else
+            target_start = op_end + 3
+            target_end = msh_ast_string_end(redirs, target_start)
+            if target_end == MSH_INDEX_NOT_FOUND then
+                pos = MSH_INDEX_NOT_FOUND
+            else
+                encoded_op = substr(redirs, op_start, op_end - op_start)
+                encoded_raw = substr(redirs, target_start, target_end - target_start)
+                op = msh_ast_unescape(encoded_op)
+                raw = msh_ast_unescape(encoded_raw)
+                status = msh_redir_target_word_status(op, raw, vars)
+                dealloc(encoded_op, encoded_raw, op, raw)
+                pos = index_of_from(redirs, marker, target_end + 1)
+            end
+        end
+    end
+    dealloc(marker)
+    return status
+end

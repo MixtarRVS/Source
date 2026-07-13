@@ -1,0 +1,219 @@
+// msh_pipeio.ail
+// In-process pipe capture state for shell-node pipeline proofs.
+
+import msh_state
+import msh_defs
+
+string msh_pipeio_append_char(text: string, c: int):
+    ch = chr(c)
+    out = text + ch
+    dealloc(ch)
+    return out
+end
+
+string msh_pipeio_encode(text: string):
+    out = "" + ""
+    i = 0
+    while i < strlen(text) then
+        c = char_at(text, i)
+        if c == MSH_CH_LF then
+            c = MSH_CH_SOH
+        end
+        old = out
+        out = msh_pipeio_append_char(out, c)
+        dealloc(old)
+        i++
+    end
+    return out
+end
+
+string msh_pipeio_decode(text: string):
+    out = "" + ""
+    i = 0
+    while i < strlen(text) then
+        c = char_at(text, i)
+        if c == MSH_CH_SOH then
+            c = MSH_CH_LF
+        end
+        old = out
+        out = msh_pipeio_append_char(out, c)
+        dealloc(old)
+        i++
+    end
+    return out
+end
+
+int msh_pipeio_capture_active(vars: string):
+    value = msh_state_get(vars, "__pipeline_capture")
+    ok = 0
+    if value == "1" then
+        ok = 1
+    end
+    dealloc(value)
+    return ok
+end
+
+int msh_pipeio_stdout_capture_enabled(vars: string):
+    if msh_pipeio_capture_active(vars) == 0 then
+        return 0
+    end
+    value = msh_state_get(vars, "__pipeline_capture_stdout")
+    enabled = 1
+    if value == "0" then
+        enabled = 0
+    end
+    dealloc(value)
+    return enabled
+end
+
+string msh_pipeio_stdout_capture_off(vars: string):
+    return msh_state_set(vars, "__pipeline_capture_stdout", "0")
+end
+
+string msh_pipeio_stdout_capture_restore(vars: string, source: string):
+    cleared = msh_state_unset(vars, "__pipeline_capture_stdout")
+    value = msh_state_get(source, "__pipeline_capture_stdout")
+    if strlen(value) > 0 then
+        out = msh_state_set(cleared, "__pipeline_capture_stdout", value)
+        dealloc(cleared, value)
+        return out
+    end
+    dealloc(value)
+    return cleared
+end
+
+string msh_pipeio_capture_on(vars: string):
+    out = msh_state_unset(vars, "__exec_stdout_path")
+    old_clear = out
+    out = msh_state_unset(out, "__exec_stdout_append")
+    dealloc(old_clear)
+    old_capture = out
+    out = msh_state_set(out, "__pipeline_capture", "1")
+    dealloc(old_capture)
+    old = out
+    out = msh_state_set(out, "__pipeline_output", "")
+    dealloc(old)
+    return out
+end
+
+string msh_pipeio_broken_writer_on(vars: string):
+    return msh_state_set(vars, "__pipeline_broken_writer", "1")
+end
+
+int msh_pipeio_broken_writer_active(vars: string):
+    raw = msh_state_get(vars, "__pipeline_broken_writer")
+    active = 0
+    if raw == "1" then
+        active = 1
+    end
+    dealloc(raw)
+    return active
+end
+
+string msh_pipeio_clear_output_error(vars: string):
+    return msh_state_unset(vars, "__pipeline_output_error")
+end
+
+string msh_pipeio_mark_output_error(vars: string):
+    return msh_state_set(vars, "__pipeline_output_error", "1")
+end
+
+int msh_pipeio_output_error(vars: string):
+    raw = msh_state_get(vars, "__pipeline_output_error")
+    failed = 0
+    if raw == "1" then
+        failed = 1
+    end
+    dealloc(raw)
+    return failed
+end
+
+string msh_pipeio_set_input(vars: string, input: string):
+    encoded = msh_pipeio_encode(input)
+    out = msh_state_set(vars, "__pipeline_input", encoded)
+    old = out
+    out = msh_state_set(out, "__pipeline_input_offset", "0")
+    dealloc(old)
+    old = out
+    out = msh_pipeio_capture_on(out)
+    dealloc(old)
+    dealloc(encoded)
+    return out
+end
+
+int msh_pipeio_input_offset(vars: string):
+    raw = msh_state_get(vars, "__pipeline_input_offset")
+    if strlen(raw) == 0 then
+        dealloc(raw)
+        return 0
+    end
+    value = parse_int(raw)
+    dealloc(raw)
+    return value
+end
+
+string msh_pipeio_set_input_offset(vars: string, offset: int):
+    text = str(offset)
+    out = msh_state_set(vars, "__pipeline_input_offset", text)
+    dealloc(text)
+    return out
+end
+
+string msh_pipeio_input(vars: string):
+    raw = msh_state_get(vars, "__pipeline_input")
+    out = msh_pipeio_decode(raw)
+    dealloc(raw)
+    return out
+end
+
+string msh_pipeio_output(vars: string):
+    raw = msh_state_get(vars, "__pipeline_output")
+    out = msh_pipeio_decode(raw)
+    dealloc(raw)
+    return out
+end
+
+string msh_pipeio_set_output(vars: string, text: string):
+    encoded = msh_pipeio_encode(text)
+    out = msh_state_set(vars, "__pipeline_capture", "1")
+    old = out
+    out = msh_state_set(out, "__pipeline_output", encoded)
+    dealloc(old)
+    dealloc(encoded)
+    return out
+end
+
+string msh_pipeio_append_output(vars: string, text: string):
+    current = msh_pipeio_output(vars)
+    joined = current + text
+    out = msh_pipeio_set_output(vars, joined)
+    dealloc(current, joined)
+    return out
+end
+
+string msh_pipeio_append_output_encoded(vars: string, encoded: string):
+    return msh_pipeio_append_output(vars, encoded)
+end
+
+string msh_pipeio_clear(vars: string):
+    out = msh_state_unset(vars, "__pipeline_capture")
+    old = out
+    out = msh_state_unset(out, "__pipeline_output")
+    dealloc(old)
+    old2 = out
+    out = msh_state_unset(out, "__pipeline_input")
+    dealloc(old2)
+    old3 = out
+    out = msh_state_unset(out, "__pipeline_input_offset")
+    dealloc(old3)
+    old4 = out
+    out = msh_state_unset(out, "__pipeline_broken_writer")
+    dealloc(old4)
+    old5 = out
+    out = msh_state_unset(out, "__pipeline_output_error")
+    dealloc(old5)
+    old6 = out
+    out = msh_state_unset(out, "__pipeline_capture_stdout")
+    dealloc(old6)
+    return out
+end

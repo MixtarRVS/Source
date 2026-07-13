@@ -1,0 +1,62 @@
+{
+  "name": "MixtarRVS Base Closure 0019",
+  "status": "non-activating-rootfs-image-content-hash-sample-and-switch-readiness",
+  "created": "2026-06-29",
+  "purpose": "Generate a content hash sample comparing selected files from rootfs.squashfs against the current root, and record switch-readiness blockers without switching /System/Current, rebuilding initramfs, or touching bootloader state.",
+  "requires": [
+    "/System/Base/Closure/0015-rootfs-image-build-first-file-no-activation/manifest.json",
+    "/System/Base/Closure/0018-rootfs-image-file-manifest-and-diff/manifest.json",
+    "/System/SystemTools/mixtar-rootfs-image",
+    "/System/Generations/0015-rootfs-image-first-file/rootfs.squashfs",
+    "/System/Generations/0015-rootfs-image-first-file/manifest.json",
+    "/System/Generations/0015-rootfs-image-first-file/activation.plan",
+    "/usr/bin/unsquashfs",
+    "/usr/bin/sha256sum"
+  ],
+  "installed_paths": [
+    "/System/SystemTools/mixtar-rootfs-image",
+    "/System/Base/Closure/0019-rootfs-image-content-hash-sample-and-switch-readiness/"
+  ],
+  "commands": [
+    "mixtar-rootfs-image hash-sample",
+    "mixtar-rootfs-image switch-readiness"
+  ],
+  "sample_paths": [
+    "etc/os-release",
+    "etc/alpine-release",
+    "etc/mixtar-release",
+    "etc/Services/network.service",
+    "etc/Network/current.network",
+    "etc/RemoteAccess/current.remote",
+    "etc/ImageBuilder/rootfs-image.requirements",
+    "System/Kernel/Profiles/rt-7.1.2-mixtar-rt/profile.json",
+    "lib/MixtarRVS/Runtime/0003/lib/ld-musl-x86_64.so.1",
+    "bin/MixtarRVS/bin/ls",
+    "bin/MixtarRVS/bin/sh",
+    "sbin/mixtar-rootfs-image"
+  ],
+  "non_goals": [
+    "Do not switch /System/Current.",
+    "Do not mount the image.",
+    "Do not modify the image file.",
+    "Do not rebuild initramfs.",
+    "Do not change bootloader state.",
+    "Do not mark the image bootable.",
+    "Do not remove Alpine/OpenRC/apk fallback."
+  ],
+  "postconditions": [
+    "Hash sample is generated.",
+    "Switch-readiness report is generated.",
+    "The report explicitly says future_switch_ready=false.",
+    "The report explicitly says would_switch_current=false.",
+    "/System/Current target is unchanged.",
+    "The inspection mountpoint is not mounted after the stage."
+  ],
+  "known_limitations": [
+    "The hash sample is intentionally small and not a full content hash manifest.",
+    "Some mismatch is expected because stages after 0015 updated runner files in the current root.",
+    "Switch-readiness remains false because initramfs image-root handoff, bootloader entry, rollback policy, and garbage collection are not implemented.",
+    "The image is still not booted."
+  ],
+  "next_stage": "0020-switch-plan-no-activation"
+}

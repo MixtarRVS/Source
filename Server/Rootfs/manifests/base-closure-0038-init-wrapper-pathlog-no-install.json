@@ -1,0 +1,21 @@
+{
+  "stage": "0038-init-wrapper-pathlog-no-install",
+  "status": "candidate_build_only",
+  "source_candidate": "/System/Initramfs/Candidates/0035-initramfs-wrapper-procfix-no-install/initramfs.img",
+  "target_candidate": "/System/Initramfs/Candidates/0038-init-wrapper-pathlog-no-install/initramfs.img",
+  "fix": {
+    "explicit_initramfs_path": true,
+    "kernel_priority_wrapper_logs": true,
+    "kernel_priority_handoff_logs": true,
+    "replace_handoff_payload": true
+  },
+  "mutations": {
+    "writes_new_candidate_image": true,
+    "installs_active_initramfs": false,
+    "copies_to_esp": false,
+    "creates_boot_entry": false,
+    "sets_bootnext": false,
+    "reboots": false
+  },
+  "next_required_stage": "0039-copy-pathlog-candidate-to-esp-no-active-switch"
+}

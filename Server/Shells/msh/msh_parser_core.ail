@@ -1,0 +1,144 @@
+// msh_parser_core.ail
+// Shared parser result and low-level token/name/redirection helpers.
+
+import msh_tokens
+import msh_ast
+import msh_defs
+
+record MshParse then
+    string node
+    int pos
+    int ok
+end
+def msh_parse_fail(pos: int, msg: string): MshParse
+    a = "ERROR(pos=" + str(pos)
+    b = a + "): "
+    out = b + msg
+    dealloc(a, b)
+    return new MshParse(out, pos, 0)
+end
+int msh_parse_is_name_start(c: int):
+    if c >= MSH_CH_UPPER_A and c <= MSH_CH_UPPER_Z then
+        return 1
+    elsif c >= MSH_CH_LOWER_A and c <= MSH_CH_LOWER_Z then
+        return 1
+    elsif c == MSH_CH_UNDERSCORE then
+        return 1
+    end
+    return 0
+end
+int msh_parse_is_name_char(c: int):
+    if msh_parse_is_name_start(c) == 1 then
+        return 1
+    elsif c >= MSH_CH_DIGIT_0 and c <= MSH_CH_DIGIT_9 then
+        return 1
+    end
+    return 0
+end
+int msh_word_assignment_equal_pos(word: string):
+    eq = index_of(word, "=")
+    if eq <= 0 then
+        return MSH_INDEX_NOT_FOUND
+    end
+    if msh_parse_is_name_start(char_at(word, 0)) == 0 then
+        return MSH_INDEX_NOT_FOUND
+    end
+    i = 1
+    while i < eq then
+        if msh_parse_is_name_char(char_at(word, i)) == 0 then
+            return MSH_INDEX_NOT_FOUND
+        end
+        i++
+    end
+    return eq
+end
+int msh_token_is_word_value(tokens: string, pos: int, value: string):
+    n = msh_token_count(tokens)
+    if pos < 0 or pos >= n then
+        return 0
+    end
+    line = msh_token_at(tokens, pos)
+    ok = 0
+    if msh_line_is_kind(line, "WORD") == 1 then
+        got = msh_token_value(line)
+        if got == value then
+            ok = 1
+        end
+        dealloc(got)
+    end
+    dealloc(line)
+    return ok
+end
+int msh_token_is_stop_word(tokens: string, pos: int, stop1: string, stop2: string, stop3: string):
+    if strlen(stop1) > 0 and msh_token_is_word_value(tokens, pos, stop1) == 1 then
+        return 1
+    end
+    if strlen(stop2) > 0 and msh_token_is_word_value(tokens, pos, stop2) == 1 then
+        return 1
+    end
+    if strlen(stop3) > 0 and msh_token_is_word_value(tokens, pos, stop3) == 1 then
+        return 1
+    end
+    return 0
+end
+int msh_token_is_double_semi(tokens: string, pos: int):
+    n = msh_token_count(tokens)
+    if pos + 1 >= n then
+        return 0
+    end
+    line = msh_token_at(tokens, pos)
+    next = msh_token_at(tokens, pos + 1)
+    ok = 0
+    if msh_line_is_kind(line, "SEMI") == 1 and msh_line_is_kind(next, "SEMI") == 1 then
+        ok = 1
+    end
+    dealloc(line, next)
+    return ok
+end
+def msh_parse_redir_list(tokens: string, pos: int): MshParse
+    n = msh_token_count(tokens)
+    cur = pos
+    redirs = "" + ""
+    while cur < n then
+        line = msh_token_at(tokens, cur)
+        if msh_line_is_redir(line) == 0 then
+            dealloc(line)
+            return new MshParse(redirs, cur, 1)
+        end
+        if cur + 1 >= n then
+            dealloc(line, redirs)
+            return msh_parse_fail(cur, "redirection without target")
+        end
+        op = msh_token_value(line)
+        next_line = msh_token_at(tokens, cur + 1)
+        if msh_line_is_kind(next_line, "WORD") == 0 then
+            dealloc(line, next_line, op, redirs)
+            return msh_parse_fail(cur + 1, "redirection target must be a word")
+        end
+        target = msh_token_value(next_line)
+        item = msh_ast_redir(op, target)
+        old = redirs
+        redirs = msh_ast_append(redirs, item)
+        dealloc(old, line, next_line, op, target, item)
+        cur = cur + 2
+    end
+    return new MshParse(redirs, cur, 1)
+end
+
+def msh_parse_wrap_trailing_redirs(tokens: string, parsed: MshParse): MshParse
+    if parsed.ok == 0 then
+        return parsed
+    end
+    redirs = msh_parse_redir_list(tokens, parsed.pos)
+    if redirs.ok == 0 then
+        dealloc(parsed.node)
+        return redirs
+    end
+    if strlen(redirs.node) == 0 then
+        dealloc(redirs.node)
+        return parsed
+    end
+    node = msh_ast_redirected(parsed.node, redirs.node)
+    dealloc(parsed.node, redirs.node)
+    return new MshParse(node, redirs.pos, 1)
+end

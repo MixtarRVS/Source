@@ -1,0 +1,2 @@
+READY=/home/vxz/mixtar-lab/repo-tools/Server/Rootfs/install-logs/mixtar-install-ready-20260628T201446Z.md
+APPROVAL=/home/vxz/mixtar-lab/repo-tools/Server/Rootfs/manifests/approval-packets/physical-install-20260628T201406Z.md

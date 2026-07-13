@@ -1,0 +1,291 @@
+// msh_eval_assigns.ail
+// Assignment-word evaluation for msh_eval.
+
+import msh_control
+import msh_diagnostics
+import msh_errors
+import msh_eval_result
+import msh_expand_state
+import msh_expand_vars
+import msh_phase_state
+import msh_state
+import msh_defs
+import msh_ast
+
+void msh_eval_assigns_diag_readonly(vars: string, name: string):
+    prefix = msh_state_get(vars, "__redir_diag_prefix")
+    if strlen(prefix) > 0 then
+        left = prefix + ": "
+        mid = left + name
+        msg = mid + ": is read only"
+        msh_diag(msg)
+        dealloc(prefix, left, mid, msg)
+        return
+    end
+    msh_diag_builtin(name, "is read only")
+    dealloc(prefix)
+end
+
+int msh_eval_assigns_readonly_status(vars: string, assigns: string):
+    marker = "" + "ASSIGN(\""
+    pos = index_of(assigns, marker)
+    while pos != MSH_INDEX_NOT_FOUND then
+        name_start = pos + strlen(marker)
+        name_end = msh_ast_string_end(assigns, name_start)
+        if name_end == MSH_INDEX_NOT_FOUND then
+            pos = MSH_INDEX_NOT_FOUND
+        else
+            value_start = name_end + 3
+            value_end = msh_ast_string_end(assigns, value_start)
+            if value_end == MSH_INDEX_NOT_FOUND then
+                pos = MSH_INDEX_NOT_FOUND
+            else
+                encoded_name = substr(assigns, name_start, name_end - name_start)
+                name = msh_ast_unescape(encoded_name)
+                if msh_state_is_readonly(vars, name) == 1 then
+                    msh_eval_assigns_diag_readonly(vars, name)
+                    dealloc(marker, encoded_name, name)
+                    return MSH_STATUS_SYNTAX_ERROR
+                end
+                dealloc(encoded_name, name)
+                pos = index_of_from(assigns, marker, value_end + 1)
+            end
+        end
+    end
+    dealloc(marker)
+    return 0
+end
+
+string msh_eval_assignment_expand_tilde(value: string, vars: string):
+    out = "" + ""
+    i = 0
+    at_prefix = 1
+    in_single = 0
+    in_double = 0
+    while i < strlen(value) then
+        c = char_at(value, i)
+        if c == MSH_Q_SINGLE or (c == MSH_CH_SQUOTE and in_double == 0) then
+            in_single = 1
+            old_sq = out
+            out = msh_str_append_char(out, c)
+            dealloc(old_sq)
+        elsif c == MSH_Q_DOUBLE or (c == MSH_CH_DQUOTE and in_single == 0) then
+            in_double = 1
+            old_dq = out
+            out = msh_str_append_char(out, c)
+            dealloc(old_dq)
+        elsif c == MSH_Q_END then
+            in_single = 0
+            in_double = 0
+            old_end = out
+            out = msh_str_append_char(out, c)
+            dealloc(old_end)
+        elsif c == MSH_Q_ESC and i + 1 < strlen(value) then
+            old_esc = out
+            out = msh_str_append_char(out, c)
+            dealloc(old_esc)
+            i++
+            old_esc_char = out
+            out = msh_str_append_char(out, char_at(value, i))
+            dealloc(old_esc_char)
+            at_prefix = 0
+        elsif in_single == 0 and in_double == 0 and at_prefix == 1 and c == MSH_CH_TILDE then
+            if i + 1 >= strlen(value) or char_at(value, i + 1) == MSH_CH_SLASH or char_at(value, i + 1) == MSH_CH_COLON then
+                home = msh_var_get(vars, "HOME")
+                old_home = out
+                out = out + home
+                dealloc(old_home, home)
+            else
+                old_tilde = out
+                out = msh_str_append_char(out, c)
+                dealloc(old_tilde)
+            end
+            at_prefix = 0
+        else
+            old = out
+            out = msh_str_append_char(out, c)
+            dealloc(old)
+            if in_single == 0 and in_double == 0 and c == MSH_CH_COLON then
+                at_prefix = 1
+            else
+                at_prefix = 0
+            end
+        end
+        i++
+    end
+    return out
+end
+
+def msh_eval_apply_assigns_state(vars: string, assigns: string): MshEvalResult
+    out = "" + vars
+    status = MSH_STATUS_OK
+    subst_seen = 0
+    marker = "" + "ASSIGN(\""
+    pos = index_of(assigns, marker)
+    while pos != MSH_INDEX_NOT_FOUND then
+        name_start = pos + strlen(marker)
+        name_end = msh_ast_string_end(assigns, name_start)
+        if name_end == MSH_INDEX_NOT_FOUND then
+            pos = MSH_INDEX_NOT_FOUND
+        else
+            value_start = name_end + 3
+            value_end = msh_ast_string_end(assigns, value_start)
+            if value_end == MSH_INDEX_NOT_FOUND then
+                pos = MSH_INDEX_NOT_FOUND
+            else
+                encoded_name = substr(assigns, name_start, name_end - name_start)
+                encoded_value = substr(assigns, value_start, value_end - value_start)
+                name = msh_ast_unescape(encoded_name)
+                value = msh_ast_unescape(encoded_value)
+                if msh_state_is_readonly(out, name) == 1 then
+                    msh_eval_assigns_diag_readonly(out, name)
+                    dealloc(marker, encoded_name, encoded_value, name, value)
+                    return new MshEvalResult(MSH_STATUS_SYNTAX_ERROR, out)
+                end
+                last_text = msh_state_get(out, "__last_status")
+                last_status = parse_int(last_text)
+                process_set_last_capture_status(MSH_INDEX_NOT_FOUND)
+                tilde_value = msh_eval_assignment_expand_tilde(value, out)
+                expanded_result = msh_expand_word_state(tilde_value, out, last_status)
+                subst_status = process_last_capture_status()
+                if expanded_result.status != 0 then
+                    fatal_vars = msh_control_set(expanded_result.vars, "exit", expanded_result.status)
+                    process_set_last_capture_status(MSH_INDEX_NOT_FOUND)
+                    dealloc(marker, encoded_name, encoded_value, name, value, tilde_value, last_text, out, expanded_result.text, expanded_result.vars)
+                    return new MshEvalResult(expanded_result.status, fatal_vars)
+                end
+                if subst_status != MSH_INDEX_NOT_FOUND then
+                    status = subst_status
+                    subst_seen = 1
+                end
+                expanded_value = "" + expanded_result.text
+                expanded_vars = "" + expanded_result.vars
+                dealloc(out)
+                out = expanded_vars
+                old = out
+                out = msh_state_set(out, name, expanded_value)
+                dealloc(old)
+                if msh_option_get(out, "allexport") == 1 then
+                    old_export = out
+                    out = msh_state_set_export(out, name)
+                    dealloc(old_export)
+                end
+                dealloc(encoded_name, encoded_value, name, value, tilde_value, last_text, expanded_value)
+                dealloc(expanded_result.text, expanded_result.vars)
+                pos = index_of_from(assigns, marker, value_end + 1)
+            end
+        end
+    end
+    dealloc(marker)
+    if subst_seen == 1 then
+        process_set_last_capture_status(status)
+    else
+        process_set_last_capture_status(MSH_INDEX_NOT_FOUND)
+    end
+    return new MshEvalResult(MSH_STATUS_OK, out)
+end
+
+string msh_eval_apply_assigns(vars: string, assigns: string):
+    result = msh_eval_apply_assigns_state(vars, assigns)
+    out = "" + result.vars
+    dealloc(result.vars)
+    return out
+end
+
+string msh_eval_mark_assigns_exported(vars: string, assigns: string):
+    out = "" + vars
+    marker = "" + "ASSIGN(\""
+    pos = index_of(assigns, marker)
+    while pos != MSH_INDEX_NOT_FOUND then
+        name_start = pos + strlen(marker)
+        name_end = msh_ast_string_end(assigns, name_start)
+        if name_end == MSH_INDEX_NOT_FOUND then
+            pos = MSH_INDEX_NOT_FOUND
+        else
+            value_start = name_end + 3
+            value_end = msh_ast_string_end(assigns, value_start)
+            if value_end == MSH_INDEX_NOT_FOUND then
+                pos = MSH_INDEX_NOT_FOUND
+            else
+                encoded_name = substr(assigns, name_start, name_end - name_start)
+                name = msh_ast_unescape(encoded_name)
+                old = out
+                out = msh_state_set_export(out, name)
+                dealloc(old, encoded_name, name)
+                pos = index_of_from(assigns, marker, value_end + 1)
+            end
+        end
+    end
+    dealloc(marker)
+    return out
+end
+
+def msh_eval_apply_assigns_exported_state(vars: string, assigns: string): MshEvalResult
+    result = msh_eval_apply_assigns_state(vars, assigns)
+    if result.status != 0 then
+        out = "" + result.vars
+        status = result.status
+        dealloc(result.vars)
+        return new MshEvalResult(status, out)
+    end
+    marked = msh_eval_mark_assigns_exported(result.vars, assigns)
+    dealloc(result.vars)
+    return new MshEvalResult(MSH_STATUS_OK, marked)
+end
+
+string msh_eval_restore_name_attr(original: string, current: string, name: string, prefix: string):
+    key = prefix + name
+    out = "" + current
+    if msh_state_has(original, key) == 1 then
+        value = msh_state_get(original, key)
+        old = out
+        out = msh_state_set(out, key, value)
+        dealloc(old, value)
+    else
+        old2 = out
+        out = msh_state_unset(out, key)
+        dealloc(old2)
+    end
+    dealloc(key)
+    return out
+end
+
+string msh_eval_restore_assign_attrs(original: string, current: string, name: string):
+    restored_export = msh_eval_restore_name_attr(original, current, name, "__export_")
+    restored_readonly = msh_eval_restore_name_attr(original, restored_export, name, "__readonly_")
+    dealloc(restored_export)
+    return restored_readonly
+end
+
+string msh_eval_restore_assign_names(original: string, current: string, assigns: string):
+    out = "" + current
+    marker = "" + "ASSIGN(\""
+    pos = index_of(assigns, marker)
+    while pos != MSH_INDEX_NOT_FOUND then
+        name_start = pos + strlen(marker)
+        name_end = msh_ast_string_end(assigns, name_start)
+        if name_end == MSH_INDEX_NOT_FOUND then
+            pos = MSH_INDEX_NOT_FOUND
+        else
+            encoded_name = substr(assigns, name_start, name_end - name_start)
+            name = msh_ast_unescape(encoded_name)
+            if msh_state_has(original, name) == 1 then
+                old_value = msh_state_get(original, name)
+                old_set = out
+                out = msh_state_set(out, name, old_value)
+                dealloc(old_set, old_value)
+            else
+                old_unset = out
+                out = msh_state_unset(out, name)
+                dealloc(old_unset)
+            end
+            attr_out = msh_eval_restore_assign_attrs(original, out, name)
+            dealloc(out)
+            out = attr_out
+            dealloc(encoded_name, name)
+            pos = index_of_from(assigns, marker, name_end + 1)
+        end
+    end
+    dealloc(marker)
+    return out
+end

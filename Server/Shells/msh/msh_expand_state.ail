@@ -1,0 +1,800 @@
+// msh_expand_state.ail
+// Stateful word/field expansion for parameter assignment/error operators.
+import msh_defs
+import msh_arith
+import msh_arith_state
+import msh_expansion
+import msh_expand_diag
+import msh_expand_vars
+import msh_fields
+import msh_glob
+import msh_expand_glob
+import msh_diagnostics
+import msh_phase_state
+import msh_quote
+import msh_split
+import msh_state
+import msh_subst
+record MshWordExpandResult then
+    string text
+    string vars
+    int status
+end
+record MshFieldExpandResult then
+    str_array fields
+    string vars
+    int status
+end
+int msh_param_assignable(vars: string, name: string):
+    if msh_state_is_readonly(vars, name) == 1 then
+        msh_diag_builtin(name, "is read only")
+        return 0
+    end
+    if strlen(name) == 0 then
+        msh_diag("bad parameter assignment")
+        return 0
+    end
+    if msh_is_name_start(char_at(name, 0)) == 1 then
+        return 1
+    end
+    msh_diag("bad parameter assignment")
+    return 0
+end
+int msh_param_is_set_state(vars: string, name: string):
+    if msh_param_is_positive_decimal(name) == 1 then
+        key = "__arg_" + name
+        ok = msh_var_is_local_set(vars, key)
+        dealloc(key)
+        return ok
+    end
+    return msh_param_is_set(vars, name)
+end
+int msh_nounset_should_error(vars: string, name: string):
+    if msh_option_get(vars, "nounset") == 0 then
+        return 0
+    end
+    match name then
+        case "?":
+            return 0
+        case "$":
+            return 0
+        case "!":
+            return 0
+        case "#":
+            return 0
+        case "*":
+            return 0
+        case "@":
+            return 0
+        case "0":
+            return 0
+        default:
+            if msh_param_is_set_state(vars, name) == 0 then
+                return 1
+            end
+    end
+    return 0
+end
+void msh_diag_parameter_not_set(name: string):
+    msg = name + ": parameter not set"
+    msh_diag(msg)
+    dealloc(msg)
+end
+string msh_default_ifs_for_vars(vars: string):
+    if msh_var_is_set(vars, "IFS") == 1 then
+        return msh_var_get(vars, "IFS")
+    end
+    return "" + " \t\n"
+end
+string msh_first_ifs_char(vars: string):
+    ifs = msh_default_ifs_for_vars(vars)
+    if strlen(ifs) == 0 then
+        dealloc(ifs)
+        return "" + ""
+    end
+    ch = chr(char_at(ifs, 0))
+    dealloc(ifs)
+    return ch
+end
+string msh_positional_join_with(vars: string, sep: string):
+    argc_text = msh_var_get(vars, "__argc")
+    argc = parse_int(argc_text)
+    dealloc(argc_text)
+    out = "" + ""
+    i = 1
+    while i <= argc then
+        key = "__arg_" + str(i)
+        value = msh_var_get(vars, key)
+        old = out
+        if i > 1 then
+            temp = out + sep
+            out = temp + value
+            dealloc(temp)
+        else
+            out = out + value
+        end
+        dealloc(old, key, value)
+        i++
+    end
+    return out
+end
+def msh_positional_fields(vars: string): str_array
+    argc_text = msh_var_get(vars, "__argc")
+    argc = parse_int(argc_text)
+    dealloc(argc_text)
+    fields = str_array_new(MSH_FIELD_CAP_DEFAULT)
+    i = 1
+    while i <= argc then
+        key = "__arg_" + str(i)
+        value = msh_var_get(vars, key)
+        fields = str_array_push(fields, value)
+        dealloc(key)
+        i++
+    end
+    return fields
+end
+def msh_positional_split_fields(vars: string): str_array
+    ifs = msh_default_ifs_for_vars(vars)
+    glob_enabled = 1
+    if msh_option_get(vars, "noglob") == 1 then
+        glob_enabled = 0
+    end
+    argc_text = msh_var_get(vars, "__argc")
+    argc = parse_int(argc_text)
+    dealloc(argc_text)
+    fields = str_array_new(MSH_FIELD_CAP_DEFAULT)
+    i = 1
+    while i <= argc then
+        key = "__arg_" + str(i)
+        value = msh_var_get(vars, key)
+        split_fields = msh_field_split_array_posix_mode(value, ifs, glob_enabled)
+        j = 0
+        while j < str_array_len(split_fields) then
+            field = str_array_get(split_fields, j)
+            owned = "" + field
+            fields = str_array_push(fields, owned)
+            j++
+        end
+        msh_field_array_destroy(split_fields)
+        dealloc(key, value)
+        i++
+    end
+    dealloc(ifs)
+    return fields
+end
+def msh_split_append_fields(fields: str_array, text: string, ifs: string, glob_enabled: int): str_array
+    split_fields = msh_field_split_array_posix_mode(text, ifs, glob_enabled)
+    j = 0
+    while j < str_array_len(split_fields) then
+        field = str_array_get(split_fields, j)
+        owned = "" + field
+        fields = str_array_push(fields, owned)
+        j++
+    end
+    msh_field_array_destroy(split_fields)
+    return fields
+end
+string msh_join2(left: string, right: string):
+    return left + right
+end
+
+string msh_join3(left: string, middle: string, right: string):
+    temp = left + middle
+    out = temp + right
+    dealloc(temp)
+    return out
+end
+int msh_find_double_quoted_special(word: string, special: int):
+    in_double = 0
+    i = 0
+    while i + 1 < strlen(word) then
+        c = char_at(word, i)
+        if c == MSH_Q_DOUBLE or c == MSH_CH_DQUOTE then
+            if in_double == 1 then
+                in_double = 0
+            else
+                in_double = 1
+            end
+        elsif c == MSH_Q_END and in_double == 1 then
+            in_double = 0
+        elsif c == MSH_Q_ESC and i + 1 < strlen(word) then
+            i++
+        elsif c == MSH_CH_DOLLAR and char_at(word, i + 1) == MSH_CH_LBRACE then
+            close = msh_find_brace_close(word, i + 2)
+            if close != MSH_INDEX_NOT_FOUND then
+                i = close
+            end
+        elsif in_double == 1 and c == MSH_CH_DOLLAR and char_at(word, i + 1) == special then
+            return i
+        end
+        i++
+    end
+    return MSH_INDEX_NOT_FOUND
+end
+int msh_find_unquoted_special(word: string, special: int):
+    quote_state = 0
+    i = 0
+    while i + 1 < strlen(word) then
+        c = char_at(word, i)
+        if c == MSH_Q_SINGLE or c == MSH_Q_DOUBLE then
+            quote_state = 1
+        elsif c == MSH_Q_END then
+            quote_state = 0
+        elsif c == MSH_Q_ESC and i + 1 < strlen(word) then
+            i++
+        elsif c == MSH_CH_DOLLAR and char_at(word, i + 1) == MSH_CH_LBRACE then
+            close = msh_find_brace_close(word, i + 2)
+            if close != MSH_INDEX_NOT_FOUND then
+                i = close
+            end
+        elsif quote_state == 0 and c == MSH_CH_DOLLAR and char_at(word, i + 1) == special then
+            return i
+        end
+        i++
+    end
+    return MSH_INDEX_NOT_FOUND
+end
+
+def msh_expand_quoted_at_state(word: string, vars: string, last_status: int, special: int): MshFieldExpandResult
+    pos = msh_find_double_quoted_special(word, special)
+    prefix = substr(word, 0, pos)
+    suffix = substr(word, pos + 2, strlen(word) - pos - 2)
+    prefix_result = msh_expand_word_state(prefix, vars, last_status)
+    if prefix_result.status != 0 then
+        fields_fail = str_array_new(1)
+        dealloc(prefix, suffix, prefix_result.text)
+        return new MshFieldExpandResult(fields_fail, prefix_result.vars, prefix_result.status)
+    end
+    suffix_result = msh_expand_word_state_mode(suffix, prefix_result.vars, last_status, 0, 1)
+    if suffix_result.status != 0 then
+        fields_fail2 = str_array_new(1)
+        dealloc(prefix, suffix, prefix_result.text, prefix_result.vars, suffix_result.text)
+        return new MshFieldExpandResult(fields_fail2, suffix_result.vars, suffix_result.status)
+    end
+
+    fields = str_array_new(MSH_FIELD_CAP_DEFAULT)
+    sep = msh_first_ifs_char(suffix_result.vars)
+    if special == MSH_CH_STAR then
+        joined = msh_positional_join_with(suffix_result.vars, sep)
+        b = msh_join3(prefix_result.text, joined, suffix_result.text)
+        fields = str_array_push(fields, b)
+        dealloc(joined)
+    else
+        argc_text = msh_var_get(suffix_result.vars, "__argc")
+        argc = parse_int(argc_text)
+        dealloc(argc_text)
+        if argc <= 0 then
+            if strlen(prefix_result.text) > 0 or strlen(suffix_result.text) > 0 then
+                only = msh_join2(prefix_result.text, suffix_result.text)
+                fields = str_array_push(fields, only)
+            end
+        else
+            i = 1
+            while i <= argc then
+                key = "__arg_" + str(i)
+                arg = msh_var_get(suffix_result.vars, key)
+                if argc == 1 then
+                    field = msh_join3(prefix_result.text, arg, suffix_result.text)
+                elsif i == 1 then
+                    field = msh_join2(prefix_result.text, arg)
+                elsif i == argc then
+                    field = msh_join2(arg, suffix_result.text)
+                else
+                    field = "" + arg
+                end
+                fields = str_array_push(fields, field)
+                dealloc(key, arg)
+                i++
+            end
+        end
+    end
+    out_vars = "" + suffix_result.vars
+    dealloc(prefix, suffix, prefix_result.text, prefix_result.vars, suffix_result.text, suffix_result.vars, sep)
+    return new MshFieldExpandResult(fields, out_vars, 0)
+end
+
+def msh_expand_unquoted_star_state(word: string, vars: string, last_status: int): MshFieldExpandResult
+    pos = msh_find_unquoted_special(word, MSH_CH_STAR)
+    prefix = substr(word, 0, pos)
+    suffix = substr(word, pos + 2, strlen(word) - pos - 2)
+    prefix_result = msh_expand_word_state_mode(prefix, vars, last_status, 0, 1)
+    if prefix_result.status != 0 then
+        fields_fail = str_array_new(1)
+        dealloc(prefix, suffix, prefix_result.text)
+        return new MshFieldExpandResult(fields_fail, prefix_result.vars, prefix_result.status)
+    end
+    suffix_result = msh_expand_word_state_mode(suffix, prefix_result.vars, last_status, 0, 1)
+    if suffix_result.status != 0 then
+        fields_fail2 = str_array_new(1)
+        dealloc(prefix, suffix, prefix_result.text, prefix_result.vars, suffix_result.text)
+        return new MshFieldExpandResult(fields_fail2, suffix_result.vars, suffix_result.status)
+    end
+
+    ifs = msh_default_ifs_for_vars(suffix_result.vars)
+    glob_enabled = 1
+    if msh_option_get(suffix_result.vars, "noglob") == 1 then
+        glob_enabled = 0
+    end
+    fields = str_array_new(MSH_FIELD_CAP_DEFAULT)
+    argc_text = msh_var_get(suffix_result.vars, "__argc")
+    argc = parse_int(argc_text)
+    dealloc(argc_text)
+    if argc <= 0 then
+        only = msh_join2(prefix_result.text, suffix_result.text)
+        fields = msh_split_append_fields(fields, only, ifs, glob_enabled)
+        dealloc(only)
+    else
+        i = 1
+        while i <= argc then
+            key = "__arg_" + str(i)
+            arg = msh_var_get(suffix_result.vars, key)
+            if argc == 1 then
+                combined = msh_join3(prefix_result.text, arg, suffix_result.text)
+            elsif i == 1 then
+                combined = msh_join2(prefix_result.text, arg)
+            elsif i == argc then
+                combined = msh_join2(arg, suffix_result.text)
+            else
+                combined = "" + arg
+            end
+            fields = msh_split_append_fields(fields, combined, ifs, glob_enabled)
+            dealloc(key, arg, combined)
+            i++
+        end
+    end
+    out_vars = "" + suffix_result.vars
+    dealloc(prefix, suffix, prefix_result.text, prefix_result.vars, suffix_result.text, suffix_result.vars, ifs)
+    return new MshFieldExpandResult(fields, out_vars, 0)
+end
+
+def msh_expand_param_word_state(word: string, vars: string, last_status: int): MshWordExpandResult
+    if word == "$*" then
+        sep = msh_first_ifs_char(vars)
+        joined = msh_positional_join_with(vars, sep)
+        dealloc(sep)
+        return new MshWordExpandResult(joined, "" + vars, 0)
+    end
+    return msh_expand_word_state(word, vars, last_status)
+end
+
+def msh_expand_braced_body_state(body: string, vars: string, last_status: int): MshWordExpandResult
+    if strlen(body) == 0 then
+        msh_expand_diag_bad_substitution(vars)
+        return new MshWordExpandResult("" + "", "" + vars, 2)
+    end
+
+    if char_at(body, 0) == MSH_CH_HASH and strlen(body) > 1 then
+        name_end = msh_param_name_end(body, 1)
+        if name_end == strlen(body) then
+            name = substr(body, 1, name_end - 1)
+            if msh_nounset_should_error(vars, name) == 1 then
+                msh_expand_diag_parameter_not_set(vars, name)
+                dealloc(name)
+                return new MshWordExpandResult("" + "", "" + vars, 2)
+            end
+            value = msh_param_value(vars, name, last_status)
+            out = str(strlen(value))
+            dealloc(name, value)
+            return new MshWordExpandResult(out, "" + vars, 0)
+        end
+    end
+
+    name_end = msh_param_name_end(body, 0)
+    name = substr(body, 0, name_end)
+    value = msh_param_value(vars, name, last_status)
+    is_set = msh_param_is_set(vars, name)
+    if name_end >= strlen(body) then
+        if msh_nounset_should_error(vars, name) == 1 then
+            msh_expand_diag_parameter_not_set(vars, name)
+            dealloc(name, value)
+            return new MshWordExpandResult("" + "", "" + vars, 2)
+        end
+        out_vars = "" + vars
+        dealloc(name)
+        return new MshWordExpandResult(value, out_vars, 0)
+    end
+
+    op_start = name_end
+    op_len = 1
+    c = char_at(body, op_start)
+    if c == MSH_CH_COLON and op_start + 1 < strlen(body) then
+        op_len = 2
+        op = substr(body, op_start, 2)
+    elsif c == MSH_CH_HASH and op_start + 1 < strlen(body) and char_at(body, op_start + 1) == MSH_CH_HASH then
+        op_len = 2
+        op = "" + "##"
+    elsif c == MSH_CH_PERCENT and op_start + 1 < strlen(body) and char_at(body, op_start + 1) == MSH_CH_PERCENT then
+        op_len = 2
+        op = "" + "%%"
+    else
+        op = substr(body, op_start, 1)
+    end
+    word = substr(body, op_start + op_len, strlen(body) - op_start - op_len)
+
+    null_or_unset = 0
+    if is_set == 0 or strlen(value) == 0 then
+        null_or_unset = 1
+    end
+    out_vars = "" + vars
+
+    if op == ":-" then
+        if null_or_unset == 1 then
+            word_result = msh_expand_param_word_state(word, vars, last_status)
+            dealloc(out_vars)
+            out_vars = "" + word_result.vars
+            out = "" + word_result.text
+            status = word_result.status
+            dealloc(word_result.text, word_result.vars)
+        else
+            out = "" + value
+            status = 0
+        end
+    elsif op == "-" then
+        if is_set == 0 then
+            word_result = msh_expand_param_word_state(word, vars, last_status)
+            dealloc(out_vars)
+            out_vars = "" + word_result.vars
+            out = "" + word_result.text
+            status = word_result.status
+            dealloc(word_result.text, word_result.vars)
+        else
+            out = "" + value
+            status = 0
+        end
+    elsif op == ":+" then
+        if null_or_unset == 0 then
+            word_result = msh_expand_param_word_state(word, vars, last_status)
+            dealloc(out_vars)
+            out_vars = "" + word_result.vars
+            out = "" + word_result.text
+            status = word_result.status
+            dealloc(word_result.text, word_result.vars)
+        else
+            out = "" + ""
+            status = 0
+        end
+    elsif op == "+" then
+        if is_set == 1 then
+            word_result = msh_expand_param_word_state(word, vars, last_status)
+            dealloc(out_vars)
+            out_vars = "" + word_result.vars
+            out = "" + word_result.text
+            status = word_result.status
+            dealloc(word_result.text, word_result.vars)
+        else
+            out = "" + ""
+            status = 0
+        end
+    elsif op == ":=" then
+        if null_or_unset == 1 then
+            if msh_param_assignable(vars, name) == 0 then
+                out = "" + ""
+                status = 2
+            else
+                word_result = msh_expand_param_word_state(word, vars, last_status)
+                dealloc(out_vars)
+                out_vars = msh_state_set(word_result.vars, name, word_result.text)
+                out = "" + word_result.text
+                status = word_result.status
+                dealloc(word_result.text, word_result.vars)
+            end
+        else
+            out = "" + value
+            status = 0
+        end
+    elsif op == "=" then
+        if is_set == 0 then
+            if msh_param_assignable(vars, name) == 0 then
+                out = "" + ""
+                status = 2
+            else
+                word_result = msh_expand_param_word_state(word, vars, last_status)
+                dealloc(out_vars)
+                out_vars = msh_state_set(word_result.vars, name, word_result.text)
+                out = "" + word_result.text
+                status = word_result.status
+                dealloc(word_result.text, word_result.vars)
+            end
+        else
+            out = "" + value
+            status = 0
+        end
+    elsif op == ":?" then
+        if null_or_unset == 1 then
+            msg_value = msh_expand_word(word, vars, last_status)
+            if strlen(msg_value) == 0 then
+                msg = name + ": parameter null or not set"
+            else
+                prefix = name + ": "
+                msg = prefix + msg_value
+                dealloc(prefix)
+            end
+            msh_expand_diag_context(vars, msg)
+            dealloc(msg, msg_value)
+            out = "" + ""
+            status = 2
+        else
+            out = "" + value
+            status = 0
+        end
+    elsif op == "?" then
+        if is_set == 0 then
+            msg_value = msh_expand_word(word, vars, last_status)
+            if strlen(msg_value) == 0 then
+                msg = name + ": parameter not set"
+            else
+                prefix2 = name + ": "
+                msg = prefix2 + msg_value
+                dealloc(prefix2)
+            end
+            msh_expand_diag_context(vars, msg)
+            dealloc(msg, msg_value)
+            out = "" + ""
+            status = 2
+        else
+            out = "" + value
+            status = 0
+        end
+    elsif op == "#" or op == "##" or op == "%" or op == "%%" then
+        if msh_nounset_should_error(vars, name) == 1 then
+            msh_expand_diag_parameter_not_set(vars, name)
+            out = "" + ""
+            status = 2
+        else
+            pattern = msh_expand_param_pattern_word(word, vars, last_status)
+            if op == "##" then
+                out = msh_remove_pattern_prefix(value, pattern, 1)
+            elsif op == "#" then
+                out = msh_remove_pattern_prefix(value, pattern, 0)
+            elsif op == "%%" then
+                out = msh_remove_pattern_suffix(value, pattern, 1)
+            else
+                out = msh_remove_pattern_suffix(value, pattern, 0)
+            end
+            dealloc(pattern)
+            status = 0
+        end
+    else
+        msh_expand_diag_bad_substitution(vars)
+        out = "" + ""
+        status = 2
+    end
+
+    dealloc(name, value, op, word)
+    return new MshWordExpandResult(out, out_vars, status)
+end
+
+def msh_expand_word_state_mode(text: string, vars: string, last_status: int, initial_single: int, initial_double: int): MshWordExpandResult
+    tilde = msh_expand_tilde(text, vars, last_status)
+    out = "" + ""
+    current_vars = "" + vars
+    i = 0
+    n = strlen(tilde)
+    in_single = initial_single
+    in_double = initial_double
+
+    while i < n then
+        c = char_at(tilde, i)
+        if in_single == 1 then
+            if c == MSH_CH_SQUOTE or c == MSH_Q_END then
+                in_single = 0
+            else
+                old = out
+                out = msh_str_append_char(out, c)
+                dealloc(old)
+            end
+        elsif (c == MSH_CH_SQUOTE or c == MSH_Q_SINGLE) and in_double == 0 then
+            in_single = 1
+        elsif c == MSH_Q_END and in_double == 1 then
+            in_double = 0
+        elsif c == MSH_CH_DQUOTE or c == MSH_Q_DOUBLE then
+            if in_double == 1 then
+                in_double = 0
+            else
+                in_double = 1
+            end
+        elsif c == MSH_Q_ESC and i + 1 < n then
+            i++
+            old = out
+            out = msh_str_append_char(out, char_at(tilde, i))
+            dealloc(old)
+        elsif c == MSH_CH_BACKTICK and in_single == 0 then
+            close = msh_find_backquote_close(tilde, i + 1)
+            if close == MSH_INDEX_NOT_FOUND then
+                old = out
+                out = msh_str_append_char(out, c)
+                dealloc(old)
+            else
+                body = substr(tilde, i + 1, close - i - 1)
+                cmd = msh_unescape_backquote_body(body)
+                raw = msh_subst_capture_with_vars(cmd, current_vars)
+                value = msh_trim_command_output(raw)
+                old = out
+                out = msh_str_append_text(out, value)
+                dealloc(old, body, cmd, raw, value)
+                i = close
+            end
+        elsif c == MSH_CH_BACKSLASH and i + 1 < n then
+            next_bs = char_at(tilde, i + 1)
+            if in_double == 1 and next_bs != MSH_CH_DOLLAR and next_bs != MSH_CH_BACKTICK and next_bs != MSH_CH_DQUOTE and next_bs != MSH_CH_BACKSLASH and next_bs != MSH_CH_LF then
+                old_keep_bs = out
+                out = msh_str_append_char(out, c)
+                dealloc(old_keep_bs)
+            else
+                i++
+                old = out
+                out = msh_str_append_char(out, char_at(tilde, i))
+                dealloc(old)
+            end
+        elsif c == MSH_CH_DOLLAR and i + 1 < n then
+            next = char_at(tilde, i + 1)
+            if next == MSH_CH_LBRACE then
+                close = msh_find_brace_close(tilde, i + 2)
+                if close == MSH_INDEX_NOT_FOUND then
+                    old = out
+                    out = msh_str_append_char(out, c)
+                    dealloc(old)
+                else
+                    body = substr(tilde, i + 2, close - i - 2)
+                    value_result = msh_expand_braced_body_state(body, current_vars, last_status)
+                    if value_result.status != 0 then
+                        dealloc(out, current_vars, body, tilde)
+                        return value_result
+                    end
+                    old = out
+                    out = msh_str_append_text(out, value_result.text)
+                    dealloc(old)
+                    dealloc(current_vars)
+                    current_vars = "" + value_result.vars
+                    dealloc(body, value_result.text, value_result.vars)
+                    i = close
+                end
+            elsif next == MSH_CH_LPAREN and i + 2 < n and char_at(tilde, i + 2) == MSH_CH_LPAREN then
+                close = msh_find_arith_close(tilde, i + 3)
+                if close == MSH_INDEX_NOT_FOUND then
+                    old = out
+                    out = msh_str_append_char(out, c)
+                    dealloc(old)
+                else
+                    expr = substr(tilde, i + 3, close - i - 3)
+                    arith_result = msh_arith_expand_state(expr, current_vars)
+                    if arith_result.status != 0 then
+                        dealloc(out, current_vars, expr, tilde, arith_result.text, arith_result.vars)
+                        return new MshWordExpandResult("" + "", "" + vars, arith_result.status)
+                    end
+                    value = "" + arith_result.text
+                    old = out
+                    out = msh_str_append_text(out, value)
+                    dealloc(old)
+                    dealloc(current_vars)
+                    current_vars = "" + arith_result.vars
+                    dealloc(expr, value, arith_result.text, arith_result.vars)
+                    i = close + 1
+                end
+            elsif next == MSH_CH_LPAREN then
+                close = msh_find_command_sub_close(tilde, i + 2)
+                if close == MSH_INDEX_NOT_FOUND then
+                    old = out
+                    out = msh_str_append_char(out, c)
+                    dealloc(old)
+                else
+                    cmd = substr(tilde, i + 2, close - i - 2)
+                    raw = msh_subst_capture_with_vars(cmd, current_vars)
+                    value = msh_trim_command_output(raw)
+                    old = out
+                    out = msh_str_append_text(out, value)
+                    dealloc(old, cmd, raw, value)
+                    i = close
+                end
+            elsif msh_is_name_start(next) == 1 then
+                end_pos = msh_name_end(tilde, i + 1)
+                name = substr(tilde, i + 1, end_pos - i - 1)
+                if msh_nounset_should_error(current_vars, name) == 1 then
+                    msh_expand_diag_parameter_not_set(vars, name)
+                    dealloc(out, current_vars, name, tilde)
+                    return new MshWordExpandResult("" + "", "" + vars, 2)
+                end
+                value = msh_param_value(current_vars, name, last_status)
+                old = out
+                out = msh_str_append_text(out, value)
+                dealloc(old, name, value)
+                i = end_pos - 1
+            elsif msh_is_unbraced_parameter_start(next) == 1 then
+                name = chr(next)
+                if next == MSH_CH_STAR and in_double == 1 then
+                    sep = msh_first_ifs_char(current_vars)
+                    value = msh_positional_join_with(current_vars, sep)
+                    dealloc(sep)
+                else
+                    if msh_nounset_should_error(current_vars, name) == 1 then
+                        msh_expand_diag_parameter_not_set(vars, name)
+                        dealloc(out, current_vars, name, tilde)
+                        return new MshWordExpandResult("" + "", "" + vars, 2)
+                    end
+                    value = msh_param_value(current_vars, name, last_status)
+                end
+                old = out
+                out = msh_str_append_text(out, value)
+                dealloc(old, name, value)
+                i++
+            else
+                old_literal_dollar = out
+                out = msh_str_append_char(out, c)
+                dealloc(old_literal_dollar)
+            end
+        else
+            old = out
+            out = msh_str_append_char(out, c)
+            dealloc(old)
+        end
+        i++
+    end
+    dealloc(tilde)
+    return new MshWordExpandResult(out, current_vars, 0)
+end
+
+def msh_expand_word_state(text: string, vars: string, last_status: int): MshWordExpandResult
+    return msh_expand_word_state_mode(text, vars, last_status, 0, 0)
+end
+
+def msh_expand_field_array_state(word: string, vars: string, last_status: int): MshFieldExpandResult
+    if msh_find_double_quoted_special(word, MSH_CH_AT) != MSH_INDEX_NOT_FOUND then
+        return msh_expand_quoted_at_state(word, vars, last_status, MSH_CH_AT)
+    end
+    if msh_find_double_quoted_special(word, MSH_CH_STAR) != MSH_INDEX_NOT_FOUND then
+        return msh_expand_quoted_at_state(word, vars, last_status, MSH_CH_STAR)
+    end
+    if word != "$*" and msh_find_unquoted_special(word, MSH_CH_STAR) != MSH_INDEX_NOT_FOUND then
+        return msh_expand_unquoted_star_state(word, vars, last_status)
+    end
+    if word == "\"$@\"" or msh_word_is_double_quoted_exact(word, "$@") == 1 then
+        fields = msh_positional_fields(vars)
+        return new MshFieldExpandResult(fields, "" + vars, 0)
+    end
+    if word == "\"$*\"" or msh_word_is_double_quoted_exact(word, "$*") == 1 then
+        sep = msh_first_ifs_char(vars)
+        joined = msh_positional_join_with(vars, sep)
+        fields = msh_quoted_field_array(joined)
+        dealloc(sep, joined)
+        return new MshFieldExpandResult(fields, "" + vars, 0)
+    end
+    if word == "$@" or word == "$*" then
+        fields = msh_positional_split_fields(vars)
+        return new MshFieldExpandResult(fields, "" + vars, 0)
+    end
+
+    word_result = msh_expand_word_state(word, vars, last_status)
+    if word_result.status != 0 then
+        fields = str_array_new(1)
+        out_vars = "" + word_result.vars
+        status = word_result.status
+        dealloc(word_result.text, word_result.vars)
+        return new MshFieldExpandResult(fields, out_vars, status)
+    end
+    if msh_word_has_quote_state(word) == 1 then
+        if msh_option_get(word_result.vars, "noglob") == 0 and msh_expand_glob_simple_word(word) == 1 then
+            fields = msh_expand_glob_fields_from_word(word, word_result.vars)
+        else
+            fields = msh_quoted_field_array(word_result.text)
+        end
+    elsif msh_word_has_split_expansion(word) == 0 then
+        if msh_option_get(word_result.vars, "noglob") == 1 then
+            fields = msh_quoted_field_array(word_result.text)
+        elsif msh_expand_glob_tilde_word(word) == 1 and msh_expand_glob_simple_word(word) == 1 then
+            fields = msh_expand_glob_fields_from_word(word, word_result.vars)
+        else
+            fields = msh_pathname_expand_field_array(word_result.text)
+        end
+    else
+        ifs = msh_default_ifs_for_vars(word_result.vars)
+        glob_enabled = 1
+        if msh_option_get(word_result.vars, "noglob") == 1 then
+            glob_enabled = 0
+        end
+        fields = msh_field_split_array_posix_mode(word_result.text, ifs, glob_enabled)
+        dealloc(ifs)
+    end
+    out_vars = "" + word_result.vars
+    dealloc(word_result.text, word_result.vars)
+    return new MshFieldExpandResult(fields, out_vars, 0)
+end

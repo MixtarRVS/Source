@@ -1,0 +1,312 @@
+// msh_exec_fdmeta.ail
+// Converts persistent exec fd metadata into native launch redirection arrays.
+
+import msh_fields
+import msh_exec_fds
+import msh_state
+
+int msh_exec_fdmeta_has(vars: string, name: string):
+    value = msh_state_get(vars, name)
+    ok = 0
+    if strlen(value) > 0 then
+        ok = 1
+    end
+    dealloc(value)
+    return ok
+end
+
+string msh_exec_fdmeta_host_target(path: string):
+    if target_os() == "windows" and path == "/dev/null" then
+        return "" + "NUL"
+    end
+    return "" + path
+end
+
+int msh_exec_fdmeta_saved_fd_scan_limit():
+    return 64
+end
+
+int msh_exec_fdmeta_saved_stdout_active(vars: string, fd: int):
+    path_key = msh_exec_fds_saved_stdout_path_key(fd)
+    path = msh_state_get(vars, path_key)
+    active = 0
+    if strlen(path) > 0 and path != "__msh_host_stdout" and path != "__msh_pipe_stdout" then
+        active = 1
+    end
+    stdin_key = msh_exec_fds_saved_stdin_path_key(fd)
+    stdin_path = msh_state_get(vars, stdin_key)
+    if target_os() != "windows" and strlen(stdin_path) > 0 and stdin_path == path then
+        active = 0
+    end
+    dealloc(path_key, path, stdin_key, stdin_path)
+    return active
+end
+
+int msh_exec_fdmeta_saved_stdin_active(vars: string, fd: int):
+    path_key = msh_exec_fds_saved_stdin_path_key(fd)
+    path = msh_state_get(vars, path_key)
+    active = 0
+    if strlen(path) > 0 and path != "__msh_host_stdin" then
+        active = 1
+    end
+    dealloc(path_key, path)
+    return active
+end
+
+string msh_exec_fdmeta_saved_stdin_op(vars: string, fd: int):
+    fd_text = str(fd)
+    offset_key = msh_exec_fds_saved_stdin_offset_key(fd)
+    offset_text = msh_state_get(vars, offset_key)
+    if strlen(offset_text) > 0 and parse_int(offset_text) > 0 then
+        prefix = fd_text + "<@"
+        out = prefix + offset_text
+        dealloc(prefix)
+    else
+        out = fd_text + "<"
+    end
+    dealloc(fd_text, offset_key, offset_text)
+    return out
+end
+
+string msh_exec_fdmeta_saved_stdin_target(vars: string, fd: int):
+    path_key = msh_exec_fds_saved_stdin_path_key(fd)
+    path = msh_state_get(vars, path_key)
+    dealloc(path_key)
+    return path
+end
+
+string msh_exec_fdmeta_current_stdin_op(vars: string):
+    offset = msh_exec_fds_stdin_offset(vars)
+    if offset > 0 then
+        offset_text = str(offset)
+        out = "<@" + offset_text
+        dealloc(offset_text)
+    else
+        out = "" + "<"
+    end
+    return out
+end
+
+string msh_exec_fdmeta_saved_stdout_op(vars: string, fd: int):
+    fd_text = str(fd)
+    append_key = msh_exec_fds_saved_stdout_append_key(fd)
+    append = msh_state_get(vars, append_key)
+    offset_key = msh_exec_fds_saved_stdout_offset_key(fd)
+    offset = msh_state_get(vars, offset_key)
+    if append == "1" or (target_os() != "windows" and strlen(offset) > 0 and parse_int(offset) > 0) then
+        out = fd_text + ">>"
+    else
+        out = fd_text + ">"
+    end
+    dealloc(fd_text, append_key, append, offset_key, offset)
+    return out
+end
+
+string msh_exec_fdmeta_saved_stdout_target(vars: string, fd: int):
+    path_key = msh_exec_fds_saved_stdout_path_key(fd)
+    path = msh_state_get(vars, path_key)
+    dealloc(path_key)
+    return path
+end
+
+def msh_exec_fdmeta_push_saved_stdin_ops(vars: string, out: str_array): str_array
+    if target_os() != "windows" then
+        return out
+    end
+    fd = 3
+    while fd < msh_exec_fdmeta_saved_fd_scan_limit() then
+        if msh_exec_fdmeta_saved_stdin_active(vars, fd) == 1 then
+            op = msh_exec_fdmeta_saved_stdin_op(vars, fd)
+            out = str_array_push(out, op)
+        end
+        fd++
+    end
+    return out
+end
+
+def msh_exec_fdmeta_push_saved_stdin_targets(vars: string, out: str_array): str_array
+    if target_os() != "windows" then
+        return out
+    end
+    fd = 3
+    while fd < msh_exec_fdmeta_saved_fd_scan_limit() then
+        if msh_exec_fdmeta_saved_stdin_active(vars, fd) == 1 then
+            target = msh_exec_fdmeta_saved_stdin_target(vars, fd)
+            host_target = msh_exec_fdmeta_host_target(target)
+            out = str_array_push(out, host_target)
+            dealloc(target)
+        end
+        fd++
+    end
+    return out
+end
+
+def msh_exec_fdmeta_push_saved_stdout_ops(vars: string, out: str_array): str_array
+    fd = 3
+    while fd < msh_exec_fdmeta_saved_fd_scan_limit() then
+        if msh_exec_fdmeta_saved_stdout_active(vars, fd) == 1 then
+            op = msh_exec_fdmeta_saved_stdout_op(vars, fd)
+            out = str_array_push(out, op)
+        end
+        fd++
+    end
+    return out
+end
+
+def msh_exec_fdmeta_push_saved_stdout_targets(vars: string, out: str_array): str_array
+    fd = 3
+    while fd < msh_exec_fdmeta_saved_fd_scan_limit() then
+        if msh_exec_fdmeta_saved_stdout_active(vars, fd) == 1 then
+            target = msh_exec_fdmeta_saved_stdout_target(vars, fd)
+            host_target = msh_exec_fdmeta_host_target(target)
+            out = str_array_push(out, host_target)
+            dealloc(target)
+        end
+        fd++
+    end
+    return out
+end
+
+def msh_exec_fdmeta_take_saved_stdout_ops(vars: string, base: str_array): str_array
+    out = str_array_new(str_array_len(base) + 2)
+    out = msh_exec_fdmeta_push_saved_stdin_ops(vars, out)
+    out = msh_exec_fdmeta_push_saved_stdout_ops(vars, out)
+    i = 0
+    while i < str_array_len(base) then
+        item = "" + str_array_get(base, i)
+        out = str_array_push(out, item)
+        i++
+    end
+    msh_field_array_destroy(base)
+    return out
+end
+
+def msh_exec_fdmeta_take_saved_stdout_targets(vars: string, base: str_array): str_array
+    out = str_array_new(str_array_len(base) + 2)
+    out = msh_exec_fdmeta_push_saved_stdin_targets(vars, out)
+    out = msh_exec_fdmeta_push_saved_stdout_targets(vars, out)
+    i = 0
+    while i < str_array_len(base) then
+        raw_item = str_array_get(base, i)
+        item = msh_exec_fdmeta_host_target(raw_item)
+        out = str_array_push(out, item)
+        i++
+    end
+    msh_field_array_destroy(base)
+    return out
+end
+
+def msh_exec_fdmeta_take_ops(vars: string, base: str_array): str_array
+    out = str_array_new(str_array_len(base) + 2)
+    if target_os() == "windows" and msh_exec_fdmeta_has(vars, "__exec_stdin_path") == 1 then
+        stdin_op = msh_exec_fdmeta_current_stdin_op(vars)
+        out = str_array_push(out, stdin_op)
+    end
+    stdout_path = msh_state_get(vars, "__exec_stdout_path")
+    if target_os() == "windows" and strlen(stdout_path) > 0 then
+        append_text = msh_state_get(vars, "__exec_stdout_append")
+        if append_text == "1" then
+            op = "" + ">>"
+        else
+            op = "" + ">"
+        end
+        out = str_array_push(out, op)
+        dealloc(append_text)
+    end
+    dealloc(stdout_path)
+    out = msh_exec_fdmeta_push_saved_stdin_ops(vars, out)
+    out = msh_exec_fdmeta_push_saved_stdout_ops(vars, out)
+    i = 0
+    while i < str_array_len(base) then
+        item = "" + str_array_get(base, i)
+        out = str_array_push(out, item)
+        i++
+    end
+    msh_field_array_destroy(base)
+    return out
+end
+
+def msh_exec_fdmeta_take_stage_ops(vars: string, base: str_array, stage: int, total: int): str_array
+    out = str_array_new(str_array_len(base) + 2)
+    if target_os() == "windows" and stage == 0 and msh_exec_fdmeta_has(vars, "__exec_stdin_path") == 1 then
+        stdin_op = msh_exec_fdmeta_current_stdin_op(vars)
+        out = str_array_push(out, stdin_op)
+    end
+    stdout_path = msh_state_get(vars, "__exec_stdout_path")
+    if target_os() == "windows" and stage + 1 == total and strlen(stdout_path) > 0 then
+        append_text = msh_state_get(vars, "__exec_stdout_append")
+        if append_text == "1" then
+            op = "" + ">>"
+        else
+            op = "" + ">"
+        end
+        out = str_array_push(out, op)
+        dealloc(append_text)
+    end
+    dealloc(stdout_path)
+    out = msh_exec_fdmeta_push_saved_stdin_ops(vars, out)
+    out = msh_exec_fdmeta_push_saved_stdout_ops(vars, out)
+    i = 0
+    while i < str_array_len(base) then
+        item = "" + str_array_get(base, i)
+        out = str_array_push(out, item)
+        i++
+    end
+    msh_field_array_destroy(base)
+    return out
+end
+
+def msh_exec_fdmeta_take_targets(vars: string, base: str_array): str_array
+    out = str_array_new(str_array_len(base) + 2)
+    stdin_path = msh_state_get(vars, "__exec_stdin_path")
+    if target_os() == "windows" and strlen(stdin_path) > 0 then
+        stdin_target = msh_exec_fdmeta_host_target(stdin_path)
+        out = str_array_push(out, stdin_target)
+    end
+    stdout_path = msh_state_get(vars, "__exec_stdout_path")
+    if target_os() == "windows" and strlen(stdout_path) > 0 then
+        stdout_target = msh_exec_fdmeta_host_target(stdout_path)
+        out = str_array_push(out, stdout_target)
+    end
+    out = msh_exec_fdmeta_push_saved_stdin_targets(vars, out)
+    out = msh_exec_fdmeta_push_saved_stdout_targets(vars, out)
+    i = 0
+    while i < str_array_len(base) then
+        raw_item = str_array_get(base, i)
+        item = msh_exec_fdmeta_host_target(raw_item)
+        out = str_array_push(out, item)
+        i++
+    end
+    msh_field_array_destroy(base)
+    dealloc(stdin_path, stdout_path)
+    return out
+end
+
+def msh_exec_fdmeta_take_stage_targets(vars: string, base: str_array, stage: int, total: int): str_array
+    out = str_array_new(str_array_len(base) + 2)
+    stdin_path = msh_state_get(vars, "__exec_stdin_path")
+    if target_os() == "windows" and stage == 0 and strlen(stdin_path) > 0 then
+        stdin_target = msh_exec_fdmeta_host_target(stdin_path)
+        out = str_array_push(out, stdin_target)
+    end
+    stdout_path = msh_state_get(vars, "__exec_stdout_path")
+    if target_os() == "windows" and stage + 1 == total and strlen(stdout_path) > 0 then
+        stdout_target = msh_exec_fdmeta_host_target(stdout_path)
+        out = str_array_push(out, stdout_target)
+    end
+    out = msh_exec_fdmeta_push_saved_stdin_targets(vars, out)
+    out = msh_exec_fdmeta_push_saved_stdout_targets(vars, out)
+    i = 0
+    while i < str_array_len(base) then
+        raw_item = str_array_get(base, i)
+        item = msh_exec_fdmeta_host_target(raw_item)
+        out = str_array_push(out, item)
+        i++
+    end
+    msh_field_array_destroy(base)
+    dealloc(stdin_path, stdout_path)
+    return out
+end
+
+
+

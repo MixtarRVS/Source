@@ -1,0 +1,10 @@
+# Mixtar Toolkit echo behavior cases.
+# Compare the Mixtar-built translated echo against FreeBSD /bin/echo.
+
+echo
+echo hello
+echo hello world
+echo -n hello
+echo hello\c
+echo -n hello\c
+echo -- not-an-option

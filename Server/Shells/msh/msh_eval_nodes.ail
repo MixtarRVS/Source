@@ -1,0 +1,715 @@
+// msh_eval_nodes.ail
+// Recursive evaluator nodes split out of msh_eval.ail to keep files small.
+
+import msh_control
+import msh_diagnostics
+import msh_defs
+import msh_ast
+import msh_eval_case_utils
+import msh_eval_result
+import msh_eval_text
+import msh_exec
+import msh_exec_fd_sync
+import msh_exec_fds_core
+import msh_exec_fdtext
+import msh_expand_state
+import msh_fields
+import msh_fd_scope
+import msh_loop_control
+import msh_output
+import msh_phase_state
+import msh_pipeio
+import msh_pipeline
+import msh_redirs
+import msh_signals
+import msh_state
+
+extern fn msh_eval_ast_state(ast: string, vars: string): MshEvalResult
+extern fn msh_eval_source_state_internal(source: string, vars: string): MshEvalResult
+extern fn msh_exec_command_fields(ast: string, vars: string): str_array
+
+def msh_eval_nodes_deliver_pending_signal(result: MshEvalResult): MshEvalResult
+    native_pending = msh_signal_native_pending_name()
+    if strlen(native_pending) == 0 then
+        pending = msh_signal_pending_get(result.vars)
+        if strlen(pending) == 0 then
+            dealloc(pending, native_pending)
+            return result
+        end
+        signal_vars = "" + result.vars
+    else
+        pending = "" + native_pending
+        signal_vars = msh_signal_pending_set(result.vars, native_pending)
+    end
+    if strlen(pending) == 0 then
+        dealloc(pending, native_pending, signal_vars)
+        return result
+    end
+    pending_status = msh_signal_pending_status_get(signal_vars)
+    cleared = msh_signal_pending_clear(signal_vars)
+    if msh_signal_untrappable(pending) == 0 and msh_trap_has(cleared, pending) == 1 then
+        action = msh_trap_get(cleared, pending)
+        if strlen(action) == 0 then
+            status_text = str(result.status)
+            out_ignored = msh_state_set(cleared, "__last_status", status_text)
+            dealloc(status_text, pending, action, cleared, signal_vars, native_pending, result.vars)
+            return new MshEvalResult(result.status, out_ignored)
+        end
+        trap_status = result.status
+        if strlen(native_pending) > 0 then
+            trap_status = msh_signal_exit_status(pending)
+        elsif pending_status >= 0 then
+            trap_status = pending_status
+        end
+        trap_status_text = str(trap_status)
+        trap_base = msh_state_set(cleared, "__last_status", trap_status_text)
+        trap_result = msh_eval_source_state_internal(action, trap_base)
+        out_trap = "" + trap_result.vars
+        status_trap = trap_status
+        if msh_control_active(trap_result.vars) == 1 then
+            status_trap = trap_result.status
+        else
+            restored_trap = msh_state_set(out_trap, "__last_status", trap_status_text)
+            dealloc(out_trap)
+            out_trap = restored_trap
+        end
+        dealloc(pending, action, cleared, signal_vars, native_pending, result.vars, trap_base, trap_status_text, trap_result.vars)
+        return new MshEvalResult(status_trap, out_trap)
+    end
+    signal_status = msh_signal_exit_status(pending)
+    status_text2 = str(signal_status)
+    default_status_vars = msh_state_set(cleared, "__last_status", status_text2)
+    out_default = msh_control_set(default_status_vars, "signal_exit", signal_status)
+    dealloc(status_text2, pending, cleared, signal_vars, native_pending, result.vars, default_status_vars)
+    return new MshEvalResult(signal_status, out_default)
+end
+
+int msh_eval_errexit_sequence_suppressed(ast: string):
+    if startswith(ast, "AND(") == 1 or startswith(ast, "OR(") == 1 then
+        return 1
+    end
+    if startswith(ast, "NOT(") == 1 then
+        return 1
+    end
+    if startswith(ast, "SEQ(") == 1 then
+        inner = msh_eval_call_inner(ast, "SEQ")
+        comma = msh_eval_find_top_comma(inner)
+        suppressed = 0
+        if comma != MSH_INDEX_NOT_FOUND then
+            right = substr(inner, comma + 1, strlen(inner) - comma - 1)
+            suppressed = msh_eval_errexit_sequence_suppressed(right)
+            dealloc(right)
+        end
+        dealloc(inner)
+        return suppressed
+    end
+    return 0
+end
+
+string msh_eval_errexit_suppress_key():
+    return "" + "__msh_errexit_suppressed"
+end
+
+int msh_eval_errexit_suppressed_state(vars: string):
+    key = msh_eval_errexit_suppress_key()
+    value = msh_state_get(vars, key)
+    ok = 0
+    if value == "1" then
+        ok = 1
+    end
+    dealloc(key, value)
+    return ok
+end
+
+string msh_eval_errexit_suppress_restore(vars: string, old_value: string):
+    key = msh_eval_errexit_suppress_key()
+    if strlen(old_value) == 0 then
+        out = msh_state_unset(vars, key)
+    else
+        out = msh_state_set(vars, key, old_value)
+    end
+    dealloc(key)
+    return out
+end
+
+def msh_eval_condition_state(ast: string, vars: string): MshEvalResult
+    key = msh_eval_errexit_suppress_key()
+    old_value = msh_state_get(vars, key)
+    cond_vars = msh_state_set(vars, key, "1")
+    cond_result = msh_eval_ast_state(ast, cond_vars)
+    restored_vars = msh_eval_errexit_suppress_restore(cond_result.vars, old_value)
+    status = cond_result.status
+    dealloc(key, old_value, cond_vars, cond_result.vars)
+    return new MshEvalResult(status, restored_vars)
+end
+
+def msh_eval_wrapped_state(ast: string, tag: string, vars: string): MshEvalResult
+    inner = msh_eval_call_inner(ast, tag)
+    result = msh_eval_ast_state(inner, vars)
+    dealloc(inner)
+    return result
+end
+
+string msh_eval_subshell_enter(vars: string):
+    pushed = msh_subshell_push(vars)
+    out = msh_trap_pipeline_subshell_vars(pushed)
+    dealloc(pushed)
+    return out
+end
+
+def msh_eval_subshell_normalize_control(result: MshEvalResult): MshEvalResult
+    if msh_control_is(result.vars, "break") == 1 or msh_control_is(result.vars, "continue") == 1 then
+        cleared = msh_control_clear(result.vars)
+        dealloc(result.vars)
+        return new MshEvalResult(0, cleared)
+    end
+    return result
+end
+
+def msh_eval_subshell_finalize(result: MshEvalResult, parent_vars: string): MshEvalResult
+    local_result = msh_eval_subshell_normalize_control(result)
+    status = local_result.status
+    exit_action = msh_trap_get(local_result.vars, "EXIT")
+    if strlen(exit_action) > 0 and msh_trap_action_matches(local_result.vars, "EXIT", exit_action) == 0 then
+        status_text = str(status)
+        trap_base = msh_control_clear(local_result.vars)
+        trap_marked = msh_trap_action_mark(trap_base, "EXIT", exit_action)
+        trap_status_vars = msh_trap_action_status_set(trap_marked, "EXIT", status)
+        trap_vars = msh_state_set(trap_status_vars, "__last_status", status_text)
+        trap_result = msh_eval_source_state_internal(exit_action, trap_vars)
+        if msh_control_active(trap_result.vars) == 1 then
+            status = trap_result.status
+        end
+        dealloc(status_text, trap_base, trap_marked, trap_status_vars, trap_vars, trap_result.vars)
+    end
+    parent_signal = msh_subshell_parent_signal_get(local_result.vars)
+    if strlen(parent_signal) > 0 then
+        pending_vars = msh_signal_pending_set(parent_vars, parent_signal)
+        out_vars = msh_signal_pending_status_set(pending_vars, parent_signal)
+        dealloc(pending_vars)
+    else
+        out_vars = "" + parent_vars
+    end
+    dealloc(exit_action, parent_signal, local_result.vars)
+    return new MshEvalResult(status, out_vars)
+end
+
+def msh_eval_pipeline_subshell_finalize(result: MshEvalResult): MshEvalResult
+    local_result = msh_eval_subshell_normalize_control(result)
+    status = local_result.status
+    exit_action = msh_trap_get(local_result.vars, "EXIT")
+    if strlen(exit_action) == 0 or msh_trap_action_matches(local_result.vars, "EXIT", exit_action) == 1 then
+        dealloc(exit_action)
+        return local_result
+    end
+    status_text = str(status)
+    trap_base = msh_control_clear(local_result.vars)
+    trap_marked = msh_trap_action_mark(trap_base, "EXIT", exit_action)
+    trap_status_vars = msh_trap_action_status_set(trap_marked, "EXIT", status)
+    trap_vars = msh_state_set(trap_status_vars, "__last_status", status_text)
+    trap_result = msh_eval_source_state_internal(exit_action, trap_vars)
+    out_vars = msh_trap_action_clear(trap_result.vars, "EXIT")
+    if msh_control_active(trap_result.vars) == 1 then
+        status = trap_result.status
+    end
+    dealloc(exit_action, status_text, trap_base, trap_marked, trap_status_vars, trap_vars, local_result.vars, trap_result.vars)
+    return new MshEvalResult(status, out_vars)
+end
+
+int msh_eval_pipeline_right_discards_input(ast: string, vars: string):
+    if startswith(ast, "CMD(") == 0 then
+        return 0
+    end
+    fields = msh_exec_command_fields(ast, vars)
+    if str_array_len(fields) == 0 then
+        msh_field_array_destroy(fields)
+        return 0
+    end
+    name = str_array_get(fields, 0)
+    discards = 0
+    if name == "true" or name == "false" or name == ":" then
+        discards = 1
+    end
+    msh_field_array_destroy(fields)
+    return discards
+end
+
+def msh_eval_node_with_redirs(child: string, redir_text: string, vars: string): MshEvalResult
+    if index_of(redir_text, "REDIR(") != MSH_INDEX_NOT_FOUND then
+        frame = msh_redir_save_stdio()
+        redir_status = 1
+        if frame.ok == 1 then
+            redir_status = msh_redir_apply_from_text(redir_text, vars)
+        end
+        if redir_status == 0 then
+            meta_result = msh_exec_fds_apply_text_redirs(redir_text, vars)
+            if meta_result.status == 0 then
+                result = msh_eval_ast_state(child, meta_result.vars)
+                status = result.status
+                out_vars = msh_exec_fds_restore_text_redirs(result.vars, vars, redir_text)
+                restored_stdio_vars = msh_exec_fds_restore_stdio_meta(out_vars, vars)
+                dealloc(out_vars)
+                out_vars = restored_stdio_vars
+                dealloc(result.vars)
+            else
+                status = meta_result.status
+                out_vars = "" + vars
+            end
+            dealloc(meta_result.vars)
+        else
+            status = redir_status
+            out_vars = "" + vars
+        end
+        restore_status = msh_redir_restore_stdio(frame)
+        if status == 0 and restore_status != 0 then
+            status = restore_status
+        end
+        return new MshEvalResult(status, out_vars)
+    end
+    return msh_eval_ast_state(child, vars)
+end
+
+def msh_eval_subshell_with_redirs(child: string, redir_text: string, vars: string, parent_vars: string): MshEvalResult
+    if index_of(redir_text, "REDIR(") == MSH_INDEX_NOT_FOUND then
+        raw = msh_eval_ast_state(child, vars)
+        return msh_eval_subshell_finalize(raw, parent_vars)
+    end
+    frame = msh_redir_save_stdio()
+    redir_status = 1
+    if frame.ok == 1 then
+        redir_status = msh_redir_apply_from_text(redir_text, vars)
+    end
+    if redir_status == 0 then
+        meta_result = msh_exec_fds_apply_text_redirs(redir_text, vars)
+        if meta_result.status == 0 then
+            raw_result = msh_eval_ast_state(child, meta_result.vars)
+            final_result = msh_eval_subshell_finalize(raw_result, parent_vars)
+            status = final_result.status
+            out_vars = "" + final_result.vars
+            dealloc(final_result.vars)
+        else
+            status = meta_result.status
+            out_vars = "" + parent_vars
+        end
+        dealloc(meta_result.vars)
+    else
+        status = redir_status
+        out_vars = "" + parent_vars
+    end
+    restore_status = msh_redir_restore_stdio(frame)
+    if status == 0 and restore_status != 0 then
+        status = restore_status
+    end
+    return new MshEvalResult(status, out_vars)
+end
+
+def msh_eval_compound_state(ast: string, tag: string, vars: string): MshEvalResult
+    inner = msh_eval_call_inner(ast, tag)
+    comma = msh_eval_find_top_comma(inner)
+    if comma == MSH_INDEX_NOT_FOUND then
+        if tag == "SUBSHELL" then
+            scope_empty = msh_fd_scope_save()
+            sub_vars = msh_eval_subshell_enter(vars)
+            result = msh_eval_ast_state(inner, sub_vars)
+            restore_empty = msh_fd_scope_restore(scope_empty)
+            if result.status == 0 and restore_empty != 0 then
+                result = new MshEvalResult(restore_empty, result.vars)
+            end
+            final_result = msh_eval_subshell_finalize(result, vars)
+            result = final_result
+            dealloc(sub_vars, scope_empty.pairs, scope_empty.originals, scope_empty.copies)
+        else
+            result = msh_eval_ast_state(inner, vars)
+        end
+        dealloc(inner)
+        return result
+    end
+    child = substr(inner, 0, comma)
+    redir_text = substr(inner, comma + 1, strlen(inner) - comma - 1)
+    if tag == "SUBSHELL" then
+        scope = msh_fd_scope_save()
+        sub_vars2 = msh_eval_subshell_enter(vars)
+        result = msh_eval_subshell_with_redirs(child, redir_text, sub_vars2, vars)
+        restore_status = msh_fd_scope_restore(scope)
+        if restore_status != 0 then
+            restore_text = str(restore_status)
+            restored_vars = msh_state_set(result.vars, "__last_status", restore_text)
+            dealloc(result.vars, restore_text)
+            result = new MshEvalResult(restore_status, restored_vars)
+        end
+        dealloc(sub_vars2, scope.pairs, scope.originals, scope.copies)
+    else
+        result = msh_eval_node_with_redirs(child, redir_text, vars)
+    end
+    dealloc(child, inner, redir_text)
+    return result
+end
+def msh_eval_binary_state(ast: string, tag: string, vars: string): MshEvalResult
+    inner = msh_eval_call_inner(ast, tag)
+    comma = msh_eval_find_top_comma(inner)
+    if comma == MSH_INDEX_NOT_FOUND then
+        dealloc(inner)
+        return new MshEvalResult(2, "" + vars)
+    end
+    left = substr(inner, 0, comma)
+    right = substr(inner, comma + 1, strlen(inner) - comma - 1)
+    if tag == "PIPE" then
+        if msh_pipeline_is_native_external(ast, vars) == 1 then
+            if msh_pipeio_capture_active(vars) == 1 then
+                pipe_output = msh_exec_pipeline_capture(ast, vars)
+                status = process_last_capture_status()
+                status = msh_exec_status_from_errno(status)
+                out_vars = msh_pipeio_set_output(vars, pipe_output)
+                dealloc(pipe_output)
+            else
+                status = msh_exec_pipeline_status(ast, vars)
+                out_vars = "" + vars
+            end
+        else
+            pipe_offset_vars = "" + vars
+            if startswith(left, "CMD(") == 1 and msh_pipeline_cmd_is_external(left, vars) == 1 then
+                pipe_input = msh_exec_command_capture(left, vars)
+            else
+                pipe_left_base = msh_trap_pipeline_subshell_vars(vars)
+                pipe_left_vars = msh_pipeio_capture_on(pipe_left_base)
+                if msh_eval_pipeline_right_discards_input(right, vars) == 1 then
+                    old_pipe_left = pipe_left_vars
+                    pipe_left_vars = msh_pipeio_broken_writer_on(pipe_left_vars)
+                    dealloc(old_pipe_left)
+                end
+                left_raw = msh_eval_ast_state(left, pipe_left_vars)
+                left_result = msh_eval_pipeline_subshell_finalize(left_raw)
+                pipe_input = msh_pipeio_output(left_result.vars)
+                dealloc(pipe_offset_vars)
+                pipe_offset_vars = msh_exec_fds_merge_child_offsets(vars, left_result.vars)
+                dealloc(pipe_left_base, pipe_left_vars, left_result.vars)
+            end
+            pipe_right_base = msh_trap_pipeline_subshell_vars(pipe_offset_vars)
+            pipe_right_vars = msh_pipeio_set_input(pipe_right_base, pipe_input)
+            right_raw = msh_eval_ast_state(right, pipe_right_vars)
+            right_result = msh_eval_pipeline_subshell_finalize(right_raw)
+            pipe_merged_vars = msh_exec_fds_merge_child_offsets(pipe_offset_vars, right_result.vars)
+            status = right_result.status
+            if msh_pipeio_capture_active(vars) == 1 then
+                pipe_output = msh_pipeio_output(right_result.vars)
+                out_vars = msh_pipeio_set_output(pipe_merged_vars, pipe_output)
+                dealloc(pipe_output)
+            else
+                pipe_output = msh_pipeio_output(right_result.vars)
+                out_vars = msh_output_text(pipe_merged_vars, pipe_output)
+                dealloc(pipe_output)
+            end
+            dealloc(pipe_input, pipe_offset_vars, pipe_right_base, pipe_right_vars, pipe_merged_vars, right_result.vars)
+        end
+        dealloc(left, right, inner)
+        return new MshEvalResult(status, out_vars)
+    end
+    left_raw = msh_eval_ast_state(left, vars)
+    left_result = msh_eval_nodes_deliver_pending_signal(left_raw)
+    if msh_control_active(left_result.vars) == 1 then
+        out_vars = "" + left_result.vars
+        status = left_result.status
+        dealloc(left_result.vars, left, right, inner)
+        return new MshEvalResult(status, out_vars)
+    end
+    if tag == "SEQ" and left_result.status != 0 and msh_option_get(left_result.vars, "e") == 1 and msh_eval_errexit_suppressed_state(left_result.vars) == 0 and msh_eval_errexit_sequence_suppressed(left) == 0 then
+        out_vars = msh_control_set(left_result.vars, "exit", left_result.status)
+        status = left_result.status
+        dealloc(left_result.vars, left, right, inner)
+        return new MshEvalResult(status, out_vars)
+    end
+    if tag == "SEQ" then
+        right_result = msh_eval_ast_state(right, left_result.vars)
+        status = right_result.status
+        out_vars = "" + right_result.vars
+        dealloc(right_result.vars)
+    elsif tag == "AND" then
+        if left_result.status == 0 then
+            right_result = msh_eval_ast_state(right, left_result.vars)
+            status = right_result.status
+            out_vars = "" + right_result.vars
+            dealloc(right_result.vars)
+        else
+            status = left_result.status
+            out_vars = "" + left_result.vars
+        end
+    elsif tag == "OR" then
+        if left_result.status != 0 then
+            right_result = msh_eval_ast_state(right, left_result.vars)
+            status = right_result.status
+            out_vars = "" + right_result.vars
+            dealloc(right_result.vars)
+        else
+            status = 0
+            out_vars = "" + left_result.vars
+        end
+    else
+        status = 2
+        out_vars = "" + left_result.vars
+    end
+            dealloc(left_result.vars, left, right, inner)
+    return new MshEvalResult(status, out_vars)
+end
+def msh_eval_if_state(ast: string, vars: string): MshEvalResult
+    inner = msh_eval_call_inner(ast, "IF")
+    first = msh_eval_find_top_comma(inner)
+    if first == MSH_INDEX_NOT_FOUND then
+        dealloc(inner)
+        return new MshEvalResult(2, "" + vars)
+    end
+    cond = substr(inner, 0, first)
+    rest = substr(inner, first + 1, strlen(inner) - first - 1)
+    second = msh_eval_find_top_comma(rest)
+    if second == MSH_INDEX_NOT_FOUND then
+        dealloc(cond, rest, inner)
+        return new MshEvalResult(2, "" + vars)
+    end
+    then_node = substr(rest, 0, second)
+    else_node = substr(rest, second + 1, strlen(rest) - second - 1)
+    cond_result = msh_eval_condition_state(cond, vars)
+    if msh_control_active(cond_result.vars) == 1 then
+        status_control = cond_result.status
+        out_control = "" + cond_result.vars
+        dealloc(cond_result.vars, cond, rest, then_node, else_node, inner)
+        return new MshEvalResult(status_control, out_control)
+    end
+    if cond_result.status == 0 then
+        branch = msh_eval_ast_state(then_node, cond_result.vars)
+    else
+        branch = msh_eval_ast_state(else_node, cond_result.vars)
+    end
+            dealloc(cond_result.vars, cond, rest, then_node, else_node, inner)
+    return branch
+end
+def msh_eval_loop_state(ast: string, tag: string, vars: string): MshEvalResult
+    inner = msh_eval_call_inner(ast, tag)
+    comma = msh_eval_find_top_comma(inner)
+    if comma == MSH_INDEX_NOT_FOUND then
+        dealloc(inner)
+        return new MshEvalResult(2, "" + vars)
+    end
+    cond = substr(inner, 0, comma)
+    body = substr(inner, comma + 1, strlen(inner) - comma - 1)
+    current = "" + vars
+    last_status = 0
+    keep_running = 1
+    while keep_running == 1 then
+        cond_result = msh_eval_condition_state(cond, current)
+        dealloc(current)
+        current = "" + cond_result.vars
+        if msh_control_active(current) == 1 then
+            status_control = cond_result.status
+            dealloc(cond_result.vars, cond, body, inner)
+            return new MshEvalResult(status_control, current)
+        end
+        run_body = 0
+        if tag == "WHILE" then
+            if cond_result.status == 0 then
+                run_body = 1
+            end
+        else
+            if cond_result.status != 0 then
+                run_body = 1
+            end
+        end
+        dealloc(cond_result.vars)
+        if run_body == 0 then
+            keep_running = 0
+        else
+            body_vars = msh_loop_push(current)
+            body_result = msh_eval_ast_state(body, body_vars)
+            body_unscoped = msh_loop_pop(body_result.vars)
+            dealloc(current)
+            current = "" + body_unscoped
+            last_status = body_result.status
+            step = msh_loop_control_step(current)
+            dealloc(current)
+            current = "" + step.vars
+            if step.action == MSH_LOOP_BREAK_THIS then
+                last_status = 0
+                keep_running = 0
+            elsif step.action == MSH_LOOP_CONTINUE_THIS then
+                last_status = 0
+            elsif step.action == MSH_LOOP_PROPAGATE then
+                keep_running = 0
+            end
+            dealloc(step.vars)
+            dealloc(body_vars, body_unscoped, body_result.vars)
+        end
+    end
+    dealloc(cond)
+    dealloc(body)
+    dealloc(inner)
+    return new MshEvalResult(last_status, current)
+end
+def msh_eval_for_state(ast: string, vars: string): MshEvalResult
+    name_start = strlen("FOR(\"")
+    name_end = msh_ast_string_end(ast, name_start)
+    if name_end == MSH_INDEX_NOT_FOUND then
+        return new MshEvalResult(2, "" + vars)
+    end
+    encoded_name = substr(ast, name_start, name_end - name_start)
+    name = msh_ast_unescape(encoded_name)
+    words_start = name_end + 3
+    words_end = index_of_from(ast, "],", words_start)
+    if words_end == MSH_INDEX_NOT_FOUND then
+        dealloc(encoded_name, name)
+        return new MshEvalResult(2, "" + vars)
+    end
+    words = substr(ast, words_start, words_end - words_start)
+    body_start = words_end + 2
+    body = substr(ast, body_start, strlen(ast) - body_start - 1)
+    marker = "" + "WORD(\""
+    pos = index_of(words, marker)
+    current = "" + vars
+    last_status = 0
+    while pos != MSH_INDEX_NOT_FOUND then
+        value_start = pos + strlen(marker)
+        value_end = msh_ast_string_end(words, value_start)
+        if value_end == MSH_INDEX_NOT_FOUND then
+            pos = MSH_INDEX_NOT_FOUND
+        else
+            encoded_value = substr(words, value_start, value_end - value_start)
+            value = msh_ast_unescape(encoded_value)
+            field_result = msh_expand_field_array_state(value, current, last_status)
+            dealloc(current)
+            current = "" + field_result.vars
+            if field_result.status != 0 then
+                fatal_vars = msh_control_set(current, "exit", field_result.status)
+                dealloc(current)
+                current = fatal_vars
+                last_status = field_result.status
+                pos = MSH_INDEX_NOT_FOUND
+            else
+                j = 0
+                while j < str_array_len(field_result.fields) and pos != MSH_INDEX_NOT_FOUND then
+                    field = str_array_get(field_result.fields, j)
+                    if msh_state_is_readonly(current, name) == 1 then
+                        msh_diag_builtin(name, "is read only")
+                        next_error = msh_control_set(current, "exit", 2)
+                        dealloc(current)
+                        current = next_error
+                        last_status = 2
+                        pos = MSH_INDEX_NOT_FOUND
+                    else
+                        next_vars = msh_state_set(current, name, field)
+                        dealloc(current)
+                        current = next_vars
+                        body_vars = msh_loop_push(current)
+                        body_result = msh_eval_ast_state(body, body_vars)
+                        body_unscoped = msh_loop_pop(body_result.vars)
+                        dealloc(current)
+                        current = "" + body_unscoped
+                        last_status = body_result.status
+                        step = msh_loop_control_step(current)
+                        dealloc(current)
+                        current = "" + step.vars
+                        if step.action == MSH_LOOP_BREAK_THIS then
+                            last_status = 0
+                            pos = MSH_INDEX_NOT_FOUND
+                        elsif step.action == MSH_LOOP_CONTINUE_THIS then
+                            last_status = 0
+                        elsif step.action == MSH_LOOP_PROPAGATE then
+                            pos = MSH_INDEX_NOT_FOUND
+                        end
+                        dealloc(step.vars)
+                        dealloc(body_vars, body_unscoped, body_result.vars)
+                    end
+                    j++
+                end
+            end
+            msh_field_array_destroy(field_result.fields)
+            dealloc(field_result.vars)
+            dealloc(encoded_value, value)
+            if pos != MSH_INDEX_NOT_FOUND then
+                pos = index_of_from(words, marker, value_end + 1)
+            end
+        end
+    end
+    dealloc(marker)
+    dealloc(encoded_name, name)
+    dealloc(words)
+    dealloc(body)
+    return new MshEvalResult(last_status, current)
+end
+def msh_eval_case_state(ast: string, vars: string): MshEvalResult
+    subject_start = strlen("CASE(\"")
+    subject_end = msh_ast_string_end(ast, subject_start)
+    if subject_end == MSH_INDEX_NOT_FOUND then
+        return new MshEvalResult(2, "" + vars)
+    end
+    encoded_subject = substr(ast, subject_start, subject_end - subject_start)
+    subject_raw = msh_ast_unescape(encoded_subject)
+    last_text = msh_state_get(vars, "__last_status")
+    last_status = parse_int(last_text)
+    subject_result = msh_expand_word_state(subject_raw, vars, last_status)
+    if subject_result.status != 0 then
+        out_error = "" + subject_result.vars
+        dealloc(encoded_subject, subject_raw, last_text, subject_result.text, subject_result.vars)
+        return new MshEvalResult(subject_result.status, out_error)
+    end
+    subject = "" + subject_result.text
+    case_vars = "" + subject_result.vars
+    items_start = subject_end + 3
+    items = substr(ast, items_start, strlen(ast) - items_start - 2)
+    pos = index_of(items, "ITEM(")
+    while pos != MSH_INDEX_NOT_FOUND then
+        tail = substr(items, pos, strlen(items) - pos)
+        item_end = msh_eval_find_item_end(tail)
+        if item_end == MSH_INDEX_NOT_FOUND then
+            dealloc(encoded_subject, subject_raw, last_text, subject_result.text, subject_result.vars, subject, case_vars, items, tail)
+            return new MshEvalResult(2, "" + vars)
+        end
+        item = substr(tail, 0, item_end + 1)
+        patterns_start = strlen("ITEM([")
+        patterns_end = index_of_from(item, "],", patterns_start)
+        if patterns_end == MSH_INDEX_NOT_FOUND then
+            dealloc(encoded_subject, subject_raw, last_text, subject_result.text, subject_result.vars, subject, case_vars, items, tail, item)
+            return new MshEvalResult(2, "" + vars)
+        end
+        patterns = substr(item, patterns_start, patterns_end - patterns_start)
+        if msh_eval_case_patterns_match_state(patterns, subject, case_vars, last_status) == 1 then
+            body_start = patterns_end + 2
+            body = substr(item, body_start, strlen(item) - body_start - 1)
+            result = msh_eval_ast_state(body, case_vars)
+            dealloc(encoded_subject, subject_raw, last_text, subject_result.text, subject_result.vars, subject, case_vars, items, tail, item, patterns, body)
+            return result
+        end
+        next_start = pos + item_end + 1
+        dealloc(tail, item, patterns)
+        pos = index_of_from(items, "ITEM(", next_start)
+    end
+    out_vars = "" + case_vars
+    dealloc(encoded_subject, subject_raw, last_text, subject_result.text, subject_result.vars, subject, case_vars, items)
+    return new MshEvalResult(0, out_vars)
+end
+def msh_eval_func_state(ast: string, vars: string): MshEvalResult
+    name_start = strlen("FUNC(\"")
+    name_end = msh_ast_string_end(ast, name_start)
+    if name_end == MSH_INDEX_NOT_FOUND then
+        return new MshEvalResult(2, "" + vars)
+    end
+    encoded_name = substr(ast, name_start, name_end - name_start)
+    name = msh_ast_unescape(encoded_name)
+    body_start = name_end + 2
+    body = substr(ast, body_start, strlen(ast) - body_start - 1)
+    key = "__fn_" + name
+    out_vars = msh_state_set(vars, key, body)
+    dealloc(encoded_name, name, body, key)
+    return new MshEvalResult(0, out_vars)
+end
+def msh_eval_redirect_state(ast: string, vars: string): MshEvalResult
+    inner = msh_eval_call_inner(ast, "REDIRECT")
+    comma = msh_eval_find_top_comma(inner)
+    if comma == MSH_INDEX_NOT_FOUND then
+        dealloc(inner)
+        return new MshEvalResult(2, "" + vars)
+    end
+    child = substr(inner, 0, comma)
+    redir_text = substr(inner, comma + 1, strlen(inner) - comma - 1)
+    result = msh_eval_node_with_redirs(child, redir_text, vars)
+    out_vars = "" + result.vars
+    status = result.status
+    dealloc(inner, child, redir_text, result.vars)
+    return new MshEvalResult(status, out_vars)
+end

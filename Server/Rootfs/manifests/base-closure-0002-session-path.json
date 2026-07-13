@@ -1,0 +1,50 @@
+{
+  "name": "MixtarRVS Base Closure 0002",
+  "status": "explicit-session-profile",
+  "created": "2026-06-29",
+  "purpose": "Make MixtarRVS Toolkit resolve first inside an explicitly entered session without changing boot, PID 1, OpenRC, SSH, or global Alpine login profiles.",
+  "requires": [
+    "/System/Base/Closure/0001-audit/manifest.json",
+    "/System/Tools/MixtarRVS/bin",
+    "/System/Tools/Current"
+  ],
+  "path_order": [
+    "/System/Tools/Current/bin",
+    "/System/Tools/MixtarRVS/bin",
+    "/usr/local/sbin",
+    "/usr/local/bin",
+    "/usr/sbin",
+    "/usr/bin",
+    "/sbin",
+    "/bin"
+  ],
+  "expected_mixtar_commands": [
+    "sh",
+    "ls",
+    "uname",
+    "vi",
+    "login",
+    "passwd",
+    "mount"
+  ],
+  "expected_fallback_commands": [
+    "rc-status",
+    "apk",
+    "openrc-run",
+    "sshd",
+    "dhcpcd"
+  ],
+  "non_goals": [
+    "Do not replace /sbin/init.",
+    "Do not rewrite /etc/inittab.",
+    "Do not rewrite /etc/profile.",
+    "Do not rewrite bootloader defaults.",
+    "Do not remove Alpine fallback commands."
+  ],
+  "known_limitations": [
+    "MixtarRVS sh resolves first in the session, but is not yet certified as the default Base Closure script driver.",
+    "Stage 0002 sources the profile from the existing login shell and then resolves external commands through MixtarRVS first.",
+    "PID 1 scripts, initramfs scripts, and service orchestration must wait for explicit shell/runtime certification."
+  ],
+  "next_stage": "0003-shell-runtime-and-libraries-profile"
+}

@@ -1,0 +1,42 @@
+{
+  "name": "MixtarRVS Base Closure 0029",
+  "id": "0029-initramfs-handoff-boot-command-no-install",
+  "status": "handoff-boot-command-candidate-built-not-installed",
+  "purpose": "Add a real boot command to the Mixtar initramfs handoff tool and build a new candidate initramfs containing it, without installing or booting the candidate.",
+  "requires": [
+    "/System/Base/Closure/0028-initramfs-candidate-init-handoff-wiring-no-install/initramfs-candidate-init-handoff-wiring-no-install-status.txt",
+    "/System/Initramfs/Candidates/0028-initramfs-candidate-init-handoff-wiring-no-install/initramfs.img",
+    "/System/Initramfs/Prototypes/mixtar-init-wrapper.sh"
+  ],
+  "creates_non_boot_candidate": [
+    "/System/Initramfs/Candidates/0029-initramfs-handoff-boot-command-no-install/initramfs.img"
+  ],
+  "non_goals": [
+    "do not install candidate initramfs",
+    "do not copy candidate to ESP",
+    "do not write bootloader entries",
+    "do not set BootNext",
+    "do not switch /System/Current",
+    "do not execute handoff boot",
+    "do not run switch_root"
+  ],
+  "must_report": [
+    "source candidate hash",
+    "target candidate hash",
+    "handoff source hash",
+    "handoff target hash",
+    "boot command availability",
+    "switch_root behavior declared by contract",
+    "active initramfs hash before and after",
+    "current generation before and after"
+  ],
+  "postconditions": [
+    "new candidate initramfs exists outside active kernel profile",
+    "handoff boot command is present in candidate",
+    "candidate /init wrapper and /init.alpine fallback remain present",
+    "active initramfs hash is unchanged",
+    "/System/Current is unchanged",
+    "rootfs inspection mountpoint is unmounted"
+  ],
+  "next_stage": "0030-esp-candidate-copy-plan-no-activation"
+}

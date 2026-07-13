@@ -1,0 +1,95 @@
+// msh_exec_preflight_diag.ail
+// Redirection-aware diagnostics for execution preflight failures.
+
+import msh_exec_errors
+import msh_exec_redirs
+import msh_fd_scope
+import msh_redirs
+
+string msh_exec_preflight_capture_temp_path():
+    pid_text = str(getpid())
+    tick_text = str(time_ns())
+    prefix = ".msh-preflight-capture-" + pid_text
+    middle = prefix + "-"
+    out = middle + tick_text
+    dealloc(pid_text, tick_text, prefix, middle)
+    return out
+end
+
+void msh_exec_diag_preflight_failure_with_redirs(ast: string, vars: string, name: string, status: int):
+    if msh_exec_command_has_redirs(ast) == 0 then
+        msh_exec_diag_preflight_failure(name, status, vars)
+        return
+    end
+    scope = msh_fd_scope_save()
+    frame = msh_redir_save_stdio()
+    if frame.ok == 0 then
+        msh_fd_scope_restore(scope)
+        dealloc(scope.pairs, scope.originals, scope.copies)
+        msh_exec_diag_preflight_failure(name, status, vars)
+        return
+    end
+    redir_status = msh_redir_apply_ast(ast, vars)
+    if redir_status == 0 then
+        msh_exec_diag_preflight_failure(name, status, vars)
+    end
+    msh_redir_restore_stdio(frame)
+    msh_fd_scope_restore(scope)
+    dealloc(scope.pairs, scope.originals, scope.copies)
+end
+
+string msh_exec_capture_preflight_failure_with_redirs(ast: string, vars: string, name: string, status: int):
+    capture_path = msh_exec_preflight_capture_temp_path()
+    scope = msh_fd_scope_save()
+    frame = msh_redir_save_stdio()
+    if frame.ok == 0 then
+        msh_fd_scope_restore(scope)
+        dealloc(scope.pairs, scope.originals, scope.copies)
+        msh_exec_diag_preflight_failure(name, status, vars)
+        dealloc(capture_path)
+        return "" + ""
+    end
+    capture_fd = fd_open(capture_path, 2 + 4 + 8, 420)
+    if capture_fd >= 0 then
+        fd_dup2(capture_fd, 1)
+        fd_close(capture_fd)
+    end
+    redir_status = msh_redir_apply_ast(ast, vars)
+    if redir_status == 0 then
+        msh_exec_diag_preflight_failure(name, status, vars)
+    end
+    fd_flush()
+    msh_redir_restore_stdio(frame)
+    msh_fd_scope_restore(scope)
+    dealloc(scope.pairs, scope.originals, scope.copies)
+    if file_exists(capture_path) == 1 then
+        out = read_file(capture_path)
+        delete_file(capture_path)
+    else
+        out = "" + ""
+    end
+    dealloc(capture_path)
+    return out
+end
+
+void msh_exec_diag_preflight_host_failure_with_redirs(ast: string, vars: string, name: string, status: int):
+    if msh_exec_command_has_redirs(ast) == 0 then
+        msh_exec_diag_preflight_host_failure(name, status)
+        return
+    end
+    scope = msh_fd_scope_save()
+    frame = msh_redir_save_stdio()
+    if frame.ok == 0 then
+        msh_fd_scope_restore(scope)
+        dealloc(scope.pairs, scope.originals, scope.copies)
+        msh_exec_diag_preflight_host_failure(name, status)
+        return
+    end
+    redir_status = msh_redir_apply_ast(ast, vars)
+    if redir_status == 0 then
+        msh_exec_diag_preflight_host_failure(name, status)
+    end
+    msh_redir_restore_stdio(frame)
+    msh_fd_scope_restore(scope)
+    dealloc(scope.pairs, scope.originals, scope.copies)
+end

@@ -1,0 +1,205 @@
+// msh_eval_export.ail
+// Stateful export/readonly builtin helper for msh_eval.
+
+import msh_eval_result
+import msh_fields
+import msh_glob
+import msh_output
+import msh_pipeio
+import msh_state
+import msh_diagnostics
+import msh_errors
+
+string msh_eval_export_emit_line(vars: string, text: string):
+    return msh_output_line(vars, text)
+end
+
+string msh_eval_export_line(builtin: string, name: string, value: string):
+    head = builtin + " "
+    pair_left = head + name
+    pair_mid = pair_left + "="
+    out = pair_mid + value
+    dealloc(head, pair_left, pair_mid)
+    return out
+end
+
+string msh_eval_shell_quote(value: string):
+    out = "" + "'"
+    i = 0
+    while i < strlen(value) then
+        c = char_at(value, i)
+        if c == MSH_CH_SQUOTE then
+            old_quote = out
+            out = old_quote + "'\\''"
+            dealloc(old_quote)
+        else
+            ch = chr(c)
+            old_char = out
+            out = old_char + ch
+            dealloc(old_char, ch)
+        end
+        i++
+    end
+    old_end = out
+    out = old_end + "'"
+    dealloc(old_end)
+    return out
+end
+
+string msh_eval_export_format_marked(builtin: string, name: string, vars: string):
+    head = builtin + " "
+    if msh_state_name_pos(vars, name) == MSH_INDEX_NOT_FOUND then
+        out = head + name
+        dealloc(head)
+        return out
+    end
+    value = msh_state_get(vars, name)
+    quoted = msh_eval_shell_quote(value)
+    left = head + name
+    mid = left + "="
+    out2 = mid + quoted
+    dealloc(head, value, quoted, left, mid)
+    return out2
+end
+
+def msh_eval_marked_names(builtin: string, vars: string): str_array
+    names = str_array_new(MSH_FIELD_CAP_DEFAULT)
+    pos = 0
+    marker = "__export_"
+    if builtin == "readonly" then
+        marker = "__readonly_"
+    end
+    while pos < strlen(vars) then
+        stop = index_of_from(vars, "\n", pos)
+        if stop == MSH_INDEX_NOT_FOUND then
+            stop = strlen(vars)
+        end
+        line = substr(vars, pos, stop - pos)
+        eq = index_of(line, "=")
+        if eq != MSH_INDEX_NOT_FOUND then
+            key = substr(line, 0, eq)
+            if startswith(key, marker) == 1 then
+                name = substr(key, strlen(marker), strlen(key) - strlen(marker))
+                names = str_array_push(names, name)
+            end
+            dealloc(key)
+        end
+        dealloc(line)
+        if stop >= strlen(vars) then
+            pos = strlen(vars)
+        else
+            pos = stop + 1
+        end
+    end
+    msh_sort_fields_ascii(names)
+    return names
+end
+
+string msh_eval_export_print_marked(builtin: string, vars: string):
+    out = "" + vars
+    names = msh_eval_marked_names(builtin, vars)
+    i = 0
+    while i < str_array_len(names) then
+        name = str_array_get(names, i)
+        text = msh_eval_export_format_marked(builtin, name, vars)
+        old = out
+        out = msh_eval_export_emit_line(out, text)
+        dealloc(old, text)
+        i++
+    end
+    msh_field_array_destroy(names)
+    return out
+end
+
+int msh_eval_export_should_print(fields: str_array):
+    if str_array_len(fields) == 1 then
+        return 1
+    end
+    if str_array_len(fields) >= 2 and str_array_get(fields, 1) == "-p" then
+        return 1
+    end
+    if str_array_len(fields) == 2 and str_array_get(fields, 1) == "--" then
+        return 1
+    end
+    return 0
+end
+
+def msh_eval_export_readonly_state(builtin: string, fields: str_array, vars: string): MshEvalResult
+    out = "" + vars
+    status = 0
+    if msh_eval_export_should_print(fields) == 1 then
+        listed = msh_eval_export_print_marked(builtin, out)
+        dealloc(out)
+        if msh_output_error(listed) == 1 then
+            left = builtin + ": I/O error"
+            msh_diag_builtin(builtin, left)
+            clean_listed = msh_output_error_clear(listed)
+            dealloc(left, listed)
+            return new MshEvalResult(1, clean_listed)
+        end
+        return new MshEvalResult(0, listed)
+    end
+    i = 1
+    while i < str_array_len(fields) then
+        arg = "" + str_array_get(fields, i)
+        if arg == "-p" then
+            status = status
+        elsif arg == "--" then
+            status = status
+        elsif startswith(arg, "-") == 1 and arg != "-" then
+            bad = substr(arg, 0, 2)
+            detail = "Illegal option " + bad
+            msh_diag_builtin(builtin, detail)
+            dealloc(bad, detail)
+            status = 2
+        elsif status == 0 then
+            if msh_state_word_is_assignment(arg) == 1 then
+                name = msh_state_assignment_name(arg)
+                value = msh_state_assignment_value(arg)
+                if msh_state_is_readonly(out, name) == 1 then
+                    detail = name + ": is read only"
+                    msh_diag_builtin(builtin, detail)
+                    dealloc(detail)
+                    status = MSH_STATUS_SYNTAX_ERROR
+                else
+                    old = out
+                    out = msh_state_set(out, name, value)
+                    dealloc(old)
+                end
+                dealloc(value)
+            else
+                name = "" + arg
+                if msh_state_name_valid(name) == 0 then
+                    eq_bad_name = index_of(name, "=")
+                    if eq_bad_name != MSH_INDEX_NOT_FOUND then
+                        bad_name = substr(name, 0, eq_bad_name)
+                    else
+                        bad_name = "" + name
+                    end
+                    detail_bad_name = bad_name + ": bad variable name"
+                    msh_diag_builtin(builtin, detail_bad_name)
+                    dealloc(bad_name, detail_bad_name)
+                    status = 2
+                end
+            end
+            if status == 0 then
+                old2 = out
+                if builtin == "export" then
+                    out = msh_state_set_export(out, name)
+                else
+                    out = msh_state_set_readonly(out, name)
+                end
+                dealloc(old2)
+            end
+            dealloc(name)
+        end
+        dealloc(arg)
+        i++
+    end
+    if status != 0 then
+        fatal = msh_error_special_consequence(builtin, status, out)
+        dealloc(out)
+        return new MshEvalResult(status, fatal)
+    end
+    return new MshEvalResult(status, out)
+end

@@ -1,0 +1,633 @@
+const string OPENBSD_DEFAULT_CONFIG = "/System/Configuration/Updates.config"
+const string OPENBSD_DEFAULT_WORK = "/Temporary/Updates/openbsd-userland"
+const int OPENBSD_OK = 0
+const int OPENBSD_USAGE = 64
+const int OPENBSD_ERROR = 65
+const int MI_OPENBSD_SQLITE_ROW = 100
+const int MI_OPENBSD_SQLITE_DONE = 101
+
+void openbsd_line(prefix: string, value: string):
+    line = prefix + value
+    print line
+    dealloc(line)
+end
+
+int openbsd_fail(message: string):
+    openbsd_line("updates-openbsd: ", message)
+    return OPENBSD_ERROR
+end
+
+string config_path():
+    if argc() >= 3 then
+        return "" + argv(2)
+    end
+    return "" + OPENBSD_DEFAULT_CONFIG
+end
+
+string work_path():
+    if argc() >= 4 then
+        return "" + argv(3)
+    end
+    return "" + OPENBSD_DEFAULT_WORK
+end
+
+@effect(sqlite)
+string query_text(db: int, sql: string):
+    stmt = sql_prepare(db, sql)
+    if stmt == 0 then
+        return "" + ""
+    end
+    rc = sql_step(stmt)
+    if rc != MI_OPENBSD_SQLITE_ROW then
+        sql_finalize(stmt)
+        return "" + ""
+    end
+    value = "" + sql_column_text(stmt, 0)
+    sql_finalize(stmt)
+    return value
+end
+
+int release_valid(value: string):
+    n = strlen(value)
+    if n < 3 or n > 8 then
+        return 0
+    end
+    raw = reinterpret(i64, value)
+    dots = 0
+    digits = 0
+    i = 0
+    while i < n then
+        ch = peek8(raw, i)
+        if ch == 46 then
+            if digits == 0 or dots != 0 then
+                return 0
+            end
+            dots++
+            digits = 0
+        else
+            if ch < 48 or ch > 57 then
+                return 0
+            end
+            digits++
+        end
+        i++
+    end
+    if dots != 1 or digits == 0 then
+        return 0
+    end
+    return 1
+end
+
+int release_part(value: string, wanted: int):
+    raw = reinterpret(i64, value)
+    n = strlen(value)
+    part = 0
+    number = 0
+    i = 0
+    while i < n then
+        ch = peek8(raw, i)
+        if ch == 46 then
+            if part == wanted then
+                return number
+            end
+            part++
+            number = 0
+        else
+            if part == wanted then
+                number = number * 10 + ch - 48
+            end
+        end
+        i++
+    end
+    if part == wanted then
+        return number
+    end
+    return 0
+end
+
+int release_compare(left: string, right: string):
+    major_left = release_part(left, 0)
+    major_right = release_part(right, 0)
+    if major_left > major_right then
+        return 1
+    end
+    if major_left < major_right then
+        return -1
+    end
+    minor_left = release_part(left, 1)
+    minor_right = release_part(right, 1)
+    if minor_left > minor_right then
+        return 1
+    end
+    if minor_left < minor_right then
+        return -1
+    end
+    return 0
+end
+
+@effect(sqlite, process)
+string capture_url(db: int, fetcher: string, url: string, connect_timeout: string, max_time: string):
+    dns_servers = query_text(db, "SELECT value FROM setting WHERE key='networking.dns.servers'")
+    if strlen(dns_servers) == 0 then
+        dealloc(dns_servers)
+        return "" + ""
+    end
+    args = str_array_new(12)
+    args = str_array_push(args, fetcher)
+    args = str_array_push(args, "--dns-servers")
+    args = str_array_push(args, dns_servers)
+    args = str_array_push(args, "--fail")
+    args = str_array_push(args, "--silent")
+    args = str_array_push(args, "--show-error")
+    args = str_array_push(args, "--location")
+    args = str_array_push(args, "--connect-timeout")
+    args = str_array_push(args, connect_timeout)
+    args = str_array_push(args, "--max-time")
+    args = str_array_push(args, max_time)
+    args = str_array_push(args, url)
+    env = str_array_new(0)
+    ops = str_array_new(0)
+    targets = str_array_new(0)
+    output = process_capture_argv_env_redirs(args, env, ops, targets)
+    dealloc(dns_servers)
+    rc = process_last_capture_status()
+    dealloc_str_array(args)
+    dealloc_str_array(env)
+    dealloc_str_array(ops)
+    dealloc_str_array(targets)
+    if rc != 0 then
+        dealloc(output)
+        return "" + ""
+    end
+    return output
+end
+
+string latest_release(index: string):
+    prefix = "href=\""
+    latest = "" + ""
+    cursor = 0
+    n = strlen(index)
+    while cursor < n then
+        found = index_of(index, prefix, cursor)
+        if found < 0 then
+            return latest
+        end
+        start = found + strlen(prefix)
+        finish = index_of(index, "/", start)
+        if finish < 0 then
+            return latest
+        end
+        count = finish - start
+        if count > 0 and count < 9 then
+            candidate = substr(index, start, count)
+            if release_valid(candidate) == 1 then
+                if strlen(latest) == 0 or release_compare(candidate, latest) > 0 then
+                    dealloc(latest)
+                    latest = candidate
+                else
+                    dealloc(candidate)
+                end
+            else
+                dealloc(candidate)
+            end
+        end
+        cursor = finish + 1
+    end
+    return latest
+end
+
+@effect(sqlite)
+int save_observation(db: int, version: string, state: string, source: string, signature: string, detail: string):
+    sql = "INSERT INTO observation(component_id,available_version,status,source_uri,signature_uri,source_path,signature_path,trust_path,detail,checked_at_ms) VALUES('openbsd-userland',?,?,?,?,'','','',?,?) ON CONFLICT(component_id) DO UPDATE SET available_version=excluded.available_version,status=CASE WHEN observation.available_version=excluded.available_version AND observation.status IN ('verified-source','build-passed') THEN observation.status ELSE excluded.status END,source_uri=excluded.source_uri,signature_uri=excluded.signature_uri,source_path=CASE WHEN observation.available_version=excluded.available_version AND observation.status IN ('verified-source','build-passed') THEN observation.source_path ELSE '' END,signature_path=CASE WHEN observation.available_version=excluded.available_version AND observation.status IN ('verified-source','build-passed') THEN observation.signature_path ELSE '' END,trust_path=CASE WHEN observation.available_version=excluded.available_version AND observation.status IN ('verified-source','build-passed') THEN observation.trust_path ELSE '' END,detail=CASE WHEN observation.available_version=excluded.available_version AND observation.status IN ('verified-source','build-passed') THEN observation.detail ELSE excluded.detail END,checked_at_ms=excluded.checked_at_ms"
+    stmt = sql_prepare(db, sql)
+    if stmt == 0 then
+        return OPENBSD_ERROR
+    end
+    sql_bind_text(stmt, 1, version)
+    sql_bind_text(stmt, 2, state)
+    sql_bind_text(stmt, 3, source)
+    sql_bind_text(stmt, 4, signature)
+    sql_bind_text(stmt, 5, detail)
+    sql_bind_int(stmt, 6, time_ms())
+    rc = sql_step(stmt)
+    sql_finalize(stmt)
+    if rc != MI_OPENBSD_SQLITE_DONE then
+        return OPENBSD_ERROR
+    end
+    return OPENBSD_OK
+end
+
+int check_openbsd(db: int):
+    fetcher = query_text(db, "SELECT value FROM setting WHERE key='tool.fetch'")
+    index_uri = query_text(db, "SELECT discovery_uri FROM component_source WHERE component_id='openbsd-userland' AND role='release-source'")
+    source_template = query_text(db, "SELECT artifact_uri_template FROM component_source WHERE component_id='openbsd-userland' AND role='release-source'")
+    signature_template = query_text(db, "SELECT signature_uri_template FROM component_source WHERE component_id='openbsd-userland' AND role='release-source'")
+    installed = query_text(db, "SELECT installed_version FROM component WHERE id='openbsd-userland' AND enabled=1")
+    connect_timeout = query_text(db, "SELECT value FROM setting WHERE key='source.download.connect_timeout_seconds'")
+    discovery_timeout = query_text(db, "SELECT value FROM setting WHERE key='source.discovery.max_time_seconds'")
+    if strlen(fetcher) == 0 or strlen(index_uri) == 0 or strlen(source_template) == 0 or strlen(connect_timeout) == 0 or strlen(discovery_timeout) == 0 then
+        dealloc(fetcher, index_uri, source_template, signature_template, installed, connect_timeout, discovery_timeout)
+        return openbsd_fail("OpenBSD update policy is incomplete")
+    end
+    index = capture_url(db, fetcher, index_uri, connect_timeout, discovery_timeout)
+    if strlen(index) == 0 then
+        dealloc(fetcher, index_uri, source_template, signature_template, installed, connect_timeout, discovery_timeout, index)
+        return openbsd_fail("could not read the official OpenBSD release index")
+    end
+    latest = latest_release(index)
+    dealloc(index)
+    if strlen(latest) == 0 then
+        dealloc(fetcher, index_uri, source_template, signature_template, installed, connect_timeout, discovery_timeout, latest)
+        return openbsd_fail("official OpenBSD index contained no valid release")
+    end
+    source = str_replace(source_template, "{version}", latest)
+    signature = str_replace(signature_template, "{version}", latest)
+    state = "available-unverified"
+    detail = "official release requires signify manifest and source checksum verification"
+    if release_valid(installed) == 1 then
+        relation = release_compare(latest, installed)
+        if relation == 0 then
+            state = "current-unverified"
+            detail = "installed release matches upstream but source is not verified"
+        else
+            if relation < 0 then
+                state = "local-newer"
+                detail = "installed release is newer than official stable source"
+            end
+        end
+    end
+    rc = save_observation(db, latest, state, source, signature, detail)
+    openbsd_line("OpenBSD installed: ", installed)
+    openbsd_line("OpenBSD available: ", latest)
+    openbsd_line("OpenBSD state: ", state)
+    dealloc(fetcher, index_uri, source_template, signature_template, installed, connect_timeout, discovery_timeout, latest, source, signature)
+    return rc
+end
+
+@effect(process)
+int run_mkdir(executable: string, path: string):
+    args = str_array_new(3)
+    args = str_array_push(args, executable)
+    args = str_array_push(args, "-p")
+    args = str_array_push(args, path)
+    rc = process_run_argv(args)
+    dealloc_str_array(args)
+    return rc
+end
+
+@effect(sqlite, process)
+int spawn_download(db: int, fetcher: string, url: string, path: string, connect_timeout: string, max_time: string, retry_count: string, retry_delay: string, resume: int):
+    dns_servers = query_text(db, "SELECT value FROM setting WHERE key='networking.dns.servers'")
+    if strlen(dns_servers) == 0 then
+        dealloc(dns_servers)
+        return -1
+    end
+    args = str_array_new(22)
+    args = str_array_push(args, fetcher)
+    args = str_array_push(args, "--dns-servers")
+    args = str_array_push(args, dns_servers)
+    args = str_array_push(args, "--fail")
+    args = str_array_push(args, "--silent")
+    args = str_array_push(args, "--show-error")
+    args = str_array_push(args, "--location")
+    args = str_array_push(args, "--http1.1")
+    args = str_array_push(args, "--connect-timeout")
+    args = str_array_push(args, connect_timeout)
+    args = str_array_push(args, "--max-time")
+    args = str_array_push(args, max_time)
+    args = str_array_push(args, "--retry")
+    args = str_array_push(args, retry_count)
+    args = str_array_push(args, "--retry-delay")
+    args = str_array_push(args, retry_delay)
+    args = str_array_push(args, "--retry-all-errors")
+    if resume == 1 then
+        args = str_array_push(args, "--continue-at")
+        args = str_array_push(args, "-")
+    end
+    args = str_array_push(args, "--output")
+    args = str_array_push(args, path)
+    args = str_array_push(args, url)
+    env = str_array_new(0)
+    ops = str_array_new(0)
+    targets = str_array_new(0)
+    pid = process_spawn_argv_env_redirs(args, env, ops, targets)
+    dealloc(dns_servers)
+    dealloc_str_array(args)
+    dealloc_str_array(env)
+    dealloc_str_array(ops)
+    dealloc_str_array(targets)
+    return pid
+end
+
+@effect(sqlite)
+int save_paths(db: int, source: string, signature: string, key: string, state: string):
+    stmt = sql_prepare(db, "UPDATE observation SET source_path=?,signature_path=?,trust_path=?,status=?,detail='OpenBSD release material acquired from official CDN' WHERE component_id='openbsd-userland'")
+    if stmt == 0 then
+        return OPENBSD_ERROR
+    end
+    sql_bind_text(stmt, 1, source)
+    sql_bind_text(stmt, 2, signature)
+    sql_bind_text(stmt, 3, key)
+    sql_bind_text(stmt, 4, state)
+    rc = sql_step(stmt)
+    sql_finalize(stmt)
+    if rc != MI_OPENBSD_SQLITE_DONE then
+        return OPENBSD_ERROR
+    end
+    return OPENBSD_OK
+end
+
+@effect(fs, process)
+int fetch_openbsd(db: int, work: string, metadata_only: int):
+    version = query_text(db, "SELECT available_version FROM observation WHERE component_id='openbsd-userland' AND status IN ('available-unverified','current-unverified','local-newer')")
+    source_uri = query_text(db, "SELECT source_uri FROM observation WHERE component_id='openbsd-userland'")
+    signature_uri = query_text(db, "SELECT signature_uri FROM observation WHERE component_id='openbsd-userland'")
+    key_uri = query_text(db, "SELECT material_uri FROM trust_anchor WHERE id='openbsd-79-base' AND enabled=1")
+    fetcher = query_text(db, "SELECT value FROM setting WHERE key='tool.fetch'")
+    mkdir_exe = query_text(db, "SELECT value FROM setting WHERE key='tool.mkdir'")
+    connect_timeout = query_text(db, "SELECT value FROM setting WHERE key='source.download.connect_timeout_seconds'")
+    download_timeout = query_text(db, "SELECT value FROM setting WHERE key='source.download.max_time_seconds'")
+    retry_count = query_text(db, "SELECT value FROM setting WHERE key='source.download.retry_count'")
+    retry_delay = query_text(db, "SELECT value FROM setting WHERE key='source.download.retry_delay_seconds'")
+    if strlen(version) == 0 or strlen(signature_uri) == 0 or strlen(key_uri) == 0 then
+        dealloc(version, source_uri, signature_uri, key_uri, fetcher, mkdir_exe, connect_timeout, download_timeout, retry_count, retry_delay)
+        return openbsd_fail("run check-openbsd before acquisition")
+    end
+    if strlen(fetcher) == 0 or strlen(mkdir_exe) == 0 or strlen(connect_timeout) == 0 or strlen(download_timeout) == 0 or strlen(retry_count) == 0 or strlen(retry_delay) == 0 then
+        dealloc(version, source_uri, signature_uri, key_uri, fetcher, mkdir_exe, connect_timeout, download_timeout, retry_count, retry_delay)
+        return openbsd_fail("OpenBSD acquisition policy is incomplete")
+    end
+    if file_exists(work) == 0 then
+        if run_mkdir(mkdir_exe, work) != 0 then
+            dealloc(version, source_uri, signature_uri, key_uri, fetcher, mkdir_exe, connect_timeout, download_timeout, retry_count, retry_delay)
+            return openbsd_fail("cannot create OpenBSD update work directory")
+        end
+    end
+    source_path = "" + ""
+    signature_path = work + "/SHA256.sig"
+    key_path = work + "/openbsd-79-base.pub"
+    pid_signature = spawn_download(db, fetcher, signature_uri, signature_path, connect_timeout, download_timeout, retry_count, retry_delay, 0)
+    pid_key = spawn_download(db, fetcher, key_uri, key_path, connect_timeout, download_timeout, retry_count, retry_delay, 0)
+    pid_source = 0
+    if metadata_only == 0 then
+        dealloc(source_path)
+        source_path = work + "/src.tar.gz"
+        pid_source = spawn_download(db, fetcher, source_uri, source_path, connect_timeout, download_timeout, retry_count, retry_delay, 1)
+    end
+    if pid_signature <= 0 or pid_key <= 0 or (metadata_only == 0 and pid_source <= 0) then
+        dealloc(version, source_uri, signature_uri, key_uri, fetcher, mkdir_exe, connect_timeout, download_timeout, retry_count, retry_delay, source_path, signature_path, key_path)
+        return openbsd_fail("could not start parallel OpenBSD acquisition")
+    end
+    rc_signature = process_wait_pid(pid_signature)
+    rc_key = process_wait_pid(pid_key)
+    rc_source = 0
+    if metadata_only == 0 then
+        rc_source = process_wait_pid(pid_source)
+    end
+    if rc_signature != 0 or rc_key != 0 or rc_source != 0 then
+        dealloc(version, source_uri, signature_uri, key_uri, fetcher, mkdir_exe, connect_timeout, download_timeout, retry_count, retry_delay, source_path, signature_path, key_path)
+        return openbsd_fail("OpenBSD acquisition failed")
+    end
+    state = "metadata-acquired"
+    if metadata_only == 0 then
+        state = "source-acquired"
+        print "OpenBSD acquisition: PASS (source, signature and key in parallel)"
+    else
+        print "OpenBSD metadata acquisition: PASS (signature and key in parallel)"
+    end
+    rc = save_paths(db, source_path, signature_path, key_path, state)
+    dealloc(version, source_uri, signature_uri, key_uri, fetcher, mkdir_exe, connect_timeout, download_timeout, retry_count, retry_delay, source_path, signature_path, key_path)
+    return rc
+end
+
+@effect(process)
+string capture_sha256(executable: string, path: string):
+    args = str_array_new(2)
+    args = str_array_push(args, executable)
+    args = str_array_push(args, path)
+    env = str_array_new(0)
+    ops = str_array_new(0)
+    targets = str_array_new(0)
+    output = process_capture_argv_env_redirs(args, env, ops, targets)
+    rc = process_last_capture_status()
+    dealloc_str_array(args)
+    dealloc_str_array(env)
+    dealloc_str_array(ops)
+    dealloc_str_array(targets)
+    if rc != 0 or strlen(output) < 64 then
+        dealloc(output)
+        return "" + ""
+    end
+    digest = substr(output, 0, 64)
+    dealloc(output)
+    return digest
+end
+
+@effect(process)
+int run_signify(signify: string, key: string, signature: string, manifest: string):
+    args = str_array_new(9)
+    args = str_array_push(args, signify)
+    args = str_array_push(args, "-V")
+    args = str_array_push(args, "-e")
+    args = str_array_push(args, "-p")
+    args = str_array_push(args, key)
+    args = str_array_push(args, "-x")
+    args = str_array_push(args, signature)
+    args = str_array_push(args, "-m")
+    args = str_array_push(args, manifest)
+    rc = process_run_argv(args)
+    dealloc_str_array(args)
+    return rc
+end
+
+@effect(process)
+string capture_file(cat: string, path: string):
+    args = str_array_new(2)
+    args = str_array_push(args, cat)
+    args = str_array_push(args, path)
+    env = str_array_new(0)
+    ops = str_array_new(0)
+    targets = str_array_new(0)
+    output = process_capture_argv_env_redirs(args, env, ops, targets)
+    rc = process_last_capture_status()
+    dealloc_str_array(args)
+    dealloc_str_array(env)
+    dealloc_str_array(ops)
+    dealloc_str_array(targets)
+    if rc != 0 then
+        dealloc(output)
+        return "" + ""
+    end
+    return output
+end
+
+int digest_valid(value: string):
+    if strlen(value) != 64 then
+        return 0
+    end
+    raw = reinterpret(i64, value)
+    i = 0
+    while i < 64 then
+        ch = peek8(raw, i)
+        digit = ch >= 48 and ch <= 57
+        lower = ch >= 97 and ch <= 102
+        if digit == 0 and lower == 0 then
+            return 0
+        end
+        i++
+    end
+    return 1
+end
+
+string expected_source_digest(manifest: string):
+    marker = "SHA256 (src.tar.gz) = "
+    found = index_of(manifest, marker)
+    if found < 0 then
+        return "" + ""
+    end
+    start = found + strlen(marker)
+    if start + 64 > strlen(manifest) then
+        return "" + ""
+    end
+    digest = substr(manifest, start, 64)
+    if digest_valid(digest) == 0 then
+        dealloc(digest)
+        return "" + ""
+    end
+    return digest
+end
+
+@effect(sqlite)
+int mark_verified(db: int, state: string, detail: string):
+    stmt = sql_prepare(db, "UPDATE observation SET status=?,detail=? WHERE component_id='openbsd-userland'")
+    if stmt == 0 then
+        return OPENBSD_ERROR
+    end
+    sql_bind_text(stmt, 1, state)
+    sql_bind_text(stmt, 2, detail)
+    rc = sql_step(stmt)
+    sql_finalize(stmt)
+    if rc != MI_OPENBSD_SQLITE_DONE then
+        return OPENBSD_ERROR
+    end
+    return OPENBSD_OK
+end
+
+@effect(fs)
+int verify_openbsd(db: int, work: string):
+    source_path = query_text(db, "SELECT source_path FROM observation WHERE component_id='openbsd-userland'")
+    signature_path = query_text(db, "SELECT signature_path FROM observation WHERE component_id='openbsd-userland'")
+    key_path = query_text(db, "SELECT trust_path FROM observation WHERE component_id='openbsd-userland'")
+    if strlen(source_path) == 0 then
+        recovered_source = work + "/src.tar.gz"
+        if file_exists(recovered_source) == 1 then
+            dealloc(source_path)
+            source_path = recovered_source
+        else
+            dealloc(recovered_source)
+        end
+    end
+    if strlen(signature_path) == 0 then
+        recovered_signature = work + "/SHA256.sig"
+        if file_exists(recovered_signature) == 1 then
+            dealloc(signature_path)
+            signature_path = recovered_signature
+        else
+            dealloc(recovered_signature)
+        end
+    end
+    if strlen(key_path) == 0 then
+        recovered_key = work + "/openbsd-79-base.pub"
+        if file_exists(recovered_key) == 1 then
+            dealloc(key_path)
+            key_path = recovered_key
+        else
+            dealloc(recovered_key)
+        end
+    end
+    expected_key_hash = query_text(db, "SELECT material_sha256 FROM trust_anchor WHERE id='openbsd-79-base' AND enabled=1")
+    sha256 = query_text(db, "SELECT value FROM setting WHERE key='tool.sha256'")
+    signify = query_text(db, "SELECT value FROM setting WHERE key='tool.signify'")
+    cat = query_text(db, "SELECT value FROM setting WHERE key='tool.cat'")
+    if strlen(signature_path) == 0 or strlen(key_path) == 0 then
+        dealloc(source_path, signature_path, key_path, expected_key_hash, sha256, signify, cat)
+        return openbsd_fail("acquire OpenBSD metadata before verification")
+    end
+    actual_key_hash = capture_sha256(sha256, key_path)
+    if actual_key_hash != expected_key_hash then
+        dealloc(source_path, signature_path, key_path, expected_key_hash, sha256, signify, cat, actual_key_hash)
+        return openbsd_fail("OpenBSD signify key hash does not match trust policy")
+    end
+    manifest_path = work + "/SHA256.verified"
+    if run_signify(signify, key_path, signature_path, manifest_path) != 0 then
+        dealloc(source_path, signature_path, key_path, expected_key_hash, sha256, signify, cat, actual_key_hash, manifest_path)
+        return openbsd_fail("OpenBSD signed manifest verification failed")
+    end
+    manifest = capture_file(cat, manifest_path)
+    expected_source_hash = expected_source_digest(manifest)
+    dealloc(manifest)
+    if strlen(expected_source_hash) == 0 then
+        dealloc(source_path, signature_path, key_path, expected_key_hash, sha256, signify, cat, actual_key_hash, manifest_path, expected_source_hash)
+        return openbsd_fail("verified OpenBSD manifest lacks a valid src.tar.gz digest")
+    end
+    state = "manifest-verified"
+    detail = "OpenBSD signify manifest and pinned release key verified; source archive not yet acquired"
+    if strlen(source_path) > 0 then
+        actual_source_hash = capture_sha256(sha256, source_path)
+        if actual_source_hash != expected_source_hash then
+            dealloc(source_path, signature_path, key_path, expected_key_hash, sha256, signify, cat, actual_key_hash, manifest_path, expected_source_hash, actual_source_hash)
+            return openbsd_fail("OpenBSD src.tar.gz checksum does not match signed manifest")
+        end
+        dealloc(actual_source_hash)
+        state = "verified-source"
+        detail = "OpenBSD signify manifest, pinned key and src.tar.gz checksum verified"
+    end
+    rc = mark_verified(db, state, detail)
+    openbsd_line("OpenBSD verification state: ", state)
+    dealloc(source_path, signature_path, key_path, expected_key_hash, sha256, signify, cat, actual_key_hash, manifest_path, expected_source_hash)
+    return rc
+end
+
+void usage():
+    print "usage: updates-openbsd COMMAND [Updates.config] [work-directory]"
+    print "commands: check-openbsd fetch-openbsd-metadata fetch-openbsd verify-openbsd"
+end
+
+@effect(sqlite)
+def main(): int
+    if argc() < 2 then
+        usage()
+        return OPENBSD_USAGE
+    end
+    command = argv(1)
+    config = config_path()
+    db = sql_open(config)
+    if db == 0 then
+        dealloc(config)
+        return openbsd_fail("cannot open Updates.config")
+    end
+    sql_exec(db, "PRAGMA foreign_keys=ON")
+    rc = OPENBSD_USAGE
+    match command then
+        case "check-openbsd":
+            rc = check_openbsd(db)
+        case "fetch-openbsd-metadata":
+            work = work_path()
+            rc = fetch_openbsd(db, work, 1)
+            dealloc(work)
+        case "fetch-openbsd":
+            work = work_path()
+            rc = fetch_openbsd(db, work, 0)
+            dealloc(work)
+        case "verify-openbsd":
+            work = work_path()
+            rc = verify_openbsd(db, work)
+            dealloc(work)
+        default:
+            usage()
+            rc = OPENBSD_USAGE
+    end
+    sql_close(db)
+    dealloc(config)
+    return rc
+end

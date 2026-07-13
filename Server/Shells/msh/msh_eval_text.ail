@@ -1,0 +1,88 @@
+// msh_eval_text.ail
+// Shared AST text helpers for the current stable msh AST representation.
+
+import msh_defs
+import msh_ast
+
+int msh_eval_find_top_comma(text: string):
+    depth = 0
+    i = 0
+    n = strlen(text)
+    while i < n then
+        c = char_at(text, i)
+        if c == MSH_CH_BACKSLASH and i + 1 < n then
+            i = i + 2
+            continue
+        elsif c == MSH_CH_DQUOTE then
+            end_quote = msh_ast_string_end(text, i + 1)
+            if end_quote == MSH_INDEX_NOT_FOUND then
+                return MSH_INDEX_NOT_FOUND
+            end
+            i = end_quote + 1
+            continue
+        elsif c == MSH_CH_LPAREN or c == MSH_CH_LBRACE then
+            depth++
+        elsif c == MSH_CH_LBRACKET then
+            depth++
+        elsif c == MSH_CH_RPAREN or c == MSH_CH_RBRACE then
+            if depth > 0 then
+                depth--
+            end
+        elsif c == MSH_CH_RBRACKET then
+            if depth > 0 then
+                depth--
+            end
+        elsif c == MSH_CH_COMMA and depth == 0 then
+            return i
+        end
+        i++
+    end
+    return MSH_INDEX_NOT_FOUND
+end
+
+string msh_eval_call_inner(ast: string, tag: string):
+    prefix = tag + "("
+    start = strlen(prefix)
+    body_len = strlen(ast) - start - 1
+    if body_len < 0 then
+        body_len = 0
+    end
+    out = substr(ast, start, body_len)
+    dealloc(prefix)
+    return out
+end
+
+string msh_eval_command_assigns(ast: string):
+    prefix = "" + "CMD(assigns=["
+    mid = index_of(ast, "],words=[")
+    if mid == MSH_INDEX_NOT_FOUND then
+        dealloc(prefix)
+        return "" + ""
+    end
+    out = substr(ast, strlen(prefix), mid - strlen(prefix))
+    dealloc(prefix)
+    return out
+end
+
+string msh_eval_clean_file_text(text: string):
+    limit = strlen(text)
+    if limit > 0 and char_at(text, limit - 1) == 0 then
+        limit--
+    end
+    out = "" + ""
+    i = 0
+    if limit >= 3 and char_at(text, 0) == MSH_UTF8_BOM_1 and char_at(text, 1) == MSH_UTF8_BOM_2 and char_at(text, 2) == MSH_UTF8_BOM_3 then
+        i = 3
+    end
+    while i < limit then
+        c = char_at(text, i)
+        if c != MSH_CH_CR then
+            old = out
+            ch = chr(c)
+            out = out + ch
+            dealloc(old, ch)
+        end
+        i++
+    end
+    return out
+end

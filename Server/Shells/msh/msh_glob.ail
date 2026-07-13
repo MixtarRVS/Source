@@ -1,0 +1,324 @@
+// msh_glob.ail
+// POSIX-sh pathname expansion support for msh.
+
+import msh_defs
+import msh_expand_vars
+import msh_fields
+import msh_pattern
+import msh_quote
+
+int msh_glob_meta_char(c: int):
+    if c == MSH_CH_STAR or c == MSH_CH_QUESTION or c == MSH_CH_LBRACKET then
+        return 1
+    end
+    return 0
+end
+
+string msh_glob_append_escaped(text: string, c: int):
+    marked = msh_quote_append_marker(text, MSH_Q_ESC)
+    out = msh_str_append_char(marked, c)
+    dealloc(marked)
+    return out
+end
+
+string msh_glob_escape_meta_text(text: string):
+    out = "" + ""
+    i = 0
+    while i < strlen(text) then
+        c = char_at(text, i)
+        old = out
+        if msh_glob_meta_char(c) == 1 then
+            out = msh_glob_append_escaped(out, c)
+        else
+            out = msh_str_append_char(out, c)
+        end
+        dealloc(old)
+        i++
+    end
+    return out
+end
+
+string msh_glob_unescape_literal(text: string):
+    out = "" + ""
+    i = 0
+    while i < strlen(text) then
+        c = char_at(text, i)
+        if c == MSH_Q_ESC and i + 1 < strlen(text) then
+            i++
+            old_esc = out
+            out = msh_str_append_char(out, char_at(text, i))
+            dealloc(old_esc)
+        elsif msh_quote_is_marker(c) == 0 then
+            old = out
+            out = msh_str_append_char(out, c)
+            dealloc(old)
+        end
+        i++
+    end
+    return out
+end
+
+int msh_word_has_glob(text: string):
+    i = 0
+    n = strlen(text)
+    while i < n then
+        c = char_at(text, i)
+        if c == MSH_Q_ESC then
+            i++
+        elsif msh_quote_is_marker(c) == 1 then
+            i = i
+        elsif msh_glob_meta_char(c) == 1 then
+            return 1
+        end
+        i++
+    end
+    return 0
+end
+
+int msh_last_slash(text: string):
+    i = strlen(text) - 1
+    while i >= 0 then
+        if char_at(text, i) == MSH_CH_SLASH then
+            return i
+        end
+        i--
+    end
+    return MSH_INDEX_NOT_FOUND
+end
+
+string msh_glob_prefix(text: string, slash: int):
+    if slash == MSH_INDEX_NOT_FOUND then
+        return "" + ""
+    end
+    return substr(text, 0, slash + 1)
+end
+
+string msh_glob_dir(text: string, slash: int):
+    if slash == MSH_INDEX_NOT_FOUND then
+        return "" + "."
+    end
+    if slash == 0 then
+        return "" + "/"
+    end
+    return substr(text, 0, slash)
+end
+
+string msh_glob_pattern(text: string, slash: int):
+    if slash == MSH_INDEX_NOT_FOUND then
+        return "" + text
+    end
+    return substr(text, slash + 1, strlen(text) - slash - 1)
+end
+
+int msh_glob_entry_allowed(name: string, pattern: string):
+    if strlen(name) == 0 then
+        return 0
+    end
+    if char_at(name, 0) == MSH_CH_DOT then
+        if strlen(pattern) == 0 or char_at(pattern, 0) != MSH_CH_DOT then
+            return 0
+        end
+    end
+    return 1
+end
+
+string msh_pathname_expand_field(field: string):
+    fields = msh_pathname_expand_field_array(field)
+    out = str_array_join(fields, "|")
+    msh_field_array_destroy(fields)
+    return out
+end
+
+int msh_ascii_less(left: string, right: string):
+    i = 0
+    left_len = strlen(left)
+    right_len = strlen(right)
+    while i < left_len and i < right_len then
+        lc = char_at(left, i)
+        rc = char_at(right, i)
+        if lc < rc then
+            return 1
+        elsif lc > rc then
+            return 0
+        end
+        i++
+    end
+    if left_len < right_len then
+        return 1
+    end
+    return 0
+end
+
+void msh_sort_fields_ascii(fields: str_array):
+    changed = 1
+    while changed == 1 then
+        changed = 0
+        i = 0
+        while i + 1 < str_array_len(fields) then
+            left = str_array_get(fields, i)
+            right = str_array_get(fields, i + 1)
+            if msh_ascii_less(right, left) == 1 then
+                str_array_set(fields, i, right)
+                str_array_set(fields, i + 1, left)
+                changed = 1
+            end
+            i++
+        end
+    end
+end
+
+int msh_field_array_contains(fields: str_array, value: string):
+    i = 0
+    while i < str_array_len(fields) then
+        item = str_array_get(fields, i)
+        if item == value then
+            return 1
+        end
+        i++
+    end
+    return 0
+end
+
+string msh_glob_join_path(left: string, right: string):
+    if strlen(left) == 0 then
+        return "" + right
+    end
+    if char_at(left, strlen(left) - 1) == MSH_CH_SLASH then
+        return left + right
+    end
+    temp = left + "/"
+    out = temp + right
+    dealloc(temp)
+    return out
+end
+
+int msh_glob_literal_unmatched(fields: str_array, literal: string):
+    if str_array_len(fields) != 1 then
+        return 0
+    end
+    only = str_array_get(fields, 0)
+    if only == literal then
+        return 1
+    end
+    return 0
+end
+
+def msh_glob_push_if_unique(fields: str_array, value: string): str_array
+    if msh_field_array_contains(fields, value) == 0 then
+        fields = str_array_push(fields, value)
+    else
+        dealloc(value)
+    end
+    return fields
+end
+
+def msh_glob_add_dot_entries(fields: str_array, prefix: string, pattern: string): str_array
+    if strlen(pattern) == 0 or char_at(pattern, 0) != MSH_CH_DOT then
+        return fields
+    end
+    dot = "" + "."
+    if msh_pattern_match(pattern, dot) == 1 then
+        full_dot = prefix + dot
+        fields = msh_glob_push_if_unique(fields, full_dot)
+    end
+    dotdot = "" + ".."
+    if msh_pattern_match(pattern, dotdot) == 1 then
+        full_dotdot = prefix + dotdot
+        fields = msh_glob_push_if_unique(fields, full_dotdot)
+    end
+    dealloc(dot, dotdot)
+    return fields
+end
+
+def msh_glob_add_dir_component_matches(fields: str_array, dir_marked: string, pattern: string): str_array
+    dirs = msh_pathname_expand_field_array(dir_marked)
+    dir_literal = msh_glob_unescape_literal(dir_marked)
+    if msh_glob_literal_unmatched(dirs, dir_literal) == 1 then
+        msh_field_array_destroy(dirs)
+        dealloc(dir_literal)
+        return fields
+    end
+    i = 0
+    while i < str_array_len(dirs) then
+        dir_item = str_array_get(dirs, i)
+        candidate = msh_glob_join_path(dir_item, pattern)
+        if msh_word_has_glob(pattern) == 1 then
+            expanded = msh_pathname_expand_field_array(candidate)
+            if msh_glob_literal_unmatched(expanded, candidate) == 0 then
+                j = 0
+                while j < str_array_len(expanded) then
+                    item = str_array_get(expanded, j)
+                    fields = msh_glob_push_if_unique(fields, "" + item)
+                    j++
+                end
+            end
+            msh_field_array_destroy(expanded)
+        elsif file_exists(candidate) == 1 then
+            fields = msh_glob_push_if_unique(fields, "" + candidate)
+        end
+        dealloc(candidate)
+        i++
+    end
+    msh_field_array_destroy(dirs)
+    dealloc(dir_literal)
+    return fields
+end
+
+def msh_pathname_expand_field_array(field: string): str_array
+    out = str_array_new(MSH_FIELD_CAP_DEFAULT)
+    if msh_word_has_glob(field) == 0 then
+        owned = msh_glob_unescape_literal(field)
+        out = str_array_push(out, owned)
+        return out
+    end
+    slash = msh_last_slash(field)
+    dir_marked = msh_glob_dir(field, slash)
+    prefix_marked = msh_glob_prefix(field, slash)
+    dir = msh_glob_unescape_literal(dir_marked)
+    prefix = msh_glob_unescape_literal(prefix_marked)
+    pattern = msh_glob_pattern(field, slash)
+    if slash != MSH_INDEX_NOT_FOUND and msh_word_has_glob(dir_marked) == 1 then
+        out = msh_glob_add_dir_component_matches(out, dir_marked, pattern)
+        count_nested = str_array_len(out)
+        dealloc(dir_marked, prefix_marked, dir, prefix, pattern)
+        if count_nested == 0 then
+            owned_nested = msh_glob_unescape_literal(field)
+            out = str_array_push(out, owned_nested)
+        else
+            msh_sort_fields_ascii(out)
+        end
+        return out
+    end
+    entries = list_dir(dir)
+    count = 0
+    before_dot = str_array_len(out)
+    out = msh_glob_add_dot_entries(out, prefix, pattern)
+    count = str_array_len(out) - before_dot
+    pos = 0
+    while pos < strlen(entries) then
+        end_pos = index_of_from(entries, "\n", pos)
+        if end_pos == MSH_INDEX_NOT_FOUND then
+            end_pos = strlen(entries)
+        end
+        name = substr(entries, pos, end_pos - pos)
+        if msh_glob_entry_allowed(name, pattern) == 1 and msh_pattern_match(pattern, name) == 1 then
+            full = prefix + name
+            if msh_field_array_contains(out, full) == 0 then
+                out = str_array_push(out, full)
+                count++
+            else
+                dealloc(full)
+            end
+        end
+        dealloc(name)
+        pos = end_pos + 1
+    end
+    dealloc(dir_marked, prefix_marked, dir, prefix, pattern, entries)
+    if count == 0 then
+        owned = msh_glob_unescape_literal(field)
+        out = str_array_push(out, owned)
+    else
+        msh_sort_fields_ascii(out)
+    end
+    return out
+end

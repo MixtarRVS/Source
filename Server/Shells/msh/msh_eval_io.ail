@@ -1,0 +1,149 @@
+// msh_eval_io.ail
+// Redirection-aware shell-local I/O builtin execution.
+
+import msh_exec
+import msh_exec_fdrestore
+import msh_exec_redirs
+import msh_exec_fds
+import msh_fields
+import msh_fd_scope
+import msh_io_builtins
+import msh_pipeio
+import msh_redirs
+
+int msh_eval_io_stdout_restored_by_metadata(ast: string, vars: string):
+    ops = msh_exec_redir_ops_array(ast)
+    targets = msh_exec_redir_targets_array(ast, vars)
+    found = 0
+    i = 0
+    while i < str_array_len(ops) and found == 0 then
+        op = str_array_get(ops, i)
+        target = str_array_get(targets, i)
+        base = msh_exec_redir_base_op(op)
+        fallback = msh_redir_target_fd(base)
+        fd = msh_redir_fd(op, fallback)
+        if fd == 1 and base == ">&" and msh_redir_is_digits(target) == 1 then
+            source_fd = parse_int(target)
+            if source_fd >= 3 then
+                if msh_exec_fds_saved_stdout_exists(vars, source_fd) == 1 then
+                    found = 1
+                end
+            end
+        end
+        dealloc(base)
+        i++
+    end
+    msh_field_array_destroy(ops)
+    msh_field_array_destroy(targets)
+    return found
+end
+
+int msh_eval_io_stdout_redirects_away_from_capture(ast: string, vars: string):
+    ops = msh_exec_redir_ops_array(ast)
+    targets = msh_exec_redir_targets_array(ast, vars)
+    found = 0
+    i = 0
+    while i < str_array_len(ops) and found == 0 then
+        op = str_array_get(ops, i)
+        target = str_array_get(targets, i)
+        base = msh_exec_redir_base_op(op)
+        fallback = msh_redir_target_fd(base)
+        fd = msh_redir_fd(op, fallback)
+        if fd == 1 and base == ">&" then
+            if target == "-" then
+                found = 1
+            elsif msh_redir_is_digits(target) == 1 then
+                source_fd = parse_int(target)
+                if source_fd == 1 then
+                    found = 0
+                else
+                    saved_path = msh_exec_fds_saved_stdout_path(vars, source_fd)
+                    if saved_path != "__msh_pipe_stdout" then
+                        found = 1
+                    end
+                    dealloc(saved_path)
+                end
+            end
+        end
+        dealloc(base)
+        i++
+    end
+    msh_field_array_destroy(ops)
+    msh_field_array_destroy(targets)
+    return found
+end
+
+def msh_eval_io_builtin_with_redirs(name: string, ast: string, fields: str_array, vars: string): MshIoResult
+    if name != "printf" and name != "read" and name != "pwd" and name != "echo" then
+        return new MshIoResult(0, 127, "" + vars)
+    end
+    if msh_exec_command_has_redirs(ast) == 0 then
+        return msh_io_builtin_state(name, fields, vars)
+    end
+
+    scope = msh_fd_scope_save()
+    frame = msh_redir_save_stdio()
+    if frame.ok == 0 then
+        msh_redir_restore_stdio(frame)
+        msh_fd_scope_restore(scope)
+        dealloc(scope.pairs, scope.originals, scope.copies)
+        return new MshIoResult(1, 1, "" + vars)
+    end
+
+    redir_status = msh_redir_apply_ast(ast, vars)
+    if redir_status == 0 then
+        meta_result = msh_exec_fds_apply_command_redirs(ast, vars)
+        if meta_result.status == 0 then
+            io_vars = "" + meta_result.vars
+            capture_source = "" + meta_result.vars
+            capture_disabled = 0
+            if msh_pipeio_capture_active(io_vars) == 1 and msh_eval_io_stdout_redirects_away_from_capture(ast, vars) == 1 then
+                capture_disabled = 1
+                disabled_vars = msh_pipeio_stdout_capture_off(io_vars)
+                dealloc(io_vars)
+                io_vars = disabled_vars
+            end
+            restore_stdout = 0
+            restored_by_metadata = msh_eval_io_stdout_restored_by_metadata(ast, vars)
+            stdout_path = msh_exec_fds_stdout_path(meta_result.vars)
+            if restored_by_metadata == 1 and (msh_exec_fds_stdout_active(meta_result.vars) == 0 or stdout_path == "__msh_host_stdout") then
+                restore_stdout = 1
+            end
+            dealloc(stdout_path)
+            if restore_stdout == 1 then
+                msh_redir_restore_stdout_only(frame)
+            end
+            io_result = msh_io_builtin_state(name, fields, io_vars)
+            handled = io_result.handled
+            status = io_result.status
+            out_vars = msh_exec_fdrestore_ast_redirs(io_result.vars, vars, ast)
+            if capture_disabled == 1 then
+                restored_capture = msh_pipeio_stdout_capture_restore(out_vars, capture_source)
+                dealloc(out_vars)
+                out_vars = restored_capture
+            end
+            dealloc(io_vars, capture_source)
+            dealloc(io_result.vars)
+        else
+            handled = 1
+            status = meta_result.status
+            out_vars = "" + vars
+        end
+        dealloc(meta_result.vars)
+    else
+        handled = 1
+        status = redir_status
+        out_vars = "" + vars
+    end
+
+    restore_status = msh_redir_restore_stdio(frame)
+    if status == 0 and restore_status != 0 then
+        status = restore_status
+    end
+    fd_restore_status = msh_fd_scope_restore(scope)
+    if status == 0 and fd_restore_status != 0 then
+        status = fd_restore_status
+    end
+    dealloc(scope.pairs, scope.originals, scope.copies)
+    return new MshIoResult(handled, status, out_vars)
+end

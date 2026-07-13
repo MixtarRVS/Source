@@ -1,0 +1,42 @@
+// msh_exec_lookup_selftest.ail
+// Guards shell-PATH based native command resolution.
+
+import msh_eval
+import msh_eval_entry
+import msh_exec_lookup
+
+int msh_exec_lookup_windows_selftest():
+    if target_os() != "windows" then
+        return 0
+    end
+    path = "msh_lookup_selftest.cmd"
+    body = "@echo off\r\nexit /B 0\r\n"
+    write_file(path, body)
+    if file_exists(path) == 0 then
+        return 1
+    end
+
+    vars = "PATH=.\n"
+    resolved = msh_exec_command_resolve_vars("msh_lookup_selftest", vars)
+    ok = 0
+    if strlen(resolved) > 0 then
+        ok = 1
+    end
+    delete_file(path)
+
+    if ok == 0 then
+        print "msh exec lookup selftest failed"
+        msg_path = "resolved=" + resolved
+        print msg_path
+        dealloc(msg_path)
+    end
+    dealloc(resolved)
+    if ok == 1 then
+        return 0
+    end
+    return 1
+end
+
+int msh_exec_lookup_selftest():
+    return msh_exec_lookup_windows_selftest()
+end

@@ -1,0 +1,15 @@
+name=current
+title=Current ThinkPad SSH remote access
+transport=ssh
+backend=openssh
+service=sshd
+service_remote=sshd
+network_profile=current
+host=192.168.99.110
+port=22
+user=vxz
+auth_mode=public-key
+authorized_keys=/Users/vxz/.ssh/authorized_keys
+sshd_config=/etc/ssh/sshd_config
+host_keys=/etc/ssh
+mutable=false

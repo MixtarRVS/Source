@@ -1,0 +1,49 @@
+{
+  "name": "MixtarRVS Base Closure 0022",
+  "id": "0022-initramfs-handoff-prototype-no-install",
+  "status": "prototype-created-not-installed",
+  "purpose": "Create a concrete initramfs image-root handoff prototype script and run only non-mutating diagnostics. The prototype is not installed into the active initramfs and does not change boot state.",
+  "requires": [
+    "/System/Base/Closure/0021-initramfs-image-root-handoff-plan/initramfs-image-root-handoff-plan-status.txt",
+    "/System/Kernel/Current/vmlinuz",
+    "/System/Kernel/Current/initramfs.img",
+    "/System/Kernel/Current/modules",
+    "/System/Generations/0015-rootfs-image-first-file/rootfs.squashfs"
+  ],
+  "installs_non_boot_prototype": [
+    "/System/Initramfs/Prototypes/mixtar-initramfs-handoff.sh"
+  ],
+  "commands": [
+    "mixtar-initramfs-handoff contract",
+    "mixtar-initramfs-handoff plan",
+    "mixtar-initramfs-handoff check-live",
+    "mixtar-initramfs-handoff simulate"
+  ],
+  "non_goals": [
+    "do not rebuild initramfs",
+    "do not install into active initramfs",
+    "do not change bootloader",
+    "do not switch /System/Current",
+    "do not mount rootfs image as /",
+    "do not run switch_root",
+    "do not delete fallback generation"
+  ],
+  "must_report": [
+    "prototype contract",
+    "planned handoff sequence",
+    "live readiness",
+    "squashfs readiness",
+    "overlay readiness",
+    "fallback policy",
+    "current initramfs hash before and after",
+    "current generation before and after"
+  ],
+  "postconditions": [
+    "prototype script exists outside active initramfs",
+    "diagnostics are generated",
+    "active initramfs hash is unchanged",
+    "/System/Current is unchanged",
+    "rootfs inspection mountpoint is unmounted"
+  ],
+  "next_stage": "0023-initramfs-builder-input-closure"
+}

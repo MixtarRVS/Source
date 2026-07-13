@@ -1,0 +1,114 @@
+// msh_exec_fdtext.ail
+// Metadata application/restoration for redirections stored as text sidecars.
+
+import msh_eval_result
+import msh_ast
+import msh_exec_fds
+import msh_exec_fdrestore
+import msh_exec_redirs
+import msh_fields
+import msh_redirs
+import msh_state
+
+string msh_exec_fdtext_restore_key(vars: string, source: string, key: string):
+    cleared = msh_state_unset(vars, key)
+    value = msh_state_get(source, key)
+    if strlen(value) > 0 then
+        out = msh_state_set(cleared, key, value)
+        dealloc(cleared, value)
+        return out
+    end
+    dealloc(value)
+    return cleared
+end
+
+string msh_exec_fdtext_restore_fd(vars: string, source: string, after: string, fd: int):
+    return msh_exec_fdrestore_one(vars, source, after, fd)
+end
+
+def msh_exec_fdtext_raw_targets_from_text(redirs: string): str_array
+    marker = "" + "REDIR(\""
+    pos = index_of(redirs, marker)
+    out = str_array_new(2)
+    while pos != MSH_INDEX_NOT_FOUND then
+        op_start = pos + strlen(marker)
+        op_end = msh_ast_string_end(redirs, op_start)
+        if op_end == MSH_INDEX_NOT_FOUND then
+            pos = MSH_INDEX_NOT_FOUND
+        else
+            target_start = op_end + 3
+            target_end = msh_ast_string_end(redirs, target_start)
+            if target_end == MSH_INDEX_NOT_FOUND then
+                pos = MSH_INDEX_NOT_FOUND
+            else
+                encoded_raw = substr(redirs, target_start, target_end - target_start)
+                raw = msh_ast_unescape(encoded_raw)
+                out = str_array_push(out, raw)
+                dealloc(encoded_raw)
+                pos = index_of_from(redirs, marker, target_end + 1)
+            end
+        end
+    end
+    dealloc(marker)
+    return out
+end
+
+def msh_exec_fds_apply_text_redirs(redirs: string, vars: string): MshEvalResult
+    target_status = msh_redir_targets_status_from_text(redirs, vars)
+    if target_status != 0 then
+        return new MshEvalResult(target_status, "" + vars)
+    end
+    ops = msh_redir_ops_from_text(redirs)
+    targets = msh_redir_targets_from_text(redirs, vars)
+    out = "" + vars
+    status = 0
+    i = 0
+    while i < str_array_len(ops) and status == 0 then
+        op = str_array_get(ops, i)
+        target = str_array_get(targets, i)
+        base = msh_exec_redir_base_op(op)
+        status = msh_exec_fds_dup_source_status(out, base, target)
+        if status == 0 then
+            next = msh_exec_fds_apply_one_mode(out, op, target, 0)
+            dealloc(out)
+            out = next
+        end
+        dealloc(base)
+        i++
+    end
+    msh_field_array_destroy(ops)
+    msh_field_array_destroy(targets)
+    return new MshEvalResult(status, out)
+end
+
+string msh_exec_fds_restore_text_redirs(vars: string, source: string, redirs: string):
+    ops = msh_redir_ops_from_text(redirs)
+    targets = msh_exec_fdtext_raw_targets_from_text(redirs)
+    after = "" + vars
+    out = "" + vars
+    i = 0
+    while i < str_array_len(ops) then
+        op = str_array_get(ops, i)
+        target = str_array_get(targets, i)
+        base = msh_exec_redir_base_op(op)
+        fallback = msh_redir_target_fd(base)
+        if msh_exec_redir_is_heredoc(op) == 1 then
+            fallback = 0
+        end
+        fd = msh_redir_fd(op, fallback)
+        next = msh_exec_fdtext_restore_fd(out, source, after, fd)
+        dealloc(out)
+        out = next
+        if target == "-" and (base == "<&" or base == ">&") then
+            closed = msh_exec_fdrestore_close_untracked(out, source, fd, base)
+            dealloc(out)
+            out = closed
+        end
+        dealloc(base)
+        i++
+    end
+    msh_field_array_destroy(ops)
+    msh_field_array_destroy(targets)
+    dealloc(after)
+    return out
+end

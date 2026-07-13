@@ -1,0 +1,110 @@
+// msh_eval_field_profile.ail
+// Field-expansion profile hooks for special POSIX command contexts.
+
+import msh_ast
+import msh_control
+import msh_eval_result
+import msh_exec
+import msh_exec_ast_helpers
+import msh_fields
+import msh_state
+
+string msh_eval_raw_word(ast: string, wanted: int):
+    words = msh_exec_section(ast, "words=[", "],redirs=[")
+    marker = "" + "WORD(\""
+    pos = index_of(words, marker)
+    seen = 0
+    while pos != MSH_INDEX_NOT_FOUND then
+        start = pos + strlen(marker)
+        stop = msh_ast_string_end(words, start)
+        if stop == MSH_INDEX_NOT_FOUND then
+            pos = MSH_INDEX_NOT_FOUND
+        else
+            if seen == wanted then
+                encoded = substr(words, start, stop - start)
+                raw = msh_ast_unescape(encoded)
+                dealloc(words, marker, encoded)
+                return raw
+            end
+            seen++
+            pos = index_of_from(words, marker, stop + 1)
+        end
+    end
+    dealloc(words, marker)
+    return "" + ""
+end
+
+int msh_eval_command_option_executes(opt: string):
+    if startswith(opt, "-") == 0 or opt == "--" or strlen(opt) <= 1 then
+        return 1
+    end
+    i = 1
+    while i < strlen(opt) then
+        c = substr(opt, i, 1)
+        if c == "v" or c == "V" then
+            dealloc(c)
+            return 0
+        end
+        dealloc(c)
+        i++
+    end
+    return 1
+end
+
+int msh_eval_raw_command_eval(ast: string):
+    first = msh_eval_raw_word(ast, 0)
+    if first != "command" then
+        dealloc(first)
+        return 0
+    end
+    dealloc(first)
+    i = 1
+    scanning = 1
+    while scanning == 1 then
+        word = msh_eval_raw_word(ast, i)
+        if strlen(word) == 0 then
+            dealloc(word)
+            return 0
+        elsif word == "--" then
+            i++
+            scanning = 0
+        elsif startswith(word, "-") == 1 and strlen(word) > 1 then
+            if msh_eval_command_option_executes(word) == 0 then
+                dealloc(word)
+                return 0
+            end
+            i++
+        else
+            scanning = 0
+        end
+        dealloc(word)
+    end
+    target = msh_eval_raw_word(ast, i)
+    ok = 0
+    if target == "eval" then
+        ok = 1
+    end
+    dealloc(target)
+    return ok
+end
+
+def msh_eval_command_fields_state_from(ast: string, vars: string, last_status: int): MshExecFieldsState
+    if msh_eval_raw_command_eval(ast) == 0 then
+        return msh_exec_command_fields_state_from(ast, vars, 0, last_status)
+    end
+    field_result = msh_exec_command_fields_state_from(ast, vars, 0, last_status)
+    out = new MshExecFieldsState(field_result.fields, field_result.vars, field_result.status)
+    return out
+end
+
+def msh_eval_field_error_result(field_result: MshExecFieldsState): MshEvalResult
+    prefix = msh_state_get(field_result.vars, "__redir_diag_prefix")
+    if prefix == "eval" then
+        out_vars = msh_control_set(field_result.vars, "error_exit", field_result.status)
+    else
+        out_vars = msh_control_set(field_result.vars, "exit", field_result.status)
+    end
+    msh_field_array_destroy(field_result.fields)
+    dealloc(field_result.vars, prefix)
+    return new MshEvalResult(field_result.status, out_vars)
+end

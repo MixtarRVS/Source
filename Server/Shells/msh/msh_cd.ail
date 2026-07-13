@@ -1,0 +1,268 @@
+// msh_cd.ail
+// POSIX cd builtin state helper.
+
+import msh_defs
+import msh_diagnostics
+import msh_output
+import msh_path
+import msh_pipeio
+import msh_state
+
+record MshCdResult then
+    int status
+    string vars
+end
+
+string msh_cd_emit_line(vars: string, text: string):
+    return msh_output_line(vars, text)
+end
+
+string msh_cd_home(vars: string):
+    value = msh_state_get(vars, "HOME")
+    if strlen(value) > 0 then
+        return value
+    end
+    dealloc(value)
+    host = getenv("HOME")
+    if strlen(host) > 0 then
+        return "" + host
+    end
+    if target_os() == "windows" then
+        profile = getenv("USERPROFILE")
+        if strlen(profile) > 0 then
+            return "" + profile
+        end
+    end
+    return "" + ""
+end
+
+string msh_cd_oldpwd(vars: string):
+    value = msh_state_get(vars, "OLDPWD")
+    return value
+end
+
+int msh_cd_arg_start(fields: str_array):
+    i = 1
+    while i < str_array_len(fields) then
+        arg = str_array_get(fields, i)
+        if arg == "--" then
+            return i + 1
+        end
+        if arg == "-L" or arg == "-P" then
+            i++
+        else
+            return i
+        end
+    end
+    return i
+end
+
+int msh_cd_use_physical(fields: str_array):
+    use_physical = 0
+    i = 1
+    while i < str_array_len(fields) then
+        arg = str_array_get(fields, i)
+        if arg == "--" then
+            return use_physical
+        end
+        if arg == "-P" then
+            use_physical = 1
+        elsif arg == "-L" then
+            use_physical = 0
+        else
+            return use_physical
+        end
+        i++
+    end
+    return use_physical
+end
+
+string msh_cd_bad_option(fields: str_array):
+    i = 1
+    while i < str_array_len(fields) then
+        arg = str_array_get(fields, i)
+        if arg == "--" then
+            return "" + ""
+        end
+        if startswith(arg, "-") == 1 and arg != "-" and arg != "-L" and arg != "-P" then
+            return substr(arg, 0, 2)
+        end
+        if arg != "-L" and arg != "-P" then
+            return "" + ""
+        end
+        i++
+    end
+    return "" + ""
+end
+
+string msh_cd_target(fields: str_array, vars: string):
+    start = msh_cd_arg_start(fields)
+    if start >= str_array_len(fields) then
+        return msh_cd_home(vars)
+    end
+    arg = str_array_get(fields, start)
+    if arg == "-" then
+        return msh_cd_oldpwd(vars)
+    end
+    return "" + arg
+end
+
+string msh_cd_logical_pwd(vars: string):
+    value = msh_state_get(vars, "PWD")
+    if strlen(value) > 0 then
+        return value
+    end
+    dealloc(value)
+    host = current_dir()
+    out = msh_path_slashify(host)
+    dealloc(host)
+    return out
+end
+
+int msh_cd_cdpath_eligible(arg: string):
+    if strlen(arg) == 0 then
+        return 0
+    end
+    if char_at(arg, 0) == MSH_CH_SLASH then
+        return 0
+    end
+    if arg == "." or arg == ".." then
+        return 0
+    end
+    if startswith(arg, "./") == 1 or startswith(arg, "../") == 1 then
+        return 0
+    end
+    return 1
+end
+
+string msh_cd_path_list(vars: string):
+    value = msh_state_get(vars, "CDPATH")
+    if strlen(value) > 0 then
+        return value
+    end
+    dealloc(value)
+    host = getenv("CDPATH")
+    if strlen(host) > 0 then
+        return "" + host
+    end
+    return "" + ""
+end
+
+string msh_cd_join(base: string, arg: string):
+    if strlen(base) == 0 then
+        return "" + arg
+    end
+    if base == "." then
+        return "" + arg
+    end
+    if char_at(base, strlen(base) - 1) == MSH_CH_SLASH then
+        return base + arg
+    end
+    left = base + "/"
+    out = left + arg
+    dealloc(left)
+    return out
+end
+
+string msh_cd_operand_arg(fields: str_array):
+    start = msh_cd_arg_start(fields)
+    if start >= str_array_len(fields) then
+        return "" + ""
+    end
+    return "" + str_array_get(fields, start)
+end
+
+string msh_cd_try_cdpath(arg: string, vars: string):
+    paths = msh_cd_path_list(vars)
+    if strlen(paths) == 0 then
+        dealloc(paths)
+        return "" + ""
+    end
+    out = "" + ""
+    pos = 0
+    while pos <= strlen(paths) and strlen(out) == 0 then
+        stop = index_of_from(paths, ":", pos)
+        if stop == MSH_INDEX_NOT_FOUND then
+            stop = strlen(paths)
+        end
+        base = substr(paths, pos, stop - pos)
+        candidate = msh_cd_join(base, arg)
+        if change_dir(candidate) == 0 then
+            dealloc(out)
+            out = current_dir()
+        end
+        dealloc(base, candidate)
+        if stop >= strlen(paths) then
+            pos = strlen(paths) + 1
+        else
+            pos = stop + 1
+        end
+    end
+    dealloc(paths)
+    return out
+end
+
+def msh_cd_state(fields: str_array, vars: string): MshCdResult
+    bad_option = msh_cd_bad_option(fields)
+    if strlen(bad_option) > 0 then
+        detail = "Illegal option " + bad_option
+        msh_diag_builtin("cd", detail)
+        dealloc(bad_option, detail)
+        return new MshCdResult(2, "" + vars)
+    end
+    dealloc(bad_option)
+    operand = msh_cd_operand_arg(fields)
+    old_pwd = msh_cd_logical_pwd(vars)
+    use_physical = msh_cd_use_physical(fields)
+    used_cdpath = 0
+    print_pwd = 0
+    if msh_cd_cdpath_eligible(operand) == 1 then
+        cdpath_pwd = msh_cd_try_cdpath(operand, vars)
+        if strlen(cdpath_pwd) > 0 then
+            used_cdpath = 1
+            print_pwd = 1
+        end
+    else
+        cdpath_pwd = "" + ""
+    end
+    target = msh_cd_target(fields, vars)
+    if strlen(target) == 0 then
+        msh_diag_builtin("cd", "can't cd to")
+        dealloc(operand, cdpath_pwd, target, old_pwd)
+        return new MshCdResult(1, "" + vars)
+    end
+    if used_cdpath == 1 then
+        rc = 0
+    else
+        rc = change_dir(target)
+    end
+    if rc != 0 then
+        fail_detail = "can't cd to " + target
+        msh_diag_builtin("cd", fail_detail)
+        dealloc(fail_detail)
+        dealloc(operand, cdpath_pwd, target, old_pwd)
+        return new MshCdResult(1, "" + vars)
+    end
+    physical_pwd = current_dir()
+    base_pwd = msh_state_get(vars, "PWD")
+    if used_cdpath == 1 or use_physical == 1 then
+        new_pwd = msh_path_slashify(physical_pwd)
+    else
+        new_pwd = msh_path_logical_cd(base_pwd, target, physical_pwd)
+    end
+    out = msh_state_set(vars, "OLDPWD", old_pwd)
+    old_out = out
+    out = msh_state_set(out, "PWD", new_pwd)
+    dealloc(old_out)
+    start = msh_cd_arg_start(fields)
+    if start < str_array_len(fields) and str_array_get(fields, start) == "-" then
+        print_pwd = 1
+    end
+    if print_pwd == 1 then
+        printed = msh_cd_emit_line(out, new_pwd)
+        dealloc(out)
+        out = printed
+    end
+    dealloc(operand, cdpath_pwd, target, old_pwd, physical_pwd, base_pwd, new_pwd)
+    return new MshCdResult(0, out)
+end

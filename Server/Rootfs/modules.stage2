@@ -1,0 +1,3 @@
+# MixtarRVS Stage 2 hardware/network modules for ThinkPad T480.
+# This is a temporary explicit closure until Mixtar owns hardware discovery.
+iwlwifi

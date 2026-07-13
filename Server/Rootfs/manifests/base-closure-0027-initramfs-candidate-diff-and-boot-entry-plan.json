@@ -1,0 +1,53 @@
+{
+  "name": "MixtarRVS Base Closure 0027",
+  "id": "0027-initramfs-candidate-diff-and-boot-entry-plan",
+  "status": "candidate-diff-and-boot-entry-plan-no-boot-mutation",
+  "purpose": "Compare the candidate initramfs against the active initramfs and generate a non-mutating boot entry plan with fallback preserved.",
+  "requires": [
+    "/System/Base/Closure/0026-initramfs-candidate-image-no-install/initramfs-candidate-image-no-install-status.txt",
+    "/System/Kernel/Current/initramfs.img",
+    "/System/Initramfs/Candidates/0026-initramfs-candidate-image-no-install/initramfs.img"
+  ],
+  "installs_non_boot_tool": [
+    "/System/Initramfs/Prototypes/mixtar-initramfs-candidate-boot-plan.sh"
+  ],
+  "commands": [
+    "mixtar-initramfs-candidate-boot-plan contract",
+    "mixtar-initramfs-candidate-boot-plan diff",
+    "mixtar-initramfs-candidate-boot-plan boot-probe",
+    "mixtar-initramfs-candidate-boot-plan boot-plan",
+    "mixtar-initramfs-candidate-boot-plan report"
+  ],
+  "non_goals": [
+    "do not copy candidate initramfs to ESP",
+    "do not write boot entries",
+    "do not change BootOrder",
+    "do not set BootNext",
+    "do not overwrite active initramfs",
+    "do not switch /System/Current",
+    "do not boot candidate"
+  ],
+  "must_report": [
+    "active initramfs hash",
+    "candidate initramfs hash",
+    "candidate-only entries",
+    "overlay module presence",
+    "Mixtar handoff prototype presence",
+    "current boot entry and cmdline",
+    "planned candidate ESP path",
+    "planned kernel args",
+    "boot entry blockers",
+    "fallback policy",
+    "active initramfs hash before and after",
+    "current generation before and after"
+  ],
+  "postconditions": [
+    "candidate diff report exists",
+    "boot entry plan exists",
+    "boot entry is explicitly not written",
+    "active initramfs hash is unchanged",
+    "/System/Current is unchanged",
+    "rootfs inspection mountpoint is unmounted"
+  ],
+  "next_stage": "0028-initramfs-candidate-init-handoff-wiring-no-install"
+}

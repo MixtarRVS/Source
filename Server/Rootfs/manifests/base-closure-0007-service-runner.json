@@ -1,0 +1,58 @@
+{
+  "name": "MixtarRVS Base Closure 0007",
+  "status": "non-activating-mixtar-service-runner-skeleton",
+  "created": "2026-06-29",
+  "purpose": "Install the first MixtarRVS service runner interface and service manifests under /System while keeping OpenRC as the explicit compatibility backend.",
+  "requires": [
+    "/System/Base/Closure/0001-audit/manifest.json",
+    "/System/Base/Closure/0002-mixtar-session-path/manifest.json",
+    "/System/Base/Closure/0003-shell-runtime-and-libraries-profile/manifest.json",
+    "/System/Base/Closure/0004-initramfs-loader-path-and-kernel-profile/manifest.json",
+    "/System/Base/Closure/0005-initramfs-contract-and-fallback-init-shim/manifest.json",
+    "/System/Base/Closure/0006-service-and-network-closure-inventory/manifest.json",
+    "/System/SystemTools/mixtar-fallback-init",
+    "/sbin/rc-service",
+    "/bin/rc-status"
+  ],
+  "installed_paths": [
+    "/System/SystemTools/mixtar-service",
+    "/System/Config/Services/sshd.service",
+    "/System/Config/Services/dbus.service",
+    "/System/Config/Services/wifi.service",
+    "/System/Config/Services/network.service",
+    "/System/Config/Services/boot-profiler.service",
+    "/System/Config/Services/firstboot-report.service",
+    "/System/Config/Services/realtime-tune.service"
+  ],
+  "commands": [
+    "mixtar-service contract",
+    "mixtar-service check",
+    "mixtar-service list",
+    "mixtar-service status <service>",
+    "mixtar-service start <service>",
+    "mixtar-service stop <service>"
+  ],
+  "backend_model": {
+    "current_backend": "openrc",
+    "backend_tools": [
+      "/sbin/rc-service",
+      "/bin/rc-status"
+    ],
+    "policy": "The user-facing service interface is MixtarRVS. OpenRC remains an explicit backend until MixtarRVS has a native supervisor."
+  },
+  "non_goals": [
+    "Do not replace PID 1.",
+    "Do not restart services during staging.",
+    "Do not change OpenRC runlevels.",
+    "Do not remove OpenRC scripts.",
+    "Do not remove dhcpcd, iwd, dbus, OpenSSH, BusyBox, or apk.",
+    "Do not claim native service supervision yet."
+  ],
+  "known_limitations": [
+    "mixtar-service is a runner facade and manifest layer, not a native supervisor.",
+    "start and stop delegate to OpenRC and are intentionally mutating user commands.",
+    "Service ordering, log capture, dependency solving, restart policy, and shutdown hooks are documented requirements but not implemented yet.",
+    "OpenRC remains the live service backend."
+  ],
+  "next_stage": "0008-mixtar-network-profile-layer"
+}

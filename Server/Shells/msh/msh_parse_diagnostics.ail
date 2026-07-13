@@ -1,0 +1,76 @@
+// msh_parse_diagnostics.ail
+// POSIX-style parser diagnostics shared by top-level scripts and eval.
+
+import msh_defs
+import msh_diagnostics
+import msh_phase_state
+
+int msh_parse_diag_ends_with(source: string, suffix: string):
+    n = strlen(source)
+    m = strlen(suffix)
+    if m > n then
+        return 0
+    end
+    tail = substr(source, n - m, m)
+    ok = 0
+    if tail == suffix then
+        ok = 1
+    end
+    dealloc(tail)
+    return ok
+end
+
+string msh_parse_diag_expected(parse_node: string, source: string):
+    if source == "if" then
+        return "" + "then"
+    elsif msh_parse_diag_ends_with(source, " in") == 1 then
+        return "" + ")"
+    elsif index_of(parse_node, "missing then") != MSH_INDEX_NOT_FOUND then
+        return "" + "then"
+    elsif index_of(parse_node, "missing do") != MSH_INDEX_NOT_FOUND then
+        return "" + "do"
+    elsif index_of(parse_node, "missing )") != MSH_INDEX_NOT_FOUND then
+        return "" + ")"
+    elsif index_of(parse_node, "missing case )") != MSH_INDEX_NOT_FOUND then
+        return "" + ")"
+    elsif index_of(parse_node, "missing fi") != MSH_INDEX_NOT_FOUND then
+        return "" + "fi"
+    elsif index_of(parse_node, "missing done") != MSH_INDEX_NOT_FOUND then
+        return "" + "done"
+    elsif index_of(parse_node, "missing esac") != MSH_INDEX_NOT_FOUND then
+        return "" + "esac"
+    end
+    return "" + ""
+end
+
+string msh_parse_diag_message(parse_node: string, source: string):
+    expected = msh_parse_diag_expected(parse_node, source)
+    if strlen(expected) > 0 then
+        a = "Syntax error: end of file unexpected (expecting \"" + expected
+        out = a + "\")"
+        dealloc(a, expected)
+        return out
+    end
+    if index_of(parse_node, "redirection without target") != MSH_INDEX_NOT_FOUND then
+        return "" + "Syntax error: newline unexpected"
+    end
+    if index_of(parse_node, "redirection target must be a word") != MSH_INDEX_NOT_FOUND then
+        return "" + "Syntax error: redirection unexpected"
+    end
+    return "" + "Syntax error"
+end
+
+void msh_parse_diag_emit(parse_node: string, source: string, vars: string):
+    key = "" + "__redir_diag_prefix"
+    prefix = msh_state_get(vars, key)
+    detail = msh_parse_diag_message(parse_node, source)
+    if strlen(prefix) > 0 then
+        left = prefix + ": "
+        msg = left + detail
+        msh_diag(msg)
+        dealloc(left, msg)
+    else
+        msh_diag_source(vars, detail)
+    end
+    dealloc(key, prefix, detail)
+end

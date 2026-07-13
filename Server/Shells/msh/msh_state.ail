@@ -1,0 +1,505 @@
+// msh_state.ail
+// Shell variable state helpers for msh.
+
+import msh_defs
+
+int msh_state_name_char_ok(c: int, first: int):
+    if c == MSH_CH_UNDERSCORE then
+        return 1
+    end
+    if c >= MSH_CH_UPPER_A and c <= MSH_CH_UPPER_Z then
+        return 1
+    end
+    if c >= MSH_CH_LOWER_A and c <= MSH_CH_LOWER_Z then
+        return 1
+    end
+    if first == 0 and c >= MSH_CH_DIGIT_0 and c <= MSH_CH_DIGIT_9 then
+        return 1
+    end
+    return 0
+end
+
+int msh_state_name_valid(name: string):
+    if strlen(name) == 0 then
+        return 0
+    end
+    i = 0
+    while i < strlen(name) then
+        if msh_state_name_char_ok(char_at(name, i), i == 0) == 0 then
+            return 0
+        end
+        i++
+    end
+    return 1
+end
+
+int msh_state_name_pos(vars: string, name: string):
+    needle = name + "="
+    pos = index_of(vars, needle)
+    while pos != MSH_INDEX_NOT_FOUND then
+        if pos == 0 then
+            dealloc(needle)
+            return pos
+        end
+        if char_at(vars, pos - 1) == MSH_CH_LF then
+            dealloc(needle)
+            return pos
+        end
+        pos = index_of_from(vars, needle, pos + 1)
+    end
+    dealloc(needle)
+    return MSH_INDEX_NOT_FOUND
+end
+
+int msh_state_has(vars: string, name: string):
+    if msh_state_name_pos(vars, name) == MSH_INDEX_NOT_FOUND then
+        return 0
+    end
+    return 1
+end
+
+string msh_state_value_encode(text: string):
+    out = "" + ""
+    i = 0
+    while i < strlen(text) then
+        c = char_at(text, i)
+        if c == MSH_CH_LF then
+            c = MSH_CH_SOH
+        end
+        ch = chr(c)
+        old = out
+        out = old + ch
+        dealloc(old, ch)
+        i++
+    end
+    return out
+end
+
+string msh_state_value_decode(text: string):
+    out = "" + ""
+    i = 0
+    while i < strlen(text) then
+        c = char_at(text, i)
+        if c == MSH_CH_SOH then
+            c = MSH_CH_LF
+        end
+        ch = chr(c)
+        old = out
+        out = old + ch
+        dealloc(old, ch)
+        i++
+    end
+    return out
+end
+
+string msh_state_get(vars: string, name: string):
+    pos = msh_state_name_pos(vars, name)
+    if pos == MSH_INDEX_NOT_FOUND then
+        return "" + ""
+    end
+    needle = name + "="
+    start = pos + strlen(needle)
+    end_pos = index_of_from(vars, "\n", start)
+    if end_pos == MSH_INDEX_NOT_FOUND then
+        end_pos = strlen(vars)
+    end
+    raw = substr(vars, start, end_pos - start)
+    out = msh_state_value_decode(raw)
+    dealloc(raw)
+    dealloc(needle)
+    return out
+end
+
+string msh_state_set(vars: string, name: string, value: string):
+    pos = msh_state_name_pos(vars, name)
+    encoded_value = msh_state_value_encode(value)
+    line_a = name + "="
+    line_b = line_a + encoded_value
+    line = line_b + "\n"
+    dealloc(encoded_value, line_a)
+    dealloc(line_b)
+
+    if pos == MSH_INDEX_NOT_FOUND then
+        out = vars + line
+        dealloc(line)
+        return out
+    end
+
+    old_end = index_of_from(vars, "\n", pos)
+    if old_end == MSH_INDEX_NOT_FOUND then
+        old_end = strlen(vars)
+    else
+        old_end++
+    end
+    left = substr(vars, 0, pos)
+    right = substr(vars, old_end, strlen(vars) - old_end)
+    temp = left + line
+    out2 = temp + right
+    dealloc(left)
+    dealloc(right)
+    dealloc(temp)
+    dealloc(line)
+    return out2
+end
+
+string msh_state_unset(vars: string, name: string):
+    pos = msh_state_name_pos(vars, name)
+    if pos == MSH_INDEX_NOT_FOUND then
+        return "" + vars
+    end
+    old_end = index_of_from(vars, "\n", pos)
+    if old_end == MSH_INDEX_NOT_FOUND then
+        old_end = strlen(vars)
+    else
+        old_end++
+    end
+    left = substr(vars, 0, pos)
+    right = substr(vars, old_end, strlen(vars) - old_end)
+    out = left + right
+    dealloc(left, right)
+    return out
+end
+
+int msh_state_is_readonly(vars: string, name: string):
+    key = "__readonly_" + name
+    value = msh_state_get(vars, key)
+    ok = 0
+    if strlen(value) > 0 then
+        ok = 1
+    end
+    dealloc(key, value)
+    return ok
+end
+
+int msh_state_is_exported(vars: string, name: string):
+    key = "__export_" + name
+    value = msh_state_get(vars, key)
+    ok = 0
+    if strlen(value) > 0 then
+        ok = 1
+    end
+    dealloc(key, value)
+    return ok
+end
+
+string msh_state_set_export(vars: string, name: string):
+    key = "__export_" + name
+    out = msh_state_set(vars, key, "1")
+    dealloc(key)
+    return out
+end
+
+string msh_state_set_readonly(vars: string, name: string):
+    key = "__readonly_" + name
+    out = msh_state_set(vars, key, "1")
+    dealloc(key)
+    return out
+end
+
+int msh_state_word_is_assignment(word: string):
+    eq = index_of(word, "=")
+    if eq <= 0 then
+        return 0
+    end
+    name = substr(word, 0, eq)
+    ok = msh_state_name_valid(name)
+    dealloc(name)
+    return ok
+end
+
+string msh_state_assignment_name(word: string):
+    eq = index_of(word, "=")
+    if eq == MSH_INDEX_NOT_FOUND then
+        return "" + word
+    end
+    return substr(word, 0, eq)
+end
+
+string msh_state_assignment_value(word: string):
+    eq = index_of(word, "=")
+    if eq == MSH_INDEX_NOT_FOUND then
+        return "" + ""
+    end
+    return substr(word, eq + 1, strlen(word) - eq - 1)
+end
+
+int msh_state_is_internal_name(name: string):
+    if name == "__last_status" then
+        return 1
+    end
+    if startswith(name, "__export_") == 1 then
+        return 1
+    end
+    if startswith(name, "__readonly_") == 1 then
+        return 1
+    end
+    if startswith(name, "__fn_") == 1 then
+        return 1
+    end
+    if startswith(name, "__option_") == 1 then
+        return 1
+    end
+    if startswith(name, "__alias_") == 1 then
+        return 1
+    end
+    if startswith(name, "__trap_") == 1 then
+        return 1
+    end
+    if startswith(name, "__job_") == 1 then
+        return 1
+    end
+    if startswith(name, "__wait_status_") == 1 then
+        return 1
+    end
+    if startswith(name, "__pending_signal") == 1 then
+        return 1
+    end
+    if startswith(name, "__source_") == 1 then
+        return 1
+    end
+    if name == "__script_name" then
+        return 1
+    end
+    if startswith(name, "__control_") == 1 then
+        return 1
+    end
+    if startswith(name, "__pipeline_") == 1 then
+        return 1
+    end
+    if startswith(name, "__exec_") == 1 then
+        return 1
+    end
+    if name == "__loop_depth" or name == "__function_depth" then
+        return 1
+    end
+    if name == "__umask" then
+        return 1
+    end
+    if name == "__entry_auto_pwd" or name == "__entry_auto_ppid" or name == "__entry_auto_ifs" then
+        return 1
+    end
+    return 0
+end
+
+int msh_state_is_positional_name(name: string):
+    if name == "__argc" then
+        return 1
+    end
+    if startswith(name, "__arg_") == 1 then
+        return 1
+    end
+    return 0
+end
+
+string msh_state_without_positionals(vars: string):
+    out = "" + ""
+    pos = 0
+    while pos < strlen(vars) then
+        stop = index_of_from(vars, "\n", pos)
+        if stop == MSH_INDEX_NOT_FOUND then
+            stop = strlen(vars)
+        end
+        line = substr(vars, pos, stop - pos)
+        eq = index_of(line, "=")
+        if eq != MSH_INDEX_NOT_FOUND then
+            name = substr(line, 0, eq)
+            if msh_state_is_positional_name(name) == 0 then
+                with_lf = line + "\n"
+                old = out
+                out = old + with_lf
+                dealloc(old, with_lf)
+            end
+            dealloc(name)
+        end
+        dealloc(line)
+        if stop >= strlen(vars) then
+            pos = strlen(vars)
+        else
+            pos = stop + 1
+        end
+    end
+    return out
+end
+
+string msh_state_positionals_only(vars: string):
+    out = "" + ""
+    pos = 0
+    while pos < strlen(vars) then
+        stop = index_of_from(vars, "\n", pos)
+        if stop == MSH_INDEX_NOT_FOUND then
+            stop = strlen(vars)
+        end
+        line = substr(vars, pos, stop - pos)
+        eq = index_of(line, "=")
+        if eq != MSH_INDEX_NOT_FOUND then
+            name = substr(line, 0, eq)
+            if msh_state_is_positional_name(name) == 1 then
+                with_lf = line + "\n"
+                old = out
+                out = old + with_lf
+                dealloc(old, with_lf)
+            end
+            dealloc(name)
+        end
+        dealloc(line)
+        if stop >= strlen(vars) then
+            pos = strlen(vars)
+        else
+            pos = stop + 1
+        end
+    end
+    return out
+end
+
+string msh_state_restore_positionals(vars: string, saved: string):
+    base = msh_state_without_positionals(vars)
+    out = base + saved
+    dealloc(base)
+    return out
+end
+
+string msh_state_set_positionals(vars: string, fields: str_array, start: int):
+    out = msh_state_without_positionals(vars)
+    count = str_array_len(fields) - start
+    if count < 0 then
+        count = 0
+    end
+    count_text = str(count)
+    old = out
+    out = msh_state_set(out, "__argc", count_text)
+    dealloc(old, count_text)
+    i = 0
+    while i < count then
+        key = "__arg_" + str(i + 1)
+        value = str_array_get(fields, start + i)
+        old2 = out
+        out = msh_state_set(out, key, value)
+        dealloc(old2, key)
+        i++
+    end
+    return out
+end
+
+string msh_state_public(vars: string):
+    out = "" + ""
+    pos = 0
+    while pos < strlen(vars) then
+        stop = index_of_from(vars, "\n", pos)
+        if stop == MSH_INDEX_NOT_FOUND then
+            stop = strlen(vars)
+        end
+        line = substr(vars, pos, stop - pos)
+        eq = index_of(line, "=")
+        if eq != MSH_INDEX_NOT_FOUND then
+            name = substr(line, 0, eq)
+            if msh_state_is_internal_name(name) == 0 then
+                with_lf = line + "\n"
+                old = out
+                out = old + with_lf
+                dealloc(old, with_lf)
+            end
+            dealloc(name)
+        end
+        dealloc(line)
+        if stop >= strlen(vars) then
+            pos = strlen(vars)
+        else
+            pos = stop + 1
+        end
+    end
+    return out
+end
+
+def msh_state_export_env(vars: string): str_array
+    out = str_array_new(4)
+    pos = 0
+    while pos < strlen(vars) then
+        stop = index_of_from(vars, "\n", pos)
+        if stop == MSH_INDEX_NOT_FOUND then
+            stop = strlen(vars)
+        end
+        line = substr(vars, pos, stop - pos)
+        eq = index_of(line, "=")
+        if eq != MSH_INDEX_NOT_FOUND then
+            name = substr(line, 0, eq)
+            if startswith(name, "__export_") == 1 then
+                export_name = substr(name, strlen("__export_"), strlen(name) - strlen("__export_"))
+                if msh_state_name_pos(vars, export_name) != MSH_INDEX_NOT_FOUND then
+                    value = msh_state_get(vars, export_name)
+                    left = export_name + "="
+                    pair = left + value
+                    out = str_array_push(out, pair)
+                    dealloc(value, left)
+                end
+                dealloc(export_name)
+            end
+            dealloc(name)
+        end
+        dealloc(line)
+        if stop >= strlen(vars) then
+            pos = strlen(vars)
+        else
+            pos = stop + 1
+        end
+    end
+    return out
+end
+
+int msh_env_has_name(env: str_array, name: string):
+    prefix = name + "="
+    i = 0
+    while i < str_array_len(env) then
+        item = str_array_get(env, i)
+        if startswith(item, prefix) == 1 then
+            dealloc(prefix)
+            return 1
+        end
+        i++
+    end
+    dealloc(prefix)
+    return 0
+end
+
+def msh_state_export_child_env(vars: string): str_array
+    out = msh_state_export_env(vars)
+    if target_os() == "windows" and msh_env_has_name(out, "PPID") == 0 then
+        pid = getpid()
+        if pid > 0 then
+            pid_text = str(pid)
+            left = "" + "PPID="
+            pair = left + pid_text
+            out = str_array_push(out, pair)
+            dealloc(pid_text, left)
+        end
+    end
+    return out
+end
+
+string msh_state_shift(vars: string):
+    argc_text = msh_state_get(vars, "__argc")
+    argc = parse_int(argc_text)
+    dealloc(argc_text)
+    if argc <= 0 then
+        return "" + vars
+    end
+    out = "" + vars
+    i = 1
+    while i < argc then
+        next_key = "__arg_" + str(i + 1)
+        cur_key = "__arg_" + str(i)
+        value = msh_state_get(out, next_key)
+        old = out
+        out = msh_state_set(out, cur_key, value)
+        dealloc(old, next_key, cur_key, value)
+        i++
+    end
+    last_key = "__arg_" + str(argc)
+    old2 = out
+    out = msh_state_unset(out, last_key)
+    dealloc(old2, last_key)
+    old3 = out
+    count_text = str(argc - 1)
+    out = msh_state_set(out, "__argc", count_text)
+    dealloc(old3, count_text)
+    return out
+end

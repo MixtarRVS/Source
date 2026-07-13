@@ -1,0 +1,191 @@
+// toolkit_upstream_tests.ail
+// Upstream-derived edge-test generation for translated Toolkit tools.
+
+string toolkit_upstream_target(tool: string):
+    prefix = "" + "Server/Userland/Generated/targets/linux-x64/bin/"
+    out = prefix + tool
+    dealloc(prefix)
+    return out
+end
+
+string toolkit_upstream_test_path(tool: string):
+    prefix = "" + "Server/Userland/Generated/tests/"
+    mid = prefix + tool
+    dealloc(prefix)
+    out = mid + "-freebsd-tests.sh"
+    dealloc(mid)
+    return out
+end
+
+string toolkit_upstream_test_report_path(tool: string):
+    prefix = "" + "Server/Userland/Generated/reports/"
+    mid = prefix + tool
+    dealloc(prefix)
+    out = mid + "-freebsd-tests.md"
+    dealloc(mid)
+    return out
+end
+
+string toolkit_upstream_wsl_script_command(tool: string):
+    script_path = toolkit_upstream_test_path(tool)
+    prefix = "" + "wsl.exe -d Debian -- bash "
+    cmd = prefix + script_path
+    dealloc(prefix)
+    dealloc(script_path)
+    return cmd
+end
+
+string toolkit_upstream_basis(tool: string):
+    match tool then
+        case "echo":
+            return "" + "Server/Userland/Toolkit/FreeBSD/freebsd-src/bin/echo/tests/echo_test.sh"
+        case "pwd":
+            if file_exists("Server/Userland/Toolkit/OpenBSD/src/bin/pwd/pwd.c") == 1 then
+                return "" + "Server/Userland/Toolkit/OpenBSD/src/bin/pwd/pwd.c"
+            end
+            return "" + "Server/Userland/Toolkit/FreeBSD/freebsd-src/bin/pwd/tests/pwd_test.sh"
+        case "mkdir":
+            return "" + "Server/Userland/Toolkit/FreeBSD/freebsd-src/bin/mkdir/tests/mkdir_test.sh"
+        case "rmdir":
+            if file_exists("Server/Userland/Toolkit/OpenBSD/src/bin/rmdir/rmdir.c") == 1 then
+                return "" + "Server/Userland/Toolkit/OpenBSD/src/bin/rmdir/rmdir.c"
+            end
+            return "" + "Server/Userland/Toolkit/FreeBSD/freebsd-src/bin/rmdir/tests/rmdir_test.sh"
+        case "cp":
+            return "" + "Server/Userland/Toolkit/FreeBSD/freebsd-src/bin/cp/tests/cp_test.sh"
+        case "ls":
+            return "" + "Server/Userland/Toolkit/FreeBSD/freebsd-src/bin/ls/tests/ls_tests.sh"
+        case "mv":
+            return "" + "Server/Userland/Toolkit/FreeBSD/freebsd-src/bin/mv/tests/mv_test.sh"
+        case "rm":
+            return "" + "Server/Userland/Toolkit/FreeBSD/freebsd-src/bin/rm/tests/rm_test.sh"
+        case "domainname":
+            return "" + "no mirrored upstream ATF script"
+        case "hostname":
+            return "" + "no mirrored upstream ATF script"
+        case "realpath":
+            return "" + "no mirrored upstream ATF script"
+        case "sleep":
+            return "" + "no mirrored upstream ATF script"
+        case "sync":
+            return "" + "no mirrored upstream ATF script"
+        case "chmod":
+            return "" + "Server/Userland/Toolkit/FreeBSD/freebsd-src/bin/chmod/tests/chmod_test.sh"
+        case "test":
+            return "" + "Server/Userland/Toolkit/FreeBSD/freebsd-src/bin/test/tests/legacy_test.sh"
+        default:
+            return "" + "no mirrored upstream ATF script"
+    end
+end
+
+string toolkit_upstream_test_script(tool: string):
+    target = toolkit_upstream_target(tool)
+    report_path = toolkit_upstream_test_report_path(tool)
+    basis = toolkit_upstream_basis(tool)
+    body = "" + "#!/usr/bin/env bash\nset +e\nrepo=\"/mnt/c/Users/V/source/repos/MixtarRVS\"\ncd \"$repo\" || exit 99\n"
+    body2 = body + "target=\"$repo/"
+    dealloc(body)
+    body3 = body2 + target
+    dealloc(body2)
+    body4 = body3 + "\"\nreport=\"$repo/"
+    dealloc(body3)
+    body5 = body4 + report_path
+    dealloc(body4)
+    body6 = body5 + "\"\nbasis=\""
+    dealloc(body5)
+    body7 = body6 + basis
+    dealloc(body6)
+    body8 = body7 + "\"\nfailures=0\nmkdir -p \"$(dirname \"$report\")\"\nprintf '# "
+    dealloc(body7)
+    body9 = body8 + tool
+    dealloc(body8)
+    body10 = body9 + " Upstream-Derived Test Report\\n\\n' > \"$report\"\nprintf 'Generated target: `%s`\\n\\n' \"$target\" >> \"$report\"\nprintf 'Upstream basis: `%s`\\n\\n' \"$basis\" >> \"$report\"\npass() { printf -- '- PASS %s\\n' \"$1\" >> \"$report\"; }\nfail() { printf -- '- FAIL %s\\n' \"$1\" >> \"$report\"; failures=$((failures+1)); }\ncheck_exact_file() { label=\"$1\"; expected=\"$2\"; printf '%s' \"$expected\" > /tmp/mixtar-upstream.expected; if cmp -s /tmp/mixtar-upstream.out /tmp/mixtar-upstream.expected; then pass \"$label\"; else fail \"$label output mismatch\"; fi; }\ncheck_usage_nonzero() { label=\"$1\"; shift; \"$target\" \"$@\" >/tmp/mixtar-upstream.out 2>/tmp/mixtar-upstream.err; rc=$?; if [ \"$rc\" != 0 ] && grep -qi 'usage:' /tmp/mixtar-upstream.err; then pass \"$label\"; else fail \"$label rc=$rc missing-usage\"; fi; }\n"
+    dealloc(body9)
+
+    if tool == "echo" then
+        body11 = body10 + "\"$target\" -n \"Hello world\" >/tmp/mixtar-upstream.out 2>/tmp/mixtar-upstream.err; rc=$?; if [ \"$rc\" = 0 ]; then check_exact_file 'echo -n omits trailing newline' 'Hello world'; else fail \"echo -n rc=$rc\"; fi\n\"$target\" \"Hello world\\c\" >/tmp/mixtar-upstream.out 2>/tmp/mixtar-upstream.err; rc=$?; if [ \"$rc\" = 0 ]; then check_exact_file 'echo trailing backslash-c omits newline' 'Hello world'; else fail \"echo backslash-c rc=$rc\"; fi\nprintf -- '\\nAutomation note: derived from FreeBSD echo ATF `n_output` and `append_c_output`.\\n' >> \"$report\"\nexit \"$failures\"\n"
+        dealloc(body10)
+        dealloc(target, report_path, basis)
+        return body11
+    end
+
+    if tool == "pwd" then
+        if file_exists("Server/Userland/Toolkit/OpenBSD/src/bin/pwd/pwd.c") == 1 then
+            body11 = body10 + "check_pwd_line() { label=\"$1\"; expected=\"$2\"; if printf '%s\\n' \"$expected\" | cmp -s /tmp/mixtar-upstream.out -; then pass \"$label\"; else fail \"$label output mismatch\"; fi; }\nroot=\"/tmp/mixtar-pwd-upstream-$$\"\nrm -rf \"$root\"\nmkdir -p \"$root/phy/baz\" || exit 98\nln -s phy \"$root/log\" || exit 98\ncd \"$root/log/baz\" || exit 98\nPWD=\"$root/log/baz\" \"$target\" -L >/tmp/mixtar-upstream.out 2>/tmp/mixtar-upstream.err; check_pwd_line 'openbsd pwd logical -L' \"$root/log/baz\"\nPWD=\"$root/log/baz\" \"$target\" -P -L >/tmp/mixtar-upstream.out 2>/tmp/mixtar-upstream.err; check_pwd_line 'openbsd pwd last option wins -P -L' \"$root/log/baz\"\nPWD=\"$root/log/baz\" \"$target\" >/tmp/mixtar-upstream.out 2>/tmp/mixtar-upstream.err; check_pwd_line 'openbsd pwd physical default' \"$root/phy/baz\"\nPWD=\"$root/log/baz\" \"$target\" -P >/tmp/mixtar-upstream.out 2>/tmp/mixtar-upstream.err; check_pwd_line 'openbsd pwd physical -P' \"$root/phy/baz\"\nPWD=\"$root/log/baz\" \"$target\" -L -P >/tmp/mixtar-upstream.out 2>/tmp/mixtar-upstream.err; check_pwd_line 'openbsd pwd last option wins -L -P' \"$root/phy/baz\"\nPWD=\"log/baz\" \"$target\" -L >/tmp/mixtar-upstream.out 2>/tmp/mixtar-upstream.err; check_pwd_line 'openbsd pwd rejects relative PWD' \"$root/phy/baz\"\nPWD=\"$root/log/./baz\" \"$target\" -L >/tmp/mixtar-upstream.out 2>/tmp/mixtar-upstream.err; check_pwd_line 'openbsd pwd rejects dotted PWD' \"$root/phy/baz\"\nPWD=\"$root/log/../log/baz\" \"$target\" -L >/tmp/mixtar-upstream.out 2>/tmp/mixtar-upstream.err; check_pwd_line 'openbsd pwd rejects dotdot PWD' \"$root/phy/baz\"\n\"$target\" extra >/tmp/mixtar-upstream.out 2>/tmp/mixtar-upstream.err; rc=$?; if [ \"$rc\" != 0 ] && grep -qi 'usage:' /tmp/mixtar-upstream.err; then pass 'openbsd pwd rejects extra operand'; else fail \"openbsd pwd extra operand rc=$rc\"; fi\nrm -rf \"$root\"\nprintf -- '\\nAutomation note: derived from OpenBSD pwd source behavior; default is physical, unlike current FreeBSD pwd.\\n' >> \"$report\"\nexit \"$failures\"\n"
+            dealloc(body10)
+            dealloc(target, report_path, basis)
+            return body11
+        end
+        body11 = body10 + "check_pwd_line() { label=\"$1\"; expected=\"$2\"; if printf '%s\\n' \"$expected\" | cmp -s /tmp/mixtar-upstream.out -; then pass \"$label\"; else fail \"$label output mismatch\"; fi; }\nroot=\"/tmp/mixtar-pwd-upstream-$$\"\nrm -rf \"$root\"\nmkdir -p \"$root/phy/baz\" || exit 98\nln -s phy \"$root/log\" || exit 98\ncd \"$root/log/baz\" || exit 98\nPWD=\"$root/log/baz\" \"$target\" -L >/tmp/mixtar-upstream.out 2>/tmp/mixtar-upstream.err; check_pwd_line 'pwd logical -L' \"$root/log/baz\"\nPWD=\"$root/log/baz\" \"$target\" -P -L >/tmp/mixtar-upstream.out 2>/tmp/mixtar-upstream.err; check_pwd_line 'pwd last option wins -P -L' \"$root/log/baz\"\nPWD=\"$root/log/baz\" \"$target\" >/tmp/mixtar-upstream.out 2>/tmp/mixtar-upstream.err; check_pwd_line 'pwd logical default' \"$root/log/baz\"\nPWD=\"$root/log/baz\" \"$target\" -P >/tmp/mixtar-upstream.out 2>/tmp/mixtar-upstream.err; check_pwd_line 'pwd physical -P' \"$root/phy/baz\"\nPWD=\"$root/log/baz\" \"$target\" -L -P >/tmp/mixtar-upstream.out 2>/tmp/mixtar-upstream.err; check_pwd_line 'pwd last option wins -L -P' \"$root/phy/baz\"\nPWD=\"log/baz\" \"$target\" -L >/tmp/mixtar-upstream.out 2>/tmp/mixtar-upstream.err; check_pwd_line 'pwd rejects relative PWD' \"$root/phy/baz\"\nPWD=\"$root/log/./baz\" \"$target\" -L >/tmp/mixtar-upstream.out 2>/tmp/mixtar-upstream.err; check_pwd_line 'pwd rejects dotted PWD' \"$root/phy/baz\"\nPWD=\"$root/log/../log/baz\" \"$target\" -L >/tmp/mixtar-upstream.out 2>/tmp/mixtar-upstream.err; check_pwd_line 'pwd rejects dotdot PWD' \"$root/phy/baz\"\nPWD=\"$root/baz\" \"$target\" -L >/tmp/mixtar-upstream.out 2>/tmp/mixtar-upstream.err; check_pwd_line 'pwd rejects nonexistent PWD' \"$root/phy/baz\"\nPWD=\"$root/log\" \"$target\" -L >/tmp/mixtar-upstream.out 2>/tmp/mixtar-upstream.err; check_pwd_line 'pwd rejects mismatched PWD' \"$root/phy/baz\"\n(\n  trap \"\" PIPE\n  sleep 1\n  \"$target\" 2>/tmp/mixtar-pwd-stderr\n  echo $? >/tmp/mixtar-pwd-result\n) | true\npipe_rc=$(cat /tmp/mixtar-pwd-result 2>/dev/null)\nif [ \"$pipe_rc\" = 1 ] && grep -qi 'stdout' /tmp/mixtar-pwd-stderr; then pass 'pwd stdout pipe error'; else fail \"pwd stdout pipe error rc=$pipe_rc\"; fi\nrm -rf \"$root\"\nprintf -- '\\nAutomation note: derived from FreeBSD pwd ATF logical, physical, and stdout cases.\\n' >> \"$report\"\nexit \"$failures\"\n"
+        dealloc(body10)
+        dealloc(target, report_path, basis)
+        return body11
+    end
+
+    if tool == "mkdir" then
+        body11 = body10 + "check_usage_nonzero 'mkdir -m requires mode argument' -m\ncheck_usage_nonzero 'mkdir -p requires directory operand' -p\ncheck_usage_nonzero 'mkdir -v requires directory operand' -v\ncheck_usage_nonzero 'mkdir requires directory operand'\nprintf -- '\\nAutomation note: derived from FreeBSD mkdir ATF invalid_usage and no_arguments cases.\\n' >> \"$report\"\nexit \"$failures\"\n"
+        dealloc(body10)
+        dealloc(target, report_path, basis)
+        return body11
+    end
+
+    if tool == "rmdir" then
+        if file_exists("Server/Userland/Toolkit/OpenBSD/src/bin/rmdir/rmdir.c") == 1 then
+            body11 = body10 + "check_openbsd_rmdir_usage() { label=\"$1\"; shift; \"$target\" \"$@\" >/tmp/mixtar-upstream.out 2>/tmp/mixtar-upstream.err; rc=$?; if [ \"$rc\" = 1 ] && grep -qi 'usage: rmdir' /tmp/mixtar-upstream.err; then pass \"$label\"; else fail \"$label rc=$rc missing-usage\"; fi; }\ncheck_openbsd_rmdir_usage 'openbsd rmdir -p requires directory operand' -p\ncheck_openbsd_rmdir_usage 'openbsd rmdir rejects unsupported -v' -v\ncheck_openbsd_rmdir_usage 'openbsd rmdir requires directory operand'\nprintf -- '\\nAutomation note: derived from OpenBSD rmdir source behavior; OpenBSD does not support FreeBSD rmdir -v and returns rc=1 for usage.\\n' >> \"$report\"\nexit \"$failures\"\n"
+            dealloc(body10)
+            dealloc(target, report_path, basis)
+            return body11
+        end
+        body11 = body10 + "check_rmdir_usage() { label=\"$1\"; shift; \"$target\" \"$@\" >/tmp/mixtar-upstream.out 2>/tmp/mixtar-upstream.err; rc=$?; if [ \"$rc\" = 2 ] && grep -qi 'usage: rmdir' /tmp/mixtar-upstream.err; then pass \"$label\"; else fail \"$label rc=$rc missing-usage\"; fi; }\ncheck_rmdir_usage 'rmdir -p requires directory operand' -p\ncheck_rmdir_usage 'rmdir -v requires directory operand' -v\ncheck_rmdir_usage 'rmdir requires directory operand'\nprintf -- '\\nAutomation note: derived from FreeBSD rmdir ATF invalid_usage and no_arguments cases.\\n' >> \"$report\"\nexit \"$failures\"\n"
+        dealloc(body10)
+        dealloc(target, report_path, basis)
+        return body11
+    end
+
+    if tool == "cp" then
+        body11 = body10 + "printf -- '- SKIP mirrored upstream ATF script exists but is not translated into this shell harness yet\\n' >> \"$report\"\nprintf -- '\\nAutomation note: cp has a mirrored FreeBSD ATF script; current certification uses WSL smoke tests only until the script is translated case-by-case.\\n' >> \"$report\"\nexit 0\n"
+        dealloc(body10)
+        dealloc(target, report_path, basis)
+        return body11
+    end
+
+    if tool == "ls" then
+        body11 = body10 + "printf -- '- SKIP mirrored upstream ATF script exists but is not translated into this shell harness yet\\n' >> \"$report\"\nprintf -- '\\nAutomation note: ls has a mirrored FreeBSD ATF script; current certification uses WSL smoke tests only until display matrices are translated case-by-case.\\n' >> \"$report\"\nexit 0\n"
+        dealloc(body10)
+        dealloc(target, report_path, basis)
+        return body11
+    end
+
+    if tool == "mv" then
+        body11 = body10 + "printf -- '- SKIP mirrored upstream ATF script exists but is not translated into this shell harness yet\\n' >> \"$report\"\nprintf -- '\\nAutomation note: mv has a mirrored FreeBSD ATF script; current certification uses WSL smoke tests only until rename/cross-device cases are translated case-by-case.\\n' >> \"$report\"\nexit 0\n"
+        dealloc(body10)
+        dealloc(target, report_path, basis)
+        return body11
+    end
+
+    if tool == "rm" then
+        body11 = body10 + "printf -- '- SKIP mirrored upstream ATF script exists but is not translated into this shell harness yet\\n' >> \"$report\"\nprintf -- '\\nAutomation note: rm has a mirrored FreeBSD ATF script; current certification uses WSL smoke tests only until recursive/interactive cases are translated case-by-case.\\n' >> \"$report\"\nexit 0\n"
+        dealloc(body10)
+        dealloc(target, report_path, basis)
+        return body11
+    end
+
+    if tool == "chmod" then
+        body11 = body10 + "printf -- '- SKIP mirrored upstream ATF script exists but is not translated into this shell harness yet\\n' >> \"$report\"\nprintf -- '\\nAutomation note: chmod has a mirrored FreeBSD ATF script; current certification uses WSL smoke tests only until recursive/ACL cases are translated case-by-case.\\n' >> \"$report\"\nexit 0\n"
+        dealloc(body10)
+        dealloc(target, report_path, basis)
+        return body11
+    end
+
+    if tool == "test" then
+        body11 = body10 + "printf -- '- SKIP mirrored upstream legacy test script exists but is not translated into this shell harness yet\\n' >> \"$report\"\nprintf -- '\\nAutomation note: test has a mirrored FreeBSD legacy script; current certification uses selected WSL parity cases until the expression matrix is translated.\\n' >> \"$report\"\nexit 0\n"
+        dealloc(body10)
+        dealloc(target, report_path, basis)
+        return body11
+    end
+
+    body11 = body10 + "printf -- '- SKIP no mirrored upstream FreeBSD ATF script is available for this tool\\n' >> \"$report\"\nexit 0\n"
+    dealloc(body10)
+    dealloc(target, report_path, basis)
+    return body11
+end

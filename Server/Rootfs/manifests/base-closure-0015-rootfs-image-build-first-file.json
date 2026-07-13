@@ -1,0 +1,52 @@
+{
+  "name": "MixtarRVS Base Closure 0015",
+  "status": "rootfs-image-first-file-no-activation",
+  "created": "2026-06-29",
+  "purpose": "Create the first real MixtarRVS rootfs.squashfs file in a staged generation directory without switching /System/Current, rebuilding initramfs, changing bootloader state, or removing the Alpine/OpenRC/apk fallback.",
+  "requires": [
+    "/System/Base/Closure/0012-rootfs-image-builder-requirements/manifest.json",
+    "/System/Base/Closure/0013-rootfs-image-builder-dependency-stage/manifest.json",
+    "/System/Base/Closure/0014-rootfs-image-build-dry-run/manifest.json",
+    "/System/SystemTools/mixtar-rootfs-image",
+    "/System/Config/ImageBuilder/rootfs-image.requirements",
+    "/usr/bin/mksquashfs",
+    "/usr/bin/unsquashfs"
+  ],
+  "target": {
+    "generation_id": "0015-rootfs-image-first-file",
+    "generation_dir": "/System/Generations/0015-rootfs-image-first-file",
+    "image": "/System/Generations/0015-rootfs-image-first-file/rootfs.squashfs",
+    "manifest": "/System/Generations/0015-rootfs-image-first-file/manifest.json",
+    "activation": "/System/Generations/0015-rootfs-image-first-file/activation.plan"
+  },
+  "allowed_mutations": [
+    "Create /System/Generations/0015-rootfs-image-first-file.",
+    "Create rootfs.squashfs in that staged generation directory.",
+    "Create a non-activating manifest.json.",
+    "Create activation.plan with activation=none.",
+    "Create build logs and summary files."
+  ],
+  "non_goals": [
+    "Do not switch /System/Current.",
+    "Do not rewrite /System/Previous.",
+    "Do not rebuild initramfs.",
+    "Do not change bootloader state.",
+    "Do not mount the generated image as root.",
+    "Do not remove Alpine/OpenRC/apk fallback.",
+    "Do not run apk add, apk del, or apk upgrade."
+  ],
+  "postconditions": [
+    "rootfs.squashfs exists and is non-empty.",
+    "unsquashfs -s succeeds.",
+    "manifest.json records sha256 and size.",
+    "activation.plan records activation=none.",
+    "/System/Current target is unchanged."
+  ],
+  "known_limitations": [
+    "The image is not booted.",
+    "The image is not mounted as root.",
+    "No switch, rollback, bootloader, or garbage collection path is implemented by this stage.",
+    "The generated image may still contain compatibility substrate because the active source root is the current mutable install."
+  ],
+  "next_stage": "0016-rootfs-image-inspection-and-mount-plan"
+}

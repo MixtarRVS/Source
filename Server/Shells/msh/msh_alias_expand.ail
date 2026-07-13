@@ -1,0 +1,466 @@
+// msh_alias_expand.ail
+// Conservative parser-input alias substitution for command-leading words.
+
+import msh_defs
+import msh_fields
+import msh_phase_state
+
+int msh_alias_is_delim(c: int):
+    if c == MSH_CH_SPACE or c == MSH_CH_TAB or c == MSH_CH_LF then
+        return 1
+    end
+    if c == MSH_CH_SEMI or c == MSH_CH_PIPE or c == MSH_CH_AMP then
+        return 1
+    end
+    if c == MSH_CH_LPAREN or c == MSH_CH_RPAREN then
+        return 1
+    end
+    if c == MSH_CH_LBRACE or c == MSH_CH_RBRACE then
+        return 1
+    end
+    if c == MSH_CH_LT or c == MSH_CH_GT then
+        return 1
+    end
+    return 0
+end
+
+int msh_alias_word_expandable(word: string):
+    if strlen(word) == 0 then
+        return 0
+    end
+    if index_of(word, "=") != MSH_INDEX_NOT_FOUND then
+        return 0
+    end
+    if msh_alias_word_reserved(word) == 1 then
+        return 0
+    end
+    return 1
+end
+
+int msh_alias_word_reserved(word: string):
+    if word == "!" then
+        return 1
+    elsif word == "case" then
+        return 1
+    elsif word == "do" then
+        return 1
+    elsif word == "done" then
+        return 1
+    elsif word == "elif" then
+        return 1
+    elsif word == "else" then
+        return 1
+    elsif word == "esac" then
+        return 1
+    elsif word == "fi" then
+        return 1
+    elsif word == "for" then
+        return 1
+    elsif word == "if" then
+        return 1
+    elsif word == "in" then
+        return 1
+    elsif word == "then" then
+        return 1
+    elsif word == "until" then
+        return 1
+    elsif word == "while" then
+        return 1
+    end
+    return 0
+end
+
+int msh_alias_word_opens_command_position(word: string):
+    if word == "!" then
+        return 1
+    elsif word == "do" then
+        return 1
+    elsif word == "elif" then
+        return 1
+    elsif word == "else" then
+        return 1
+    elsif word == "if" then
+        return 1
+    elsif word == "then" then
+        return 1
+    elsif word == "until" then
+        return 1
+    elsif word == "while" then
+        return 1
+    end
+    return 0
+end
+
+int msh_alias_value_trailing_blank(value: string):
+    if strlen(value) == 0 then
+        return 0
+    end
+    last = char_at(value, strlen(value) - 1)
+    if last == MSH_CH_SPACE or last == MSH_CH_TAB then
+        return 1
+    end
+    return 0
+end
+
+string msh_alias_append(source: string, piece: string):
+    out = source + piece
+    return out
+end
+
+string msh_alias_expand_once(source: string, vars: string):
+    out = "" + ""
+    command_start = 1
+    in_single = 0
+    in_double = 0
+    i = 0
+    while i < strlen(source) then
+        c = char_at(source, i)
+        if in_single == 1 then
+            if c == MSH_CH_SQUOTE then
+                in_single = 0
+            end
+            ch = chr(c)
+            old = out
+            out = msh_alias_append(out, ch)
+            dealloc(old, ch)
+            i++
+        elsif in_double == 1 then
+            if c == MSH_CH_DQUOTE then
+                in_double = 0
+            end
+            ch2 = chr(c)
+            old2 = out
+            out = msh_alias_append(out, ch2)
+            dealloc(old2, ch2)
+            i++
+        elsif c == MSH_CH_SQUOTE then
+            in_single = 1
+            ch3 = chr(c)
+            old3 = out
+            out = msh_alias_append(out, ch3)
+            dealloc(old3, ch3)
+            i++
+        elsif c == MSH_CH_DQUOTE then
+            in_double = 1
+            ch4 = chr(c)
+            old4 = out
+            out = msh_alias_append(out, ch4)
+            dealloc(old4, ch4)
+            i++
+        elsif command_start == 1 and (c == MSH_CH_SPACE or c == MSH_CH_TAB) then
+            ch5 = chr(c)
+            old5 = out
+            out = msh_alias_append(out, ch5)
+            dealloc(old5, ch5)
+            i++
+        elsif command_start == 1 and msh_alias_is_delim(c) == 0 then
+            start = i
+            while i < strlen(source) and msh_alias_is_delim(char_at(source, i)) == 0 then
+                i++
+            end
+            word = substr(source, start, i - start)
+            if msh_alias_word_expandable(word) == 1 then
+                value = msh_alias_get(vars, word)
+                alias_defined = msh_alias_defined(vars, word)
+            else
+                value = "" + ""
+                alias_defined = 0
+            end
+            old6 = out
+            if alias_defined == 1 then
+                out = msh_alias_append(out, value)
+                command_start = msh_alias_value_trailing_blank(value)
+            else
+                out = msh_alias_append(out, word)
+                command_start = msh_alias_word_opens_command_position(word)
+            end
+            dealloc(old6, word, value)
+        else
+            ch6 = chr(c)
+            old7 = out
+            out = msh_alias_append(out, ch6)
+            dealloc(old7, ch6)
+            if c == MSH_CH_SEMI or c == MSH_CH_LF or c == MSH_CH_PIPE or c == MSH_CH_AMP then
+                command_start = 1
+            elsif c == MSH_CH_LBRACE or c == MSH_CH_LPAREN then
+                command_start = 1
+            elsif c == MSH_CH_RPAREN then
+                command_start = 1
+            elsif c != MSH_CH_SPACE and c != MSH_CH_TAB then
+                command_start = 0
+            end
+            i++
+        end
+    end
+    return out
+end
+
+string msh_alias_expand_source(source: string, vars: string):
+    current = "" + source
+    passes = 0
+    changed = 1
+    while passes < 8 and changed == 1 then
+        next = msh_alias_expand_once(current, vars)
+        if next == current then
+            changed = 0
+        end
+        dealloc(current)
+        current = next
+        passes++
+    end
+    return current
+end
+
+string msh_alias_unquote_value(text: string):
+    if strlen(text) >= 2 then
+        first = char_at(text, 0)
+        last = char_at(text, strlen(text) - 1)
+        if first == MSH_CH_SQUOTE and last == MSH_CH_SQUOTE then
+            return substr(text, 1, strlen(text) - 2)
+        end
+        if first == MSH_CH_DQUOTE and last == MSH_CH_DQUOTE then
+            return substr(text, 1, strlen(text) - 2)
+        end
+    end
+    return "" + text
+end
+
+string msh_alias_record_line_defs(vars: string, line: string):
+    i = 0
+    while i < strlen(line) and (char_at(line, i) == MSH_CH_SPACE or char_at(line, i) == MSH_CH_TAB) then
+        i++
+    end
+    rest = substr(line, i, strlen(line) - i)
+    if startswith(rest, "alias ") == 0 and startswith(rest, "alias\t") == 0 then
+        dealloc(rest)
+        return "" + vars
+    end
+    dealloc(rest)
+    out = "" + vars
+    i = i + strlen("alias")
+    while i < strlen(line) then
+        while i < strlen(line) and (char_at(line, i) == MSH_CH_SPACE or char_at(line, i) == MSH_CH_TAB) then
+            i++
+        end
+        start = i
+        in_single = 0
+        in_double = 0
+        while i < strlen(line) then
+            c = char_at(line, i)
+            if c == MSH_CH_SQUOTE and in_double == 0 then
+                if in_single == 1 then
+                    in_single = 0
+                else
+                    in_single = 1
+                end
+            elsif c == MSH_CH_DQUOTE and in_single == 0 then
+                if in_double == 1 then
+                    in_double = 0
+                else
+                    in_double = 1
+                end
+            elsif in_single == 0 and in_double == 0 and (c == MSH_CH_SPACE or c == MSH_CH_TAB) then
+                break
+            end
+            i++
+        end
+        if i > start then
+            arg = substr(line, start, i - start)
+            eq = index_of(arg, "=")
+            if eq > 0 then
+                name = substr(arg, 0, eq)
+                raw_value = substr(arg, eq + 1, strlen(arg) - eq - 1)
+                value = msh_alias_unquote_value(raw_value)
+                old = out
+                out = msh_alias_set(out, name, value)
+                dealloc(old, name, raw_value, value)
+            end
+            dealloc(arg)
+        end
+        i++
+    end
+    return out
+end
+
+string msh_alias_trim_leading(text: string):
+    i = 0
+    while i < strlen(text) and (char_at(text, i) == MSH_CH_SPACE or char_at(text, i) == MSH_CH_TAB) then
+        i++
+    end
+    return substr(text, i, strlen(text) - i)
+end
+
+int msh_alias_line_starts_word(line: string, word: string):
+    if startswith(line, word) == 0 then
+        return 0
+    end
+    n = strlen(word)
+    if strlen(line) == n then
+        return 1
+    end
+    c = char_at(line, n)
+    if c == MSH_CH_SPACE or c == MSH_CH_TAB or c == MSH_CH_SEMI then
+        return 1
+    end
+    return 0
+end
+
+int msh_alias_line_opens_compound(line: string):
+    trimmed = msh_alias_trim_leading(line)
+    ok = 0
+    if msh_alias_line_starts_word(trimmed, "if") == 1 then
+        ok = 1
+    elsif msh_alias_line_starts_word(trimmed, "for") == 1 then
+        ok = 1
+    elsif msh_alias_line_starts_word(trimmed, "while") == 1 then
+        ok = 1
+    elsif msh_alias_line_starts_word(trimmed, "until") == 1 then
+        ok = 1
+    elsif msh_alias_line_starts_word(trimmed, "case") == 1 then
+        ok = 1
+    end
+    dealloc(trimmed)
+    return ok
+end
+
+int msh_alias_line_closes_compound(line: string):
+    trimmed = msh_alias_trim_leading(line)
+    ok = 0
+    if msh_alias_line_starts_word(trimmed, "fi") == 1 then
+        ok = 1
+    elsif msh_alias_line_starts_word(trimmed, "done") == 1 then
+        ok = 1
+    elsif msh_alias_line_starts_word(trimmed, "esac") == 1 then
+        ok = 1
+    end
+    dealloc(trimmed)
+    return ok
+end
+
+string msh_alias_record_unit_defs(vars: string, unit: string):
+    out = "" + vars
+    pos = 0
+    while pos < strlen(unit) then
+        stop = index_of_from(unit, "\n", pos)
+        if stop == MSH_INDEX_NOT_FOUND then
+            stop = strlen(unit)
+        end
+        line = substr(unit, pos, stop - pos)
+        old = out
+        out = msh_alias_record_line_defs(out, line)
+        dealloc(old, line)
+        if stop >= strlen(unit) then
+            pos = stop
+        else
+            pos = stop + 1
+        end
+    end
+    return out
+end
+
+int msh_alias_line_quote_state_after(line: string, start_single: int, start_double: int, wanted: int):
+    in_single = start_single
+    in_double = start_double
+    i = 0
+    while i < strlen(line) then
+        c = char_at(line, i)
+        if in_single == 1 then
+            if c == MSH_CH_SQUOTE then
+                in_single = 0
+            end
+            i++
+        elsif in_double == 1 then
+            if c == MSH_CH_BACKSLASH and i + 1 < strlen(line) then
+                i = i + 2
+            else
+                if c == MSH_CH_DQUOTE then
+                    in_double = 0
+                end
+                i++
+            end
+        elsif c == MSH_CH_BACKSLASH and i + 1 < strlen(line) then
+            i = i + 2
+        else
+            if c == MSH_CH_SQUOTE then
+                in_single = 1
+            elsif c == MSH_CH_DQUOTE then
+                in_double = 1
+            end
+            i++
+        end
+    end
+    if wanted == 1 then
+        return in_single
+    end
+    return in_double
+end
+
+string msh_alias_expand_source_read_units(source: string, vars: string):
+    parts = str_array_new(MSH_FIELD_CAP_DEFAULT)
+    current_vars = "" + vars
+    unit_parts = str_array_new(MSH_FIELD_CAP_DEFAULT)
+    depth = 0
+    in_single = 0
+    in_double = 0
+    pos = 0
+    while pos < strlen(source) then
+        stop = index_of_from(source, "\n", pos)
+        has_lf = 1
+        if stop == MSH_INDEX_NOT_FOUND then
+            stop = strlen(source)
+            has_lf = 0
+        end
+        line = substr(source, pos, stop - pos)
+        line_started_quoted = 0
+        if in_single == 1 or in_double == 1 then
+            line_started_quoted = 1
+        end
+        if line_started_quoted == 0 and msh_alias_line_closes_compound(line) == 1 and depth > 0 then
+            depth--
+        end
+        if has_lf == 1 then
+            line_with_lf = line + "\n"
+            unit_parts = str_array_push(unit_parts, line_with_lf)
+            pos = stop + 1
+        else
+            owned_line = "" + line
+            unit_parts = str_array_push(unit_parts, owned_line)
+            pos = stop
+        end
+        next_single = msh_alias_line_quote_state_after(line, in_single, in_double, 1)
+        next_double = msh_alias_line_quote_state_after(line, in_single, in_double, 2)
+        in_single = next_single
+        in_double = next_double
+        if line_started_quoted == 0 and in_single == 0 and in_double == 0 and msh_alias_line_opens_compound(line) == 1 then
+            depth++
+        end
+        if depth == 0 and in_single == 0 and in_double == 0 then
+            unit = str_array_join(unit_parts, "")
+            expanded = msh_alias_expand_source(unit, current_vars)
+            parts = str_array_push(parts, "" + expanded)
+            old_vars = current_vars
+            current_vars = msh_alias_record_unit_defs(current_vars, expanded)
+            dealloc(old_vars)
+            dealloc(expanded)
+            dealloc(unit)
+            msh_field_array_destroy(unit_parts)
+            unit_parts = str_array_new(MSH_FIELD_CAP_DEFAULT)
+        end
+        dealloc(line)
+    end
+    if str_array_len(unit_parts) > 0 then
+        unit_tail = str_array_join(unit_parts, "")
+        expanded_tail = msh_alias_expand_source(unit_tail, current_vars)
+        parts = str_array_push(parts, "" + expanded_tail)
+        old_tail_vars = current_vars
+        current_vars = msh_alias_record_unit_defs(current_vars, expanded_tail)
+        dealloc(old_tail_vars)
+        dealloc(expanded_tail)
+        dealloc(unit_tail)
+    end
+    out = str_array_join(parts, "")
+    msh_field_array_destroy(parts)
+    msh_field_array_destroy(unit_parts)
+    dealloc(current_vars)
+    return out
+end

@@ -1,0 +1,50 @@
+// msh_control.ail
+// Internal shell control-flow metadata for break/continue/return/exit.
+
+import msh_state
+
+string msh_control_set(vars: string, kind: string, status: int):
+    status_text = str(status)
+    step1 = msh_state_set(vars, "__control_kind", kind)
+    out = msh_state_set(step1, "__control_status", status_text)
+    dealloc(status_text, step1)
+    return out
+end
+
+string msh_control_kind(vars: string):
+    return msh_state_get(vars, "__control_kind")
+end
+
+int msh_control_status(vars: string):
+    status_text = msh_state_get(vars, "__control_status")
+    status = parse_int(status_text)
+    dealloc(status_text)
+    return status
+end
+
+int msh_control_is(vars: string, kind: string):
+    got = msh_control_kind(vars)
+    ok = 0
+    if got == kind then
+        ok = 1
+    end
+    dealloc(got)
+    return ok
+end
+
+int msh_control_active(vars: string):
+    got = msh_control_kind(vars)
+    active = 0
+    if strlen(got) > 0 then
+        active = 1
+    end
+    dealloc(got)
+    return active
+end
+
+string msh_control_clear(vars: string):
+    step1 = msh_state_unset(vars, "__control_kind")
+    out = msh_state_unset(step1, "__control_status")
+    dealloc(step1)
+    return out
+end
