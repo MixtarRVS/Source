@@ -1,0 +1,441 @@
+const string KERNEL_PREPARE_DEFAULT_DB = "/System/Configuration/Updates.config"
+const int KERNEL_PREPARE_OK = 0
+const int KERNEL_PREPARE_USAGE = 64
+const int KERNEL_PREPARE_BLOCKED = 65
+const int MI_SQLITE_ROW = 100
+const int MI_SQLITE_DONE = 101
+
+void prepare_line(prefix: string, value: string):
+    line = prefix + value
+    print line
+    dealloc(line)
+end
+
+int prepare_fail(message: string):
+    prepare_line("kernel-prepare: ", message)
+    return KERNEL_PREPARE_BLOCKED
+end
+
+string prepare_db_path():
+    if argc() >= 3 then
+        return "" + argv(2)
+    end
+    return "" + KERNEL_PREPARE_DEFAULT_DB
+end
+
+string query_text(db: int, sql: string):
+    stmt = sql_prepare(db, sql)
+    if stmt == 0 then
+        return "" + ""
+    end
+    rc = sql_step(stmt)
+    if rc != MI_SQLITE_ROW then
+        sql_finalize(stmt)
+        return "" + ""
+    end
+    value = "" + sql_column_text(stmt, 0)
+    sql_finalize(stmt)
+    return value
+end
+
+int path_allowed(path: string, allowed_root: string):
+    if strlen(path) == 0 or strlen(allowed_root) < 2 then
+        return 0
+    end
+    if path == allowed_root then
+        return 1
+    end
+    prefix = allowed_root + "/"
+    if strlen(path) < strlen(prefix) then
+        dealloc(prefix)
+        return 0
+    end
+    actual = substr(path, 0, strlen(prefix))
+    ok = 0
+    if actual == prefix then
+        ok = 1
+    end
+    dealloc(prefix, actual)
+    return ok
+end
+
+int run_args(args: str_array):
+    rc = process_run_argv(args)
+    return rc
+end
+
+string capture_args(args: str_array):
+    env = str_array_new(0)
+    ops = str_array_new(0)
+    targets = str_array_new(0)
+    output = process_capture_argv_env_redirs(args, env, ops, targets)
+    rc = process_last_capture_status()
+    dealloc_str_array(env)
+    dealloc_str_array(ops)
+    dealloc_str_array(targets)
+    if rc != 0 then
+        dealloc(output)
+        return "" + ""
+    end
+    return output
+end
+
+int run_mkdir(executable: string, path: string):
+    args = str_array_new(3)
+    args = str_array_push(args, executable)
+    args = str_array_push(args, "-p")
+    args = str_array_push(args, path)
+    rc = run_args(args)
+    dealloc_str_array(args)
+    return rc
+end
+
+int nonempty_path(test_exe: string, path: string):
+    args = str_array_new(3)
+    args = str_array_push(args, test_exe)
+    args = str_array_push(args, "-s")
+    args = str_array_push(args, path)
+    rc = run_args(args)
+    dealloc_str_array(args)
+    if rc == 0 then
+        return 1
+    end
+    return 0
+end
+
+string without_xz(path: string):
+    if strlen(path) <= 3 then
+        return "" + ""
+    end
+    suffix = substr(path, strlen(path) - 3, 3)
+    if suffix != ".xz" then
+        dealloc(suffix)
+        return "" + ""
+    end
+    dealloc(suffix)
+    return substr(path, 0, strlen(path) - 3)
+end
+
+string capture_sha256(executable: string, path: string):
+    args = str_array_new(2)
+    args = str_array_push(args, executable)
+    args = str_array_push(args, path)
+    output = capture_args(args)
+    dealloc_str_array(args)
+    if strlen(output) < 64 then
+        dealloc(output)
+        return "" + ""
+    end
+    digest = substr(output, 0, 64)
+    dealloc(output)
+    return digest
+end
+
+int extract_source(tar_exe: string, archive: string, parent: string):
+    args = str_array_new(6)
+    args = str_array_push(args, tar_exe)
+    args = str_array_push(args, "-xf")
+    args = str_array_push(args, archive)
+    args = str_array_push(args, "-C")
+    args = str_array_push(args, parent)
+    args = str_array_push(args, "--no-same-owner")
+    rc = run_args(args)
+    dealloc_str_array(args)
+    return rc
+end
+
+int apply_rt_patch(patch_exe: string, source_root: string, patch_path: string):
+    args = str_array_new(8)
+    args = str_array_push(args, patch_exe)
+    args = str_array_push(args, "--batch")
+    args = str_array_push(args, "--forward")
+    args = str_array_push(args, "--strip=1")
+    args = str_array_push(args, "--directory")
+    args = str_array_push(args, source_root)
+    args = str_array_push(args, "--input")
+    args = str_array_push(args, patch_path)
+    rc = run_args(args)
+    dealloc_str_array(args)
+    return rc
+end
+
+int make_target(make_exe: string, source_root: string, build_root: string, target: string):
+    output_arg = "O=" + build_root
+    args = str_array_new(6)
+    args = str_array_push(args, make_exe)
+    args = str_array_push(args, "-C")
+    args = str_array_push(args, source_root)
+    args = str_array_push(args, output_arg)
+    args = str_array_push(args, target)
+    rc = run_args(args)
+    dealloc_str_array(args)
+    dealloc(output_arg)
+    return rc
+end
+
+int merge_fragment(source_root: string, build_root: string, fragment: string):
+    merge_script = source_root + "/scripts/kconfig/merge_config.sh"
+    config_path = build_root + "/.config"
+    args = str_array_new(7)
+    args = str_array_push(args, merge_script)
+    args = str_array_push(args, "-m")
+    args = str_array_push(args, "-O")
+    args = str_array_push(args, build_root)
+    args = str_array_push(args, config_path)
+    args = str_array_push(args, fragment)
+    rc = run_args(args)
+    dealloc_str_array(args)
+    dealloc(merge_script, config_path)
+    return rc
+end
+
+int set_kernel_strings(source_root: string, build_root: string, initramfs: string, cmdline: string, firmware_names: string, firmware_root: string):
+    config_tool = source_root + "/scripts/config"
+    config_path = build_root + "/.config"
+    args = str_array_new(22)
+    args = str_array_push(args, config_tool)
+    args = str_array_push(args, "--file")
+    args = str_array_push(args, config_path)
+    args = str_array_push(args, "--set-str")
+    args = str_array_push(args, "INITRAMFS_SOURCE")
+    args = str_array_push(args, initramfs)
+    args = str_array_push(args, "--set-str")
+    args = str_array_push(args, "CMDLINE")
+    args = str_array_push(args, cmdline)
+    args = str_array_push(args, "--set-str")
+    args = str_array_push(args, "EXTRA_FIRMWARE")
+    args = str_array_push(args, firmware_names)
+    args = str_array_push(args, "--set-str")
+    args = str_array_push(args, "EXTRA_FIRMWARE_DIR")
+    args = str_array_push(args, firmware_root)
+    args = str_array_push(args, "--enable")
+    args = str_array_push(args, "CMDLINE_BOOL")
+    args = str_array_push(args, "--disable")
+    args = str_array_push(args, "CMDLINE_OVERRIDE")
+    args = str_array_push(args, "--enable")
+    args = str_array_push(args, "FW_LOADER")
+    rc = run_args(args)
+    dealloc_str_array(args)
+    dealloc(config_tool, config_path)
+    return rc
+end
+
+int verify_firmware_files(test_exe: string, firmware_root: string, names: string):
+    cursor = 0
+    while cursor < strlen(names) then
+        space = index_of(names, " ", cursor)
+        if space < 0 then
+            space = strlen(names)
+        end
+        name = substr(names, cursor, space - cursor)
+        if strlen(name) > 0 then
+            path_left = firmware_root + "/"
+            path = path_left + name
+            dealloc(path_left)
+            if nonempty_path(test_exe, path) == 0 then
+                dealloc(name, path)
+                return 0
+            end
+            dealloc(path)
+        end
+        dealloc(name)
+        cursor = space + 1
+    end
+    return 1
+end
+
+int save_prepare_state(db: int, version: string, release: string, work_root: string, source_root: string, build_root: string, fragment: string, initramfs: string, firmware_root: string, config_path: string, detail: string):
+    stmt = sql_prepare(db, "INSERT INTO kernel_build_state(component_id,kernel_version,system_release,work_root,source_root,build_root,config_fragment_path,initramfs_path,firmware_root,kernel_config_path,status,detail,updated_at_ms) VALUES('linux-rt',?,?,?,?,?,?,?,?,?,'prepared-awaiting-config-gate',?,?) ON CONFLICT(component_id) DO UPDATE SET kernel_version=excluded.kernel_version,system_release=excluded.system_release,work_root=excluded.work_root,source_root=excluded.source_root,build_root=excluded.build_root,config_fragment_path=excluded.config_fragment_path,initramfs_path=excluded.initramfs_path,firmware_root=excluded.firmware_root,kernel_config_path=excluded.kernel_config_path,kernel_release='',staged_kernel_root='',staged_efi_path='',kernel_sha256='',efi_sha256='',status=excluded.status,detail=excluded.detail,updated_at_ms=excluded.updated_at_ms")
+    if stmt == 0 then
+        return KERNEL_PREPARE_BLOCKED
+    end
+    sql_bind_text(stmt, 1, version)
+    sql_bind_text(stmt, 2, release)
+    sql_bind_text(stmt, 3, work_root)
+    sql_bind_text(stmt, 4, source_root)
+    sql_bind_text(stmt, 5, build_root)
+    sql_bind_text(stmt, 6, fragment)
+    sql_bind_text(stmt, 7, initramfs)
+    sql_bind_text(stmt, 8, firmware_root)
+    sql_bind_text(stmt, 9, config_path)
+    sql_bind_text(stmt, 10, detail)
+    sql_bind_int(stmt, 11, time_ms())
+    rc = sql_step(stmt)
+    sql_finalize(stmt)
+    if rc != MI_SQLITE_DONE then
+        return KERNEL_PREPARE_BLOCKED
+    end
+    return KERNEL_PREPARE_OK
+end
+
+int updates_prepare_kernel(db: int):
+    source_state = query_text(db, "SELECT status FROM kernel_observation WHERE component_id='linux-rt'")
+    version = query_text(db, "SELECT stable_version FROM kernel_observation WHERE component_id='linux-rt'")
+    source_compressed = query_text(db, "SELECT stable_source_path FROM kernel_observation WHERE component_id='linux-rt'")
+    patch_compressed = query_text(db, "SELECT rt_patch_path FROM kernel_observation WHERE component_id='linux-rt'")
+    release = query_text(db, "SELECT value FROM setting WHERE key='system.release.target'")
+    allowed_work_root = query_text(db, "SELECT value FROM setting WHERE key='kernel.build.allowed_work_root'")
+    work_root = query_text(db, "SELECT value FROM setting WHERE key='kernel.build.work_root'")
+    fragment = query_text(db, "SELECT value FROM setting WHERE key='kernel.config.fragment'")
+    initramfs = query_text(db, "SELECT value FROM setting WHERE key='kernel.initramfs.path'")
+    firmware_root = query_text(db, "SELECT value FROM setting WHERE key='kernel.firmware.root'")
+    firmware_names = query_text(db, "SELECT value FROM setting WHERE key='kernel.firmware.embedded'")
+    cmdline = query_text(db, "SELECT value FROM setting WHERE key='kernel.cmdline'")
+    tar_exe = query_text(db, "SELECT value FROM setting WHERE key='tool.tar'")
+    patch_exe = query_text(db, "SELECT value FROM setting WHERE key='tool.patch'")
+    make_exe = query_text(db, "SELECT value FROM setting WHERE key='tool.make'")
+    mkdir_exe = query_text(db, "SELECT value FROM setting WHERE key='tool.mkdir'")
+    test_exe = query_text(db, "SELECT value FROM setting WHERE key='tool.test'")
+    sha256_exe = query_text(db, "SELECT value FROM setting WHERE key='tool.sha256'")
+    if source_state != "verified-source" then
+        prepare_line("Kernel prepare gate: BLOCKED, source state=", source_state)
+        dealloc(source_state, version, source_compressed, patch_compressed, release, allowed_work_root, work_root, fragment, initramfs, firmware_root, firmware_names, cmdline, tar_exe, patch_exe, make_exe, mkdir_exe, test_exe, sha256_exe)
+        return KERNEL_PREPARE_BLOCKED
+    end
+    if path_allowed(work_root, allowed_work_root) == 0 or strlen(version) == 0 or strlen(release) == 0 or strlen(fragment) == 0 or strlen(initramfs) == 0 or strlen(firmware_root) == 0 or strlen(firmware_names) == 0 or strlen(cmdline) == 0 then
+        dealloc(source_state, version, source_compressed, patch_compressed, release, allowed_work_root, work_root, fragment, initramfs, firmware_root, firmware_names, cmdline, tar_exe, patch_exe, make_exe, mkdir_exe, test_exe, sha256_exe)
+        return prepare_fail("kernel build policy is incomplete")
+    end
+    source_archive = without_xz(source_compressed)
+    in_tree = 0
+    if strlen(patch_compressed) == 0 then
+        in_tree = 1
+    end
+    rt_patch = "" + ""
+    if in_tree == 0 then
+        dealloc(rt_patch)
+        rt_patch = without_xz(patch_compressed)
+    end
+    if nonempty_path(test_exe, source_archive) == 0 or (in_tree == 0 and nonempty_path(test_exe, rt_patch) == 0) or nonempty_path(test_exe, fragment) == 0 or nonempty_path(test_exe, initramfs) == 0 or verify_firmware_files(test_exe, firmware_root, firmware_names) == 0 then
+        dealloc(source_state, version, source_compressed, patch_compressed, release, allowed_work_root, work_root, fragment, initramfs, firmware_root, firmware_names, cmdline, tar_exe, patch_exe, make_exe, mkdir_exe, test_exe, sha256_exe, source_archive, rt_patch)
+        return prepare_fail("verified source or configured build input is missing")
+    end
+    source_sha = capture_sha256(sha256_exe, source_archive)
+    patch_sha = "" + "in-tree"
+    if in_tree == 0 then
+        dealloc(patch_sha)
+        patch_sha = capture_sha256(sha256_exe, rt_patch)
+    end
+    src_parent = work_root + "/src"
+    source_name_left = "/linux-" + version
+    source_root = src_parent + source_name_left
+    dealloc(source_name_left)
+    build_parent = work_root + "/build"
+    build_name_left = "/linux-" + version
+    build_root = build_parent + build_name_left
+    dealloc(build_name_left)
+    marker_path = source_root + "/.mixtar-verified-source"
+    makefile_path = source_root + "/Makefile"
+    marker_left = "source_sha256=" + source_sha
+    marker_middle = marker_left + "\npatch_sha256="
+    marker_expected_left = marker_middle + patch_sha
+    marker_expected = marker_expected_left + "\n"
+    dealloc(marker_left, marker_middle, marker_expected_left)
+    existing_marker = "" + ""
+    if nonempty_path(test_exe, marker_path) == 1 then
+        dealloc(existing_marker)
+        existing_marker = read_file(marker_path)
+    end
+    reusable = 0
+    if existing_marker == marker_expected and nonempty_path(test_exe, makefile_path) == 1 then
+        reusable = 1
+    end
+    if reusable == 0 then
+        if strlen(existing_marker) > 0 or nonempty_path(test_exe, makefile_path) == 1 then
+            dealloc(source_state, version, source_compressed, patch_compressed, release, allowed_work_root, work_root, fragment, initramfs, firmware_root, firmware_names, cmdline, tar_exe, patch_exe, make_exe, mkdir_exe, test_exe, sha256_exe, source_archive, rt_patch, source_sha, patch_sha, src_parent, source_root, build_parent, build_root, marker_path, makefile_path, marker_expected, existing_marker)
+            return prepare_fail("existing kernel source tree does not match verified source hashes")
+        end
+        if run_mkdir(mkdir_exe, src_parent) != 0 or extract_source(tar_exe, source_archive, src_parent) != 0 or nonempty_path(test_exe, makefile_path) == 0 then
+            dealloc(source_state, version, source_compressed, patch_compressed, release, allowed_work_root, work_root, fragment, initramfs, firmware_root, firmware_names, cmdline, tar_exe, patch_exe, make_exe, mkdir_exe, test_exe, sha256_exe, source_archive, rt_patch, source_sha, patch_sha, src_parent, source_root, build_parent, build_root, marker_path, makefile_path, marker_expected, existing_marker)
+            return prepare_fail("verified kernel source extraction failed")
+        end
+        patch_rc = 0
+        if in_tree == 0 then
+            patch_rc = apply_rt_patch(patch_exe, source_root, rt_patch)
+        end
+        if patch_rc != 0 or write_file(marker_path, marker_expected) == 0 then
+            dealloc(source_state, version, source_compressed, patch_compressed, release, allowed_work_root, work_root, fragment, initramfs, firmware_root, firmware_names, cmdline, tar_exe, patch_exe, make_exe, mkdir_exe, test_exe, sha256_exe, source_archive, rt_patch, source_sha, patch_sha, src_parent, source_root, build_parent, build_root, marker_path, makefile_path, marker_expected, existing_marker)
+            return prepare_fail("verified PREEMPT_RT patch application failed")
+        end
+    end
+    dealloc(existing_marker)
+    if run_mkdir(mkdir_exe, build_root) != 0 or make_target(make_exe, source_root, build_root, "x86_64_defconfig") != 0 or merge_fragment(source_root, build_root, fragment) != 0 or set_kernel_strings(source_root, build_root, initramfs, cmdline, firmware_names, firmware_root) != 0 or make_target(make_exe, source_root, build_root, "olddefconfig") != 0 then
+        dealloc(source_state, version, source_compressed, patch_compressed, release, allowed_work_root, work_root, fragment, initramfs, firmware_root, firmware_names, cmdline, tar_exe, patch_exe, make_exe, mkdir_exe, test_exe, sha256_exe, source_archive, rt_patch, source_sha, patch_sha, src_parent, source_root, build_parent, build_root, marker_path, makefile_path, marker_expected)
+        return prepare_fail("kernel configuration preparation failed")
+    end
+    kernel_config_path = build_root + "/.config"
+    if nonempty_path(test_exe, kernel_config_path) == 0 then
+        dealloc(source_state, version, source_compressed, patch_compressed, release, allowed_work_root, work_root, fragment, initramfs, firmware_root, firmware_names, cmdline, tar_exe, patch_exe, make_exe, mkdir_exe, test_exe, sha256_exe, source_archive, rt_patch, source_sha, patch_sha, src_parent, source_root, build_parent, build_root, marker_path, makefile_path, marker_expected, kernel_config_path)
+        return prepare_fail("prepared kernel .config is missing")
+    end
+    detail_left = "verified Linux " + version
+    if in_tree == 1 then
+        detail = detail_left + " source with in-tree PREEMPT_RT prepared; awaiting config gate"
+    else
+        detail = detail_left + " source and PREEMPT_RT patch prepared; awaiting config gate"
+    end
+    dealloc(detail_left)
+    rc = save_prepare_state(db, version, release, work_root, source_root, build_root, fragment, initramfs, firmware_root, kernel_config_path, detail)
+    if rc == KERNEL_PREPARE_OK then
+        prepare_line("Kernel prepared: ", version)
+        prepare_line("Kernel source root: ", source_root)
+        prepare_line("Kernel config: ", kernel_config_path)
+    end
+    dealloc(source_state, version, source_compressed, patch_compressed, release, allowed_work_root, work_root, fragment, initramfs, firmware_root, firmware_names, cmdline, tar_exe, patch_exe, make_exe, mkdir_exe, test_exe, sha256_exe, source_archive, rt_patch, source_sha, patch_sha, src_parent, source_root, build_parent, build_root, marker_path, makefile_path, marker_expected, kernel_config_path, detail)
+    return rc
+end
+
+int updates_prepare_status(db: int):
+    version = query_text(db, "SELECT kernel_version FROM kernel_build_state WHERE component_id='linux-rt'")
+    state = query_text(db, "SELECT status FROM kernel_build_state WHERE component_id='linux-rt'")
+    detail = query_text(db, "SELECT detail FROM kernel_build_state WHERE component_id='linux-rt'")
+    if strlen(state) == 0 then
+        dealloc(version, state, detail)
+        return prepare_fail("kernel prepare has not run")
+    end
+    prepare_line("Kernel version: ", version)
+    prepare_line("Kernel prepare state: ", state)
+    prepare_line("Detail: ", detail)
+    dealloc(version, state, detail)
+    return KERNEL_PREPARE_OK
+end
+
+void prepare_usage():
+    print "usage: updates-kernel-prepare prepare-kernel [Updates.config]"
+    print "       updates-kernel-prepare status-kernel-prepare [Updates.config]"
+end
+
+def main(): int
+    if argc() < 2 then
+        prepare_usage()
+        return KERNEL_PREPARE_USAGE
+    end
+    command = argv(1)
+    config = prepare_db_path()
+    if command == "status-kernel-prepare" then
+        db = sql_open_readonly(config)
+    else
+        db = sql_open(config)
+    end
+    if db == 0 then
+        dealloc(config)
+        return prepare_fail("cannot open Updates.config")
+    end
+    sql_exec(db, "PRAGMA foreign_keys=ON")
+    rc = KERNEL_PREPARE_USAGE
+    match command then
+        case "prepare-kernel":
+            rc = updates_prepare_kernel(db)
+        case "status-kernel-prepare":
+            rc = updates_prepare_status(db)
+        case "help":
+            prepare_usage()
+            rc = KERNEL_PREPARE_OK
+        default:
+            prepare_usage()
+            rc = KERNEL_PREPARE_USAGE
+    end
+    sql_close(db)
+    dealloc(config)
+    return rc
+end

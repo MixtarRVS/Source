@@ -1,0 +1,1088 @@
+// toolkit_compat_tests.ail
+// WSL compatibility smoke-test generation for Toolkit builds.
+
+import toolkit_core
+
+string toolkit_test_script(tool: string):
+    target = toolkit_target(tool)
+    report_path = toolkit_test_report_path(tool)
+    body = "" + "#!/usr/bin/env bash\nset +e\nexport LC_ALL=C\ncd /mnt/c/Users/V/source/repos/MixtarRVS || exit 99\n"
+    body2 = body + "target=\""
+    dealloc(body)
+    body3 = body2 + target
+    dealloc(body2)
+    body4 = body3 + "\"\ntarget=\"$PWD/$target\"\nreport=\""
+    dealloc(body3)
+    body5 = body4 + report_path
+    dealloc(body4)
+    body6 = body5 + "\"\nfailures=0\nmkdir -p \"$(dirname \"$report\")\"\nprintf '# "
+    dealloc(body5)
+    body7 = body6 + tool
+    dealloc(body6)
+    body8 = body7 + " WSL Compatibility Report\\n\\n' > \"$report\"\nprintf 'Generated target: `%s`\\n\\n' \"$target\" >> \"$report\"\n"
+    dealloc(body7)
+
+    if tool == "echo" then
+        body9 = body8 + "compare_stdout() { name=\"$1\"; shift; \"$target\" \"$@\" > /tmp/mixtar-tool.out; trc=$?; /usr/bin/echo \"$@\" > /tmp/native-tool.out; nrc=$?; if cmp -s /tmp/mixtar-tool.out /tmp/native-tool.out && [ \"$trc\" = \"$nrc\" ]; then printf -- '- PASS %s\\n' \"$name\" >> \"$report\"; else printf -- '- FAIL %s\\n' \"$name\" >> \"$report\"; failures=$((failures+1)); fi; }\n"
+        dealloc(body8)
+        body10 = body9 + "compare_stdout basic hello world\ncompare_stdout dashdash -- not-an-option\n"
+        dealloc(body9)
+        body11 = body10 + "printf -- '\\nNote: FreeBSD echo intentionally differs from GNU echo for bare `\\\\c`; GNU parity is not required.\\n' >> \"$report\"\n"
+        dealloc(body10)
+        body12 = body11 + "exit \"$failures\"\n"
+        dealloc(body11)
+        dealloc(target, report_path)
+        return body12
+    end
+
+    if tool == "cat" then
+        body9 = body8 + "printf 'alpha\\nbeta\\n' >/tmp/mixtar-cat.in\n\"$target\" /tmp/mixtar-cat.in >/tmp/mixtar-tool.out; trc=$?; /usr/bin/cat /tmp/mixtar-cat.in >/tmp/native-tool.out; nrc=$?; if cmp -s /tmp/mixtar-tool.out /tmp/native-tool.out && [ \"$trc\" = \"$nrc\" ]; then printf -- '- PASS cat file stdout\\n' >> \"$report\"; else printf -- '- FAIL cat file stdout generated=%s native=%s\\n' \"$trc\" \"$nrc\" >> \"$report\"; failures=$((failures+1)); fi\nprintf 'stdin-data\\n' | \"$target\" >/tmp/mixtar-tool.out; trc=$?; printf 'stdin-data\\n' | /usr/bin/cat >/tmp/native-tool.out; nrc=$?; if cmp -s /tmp/mixtar-tool.out /tmp/native-tool.out && [ \"$trc\" = \"$nrc\" ]; then printf -- '- PASS cat stdin stdout\\n' >> \"$report\"; else printf -- '- FAIL cat stdin stdout generated=%s native=%s\\n' \"$trc\" \"$nrc\" >> \"$report\"; failures=$((failures+1)); fi\n\"$target\" /tmp/mixtar-cat-missing >/tmp/mixtar-tool.out 2>/tmp/mixtar-tool.err; trc=$?; /usr/bin/cat /tmp/mixtar-cat-missing >/tmp/native-tool.out 2>/tmp/native-tool.err; nrc=$?; if [ \"$trc\" != 0 ] && [ \"$nrc\" != 0 ] && grep -qi 'No such file' /tmp/mixtar-tool.err; then printf -- '- PASS cat missing file error\\n' >> \"$report\"; else printf -- '- FAIL cat missing file generated=%s native=%s\\n' \"$trc\" \"$nrc\" >> \"$report\"; failures=$((failures+1)); fi\nprintf -- '\\nNote: `BOOTSTRAP_CAT` limits this first conversion to raw cat behavior.\\n' >> \"$report\"\nexit \"$failures\"\n"
+        dealloc(body8)
+        dealloc(target, report_path)
+        return body9
+    end
+
+    if tool == "pwd" then
+        body9 = body8 + "\"$target\" > /tmp/mixtar-tool.out; trc=$?; /usr/bin/pwd > /tmp/native-tool.out; nrc=$?; if cmp -s /tmp/mixtar-tool.out /tmp/native-tool.out && [ \"$trc\" = \"$nrc\" ]; then printf -- '- PASS pwd\\n' >> \"$report\"; else printf -- '- FAIL pwd\\n' >> \"$report\"; failures=$((failures+1)); fi\n"
+        dealloc(body8)
+        body10 = body9 + "\"$target\" -P > /tmp/mixtar-tool.out; trc=$?; /usr/bin/pwd -P > /tmp/native-tool.out; nrc=$?; if cmp -s /tmp/mixtar-tool.out /tmp/native-tool.out && [ \"$trc\" = \"$nrc\" ]; then printf -- '- PASS pwd -P\\n' >> \"$report\"; else printf -- '- FAIL pwd -P\\n' >> \"$report\"; failures=$((failures+1)); fi\nexit \"$failures\"\n"
+        dealloc(body9)
+        dealloc(target, report_path)
+        return body10
+    end
+
+    if tool == "true" then
+        body9 = body8 + "\"$target\"; trc=$?; /usr/bin/true; nrc=$?; if [ \"$trc\" = \"$nrc\" ]; then printf -- '- PASS true exit code %s\\n' \"$trc\" >> \"$report\"; else printf -- '- FAIL true generated=%s native=%s\\n' \"$trc\" \"$nrc\" >> \"$report\"; failures=$((failures+1)); fi\nexit \"$failures\"\n"
+        dealloc(body8)
+        dealloc(target, report_path)
+        return body9
+    end
+
+    if tool == "false" then
+        body9 = body8 + "\"$target\"; trc=$?; /usr/bin/false; nrc=$?; if [ \"$trc\" = \"$nrc\" ]; then printf -- '- PASS false exit code %s\\n' \"$trc\" >> \"$report\"; else printf -- '- FAIL false generated=%s native=%s\\n' \"$trc\" \"$nrc\" >> \"$report\"; failures=$((failures+1)); fi\nexit \"$failures\"\n"
+        dealloc(body8)
+        dealloc(target, report_path)
+        return body9
+    end
+
+    if tool == "mkdir" then
+        body9 = body8 + "check_mode() { label=\"$1\"; mode_arg=\"$2\"; expected=\"$3\"; tmp=\"/tmp/mixtar-mkdir-$$-$label\"; rm -rf \"$tmp\"; \"$target\" -m \"$mode_arg\" \"$tmp\"; rc=$?; actual=$(stat -c '%a' \"$tmp\" 2>/dev/null); rm -rf \"$tmp\"; if [ \"$rc\" = 0 ] && [ \"$actual\" = \"$expected\" ]; then printf -- '- PASS mkdir -m %s => %s\\n' \"$mode_arg\" \"$actual\" >> \"$report\"; else printf -- '- FAIL mkdir -m %s rc=%s actual=%s expected=%s\\n' \"$mode_arg\" \"$rc\" \"$actual\" \"$expected\" >> \"$report\"; failures=$((failures+1)); fi; }\ntmp=\"/tmp/mixtar-mkdir-$$\"\nrm -rf \"$tmp\"\n\"$target\" \"$tmp\"; rc1=$?; [ -d \"$tmp\" ]; exists=$?; /usr/bin/rmdir \"$tmp\" 2>/dev/null\nif [ \"$rc1\" = 0 ] && [ \"$exists\" = 0 ]; then printf -- '- PASS mkdir basic\\n' >> \"$report\"; else printf -- '- FAIL mkdir basic rc=%s exists=%s\\n' \"$rc1\" \"$exists\" >> \"$report\"; failures=$((failures+1)); fi\nrm -rf \"$tmp\"\n\"$target\" -p \"$tmp/a/b\"; rc2=$?; [ -d \"$tmp/a/b\" ]; exists2=$?; rm -rf \"$tmp\"\nif [ \"$rc2\" = 0 ] && [ \"$exists2\" = 0 ]; then printf -- '- PASS mkdir -p\\n' >> \"$report\"; else printf -- '- FAIL mkdir -p rc=%s exists=%s\\n' \"$rc2\" \"$exists2\" >> \"$report\"; failures=$((failures+1)); fi\ncheck_mode octal-700 700 700\ncheck_mode symbolic-user-only 'u=rwx,go=' 700\ncheck_mode symbolic-add-user-write 'a=rx,u+w' 755\ncheck_mode symbolic-X 'a=rX' 555\nexit \"$failures\"\n"
+        dealloc(body8)
+        dealloc(target, report_path)
+        return body9
+    end
+
+    if tool == "rmdir" then
+        body9 = body8 + "tmp=\"/tmp/mixtar-rmdir-$$\"\nrm -rf \"$tmp\"\n/usr/bin/mkdir -p \"$tmp\"\n\"$target\" \"$tmp\"; rc1=$?; [ ! -e \"$tmp\" ]; gone=$?\nif [ \"$rc1\" = 0 ] && [ \"$gone\" = 0 ]; then printf -- '- PASS rmdir basic\\n' >> \"$report\"; else printf -- '- FAIL rmdir basic rc=%s gone=%s\\n' \"$rc1\" \"$gone\" >> \"$report\"; failures=$((failures+1)); fi\nrm -rf \"$tmp\"\nexit \"$failures\"\n"
+        dealloc(body8)
+        dealloc(target, report_path)
+        return body9
+    end
+
+    if tool == "cp" then
+        body9 = body8 + "tmp=\"/tmp/mixtar-cp-$$\"\nrm -rf \"$tmp\"\nmkdir -p \"$tmp\"\nprintf 'alpha\\nbeta\\n' > \"$tmp/src\"\n\"$target\" \"$tmp/src\" \"$tmp/dst\"; rc1=$?; if [ \"$rc1\" = 0 ] && cmp -s \"$tmp/src\" \"$tmp/dst\"; then printf -- '- PASS cp file copy\\n' >> \"$report\"; else printf -- '- FAIL cp file copy rc=%s\\n' \"$rc1\" >> \"$report\"; failures=$((failures+1)); fi\n\"$target\" \"$tmp/missing\" \"$tmp/nope\" >/tmp/mixtar-cp.out 2>/tmp/mixtar-cp.err; rc2=$?; if [ \"$rc2\" != 0 ] && grep -qi 'No such file' /tmp/mixtar-cp.err; then printf -- '- PASS cp missing source error\\n' >> \"$report\"; else printf -- '- FAIL cp missing source rc=%s\\n' \"$rc2\" >> \"$report\"; failures=$((failures+1)); fi\nrm -rf \"$tmp\"\nprintf -- '\\nNote: ACL, MAC, flags, whiteout, and filesystem-specific metadata are Bridge-limited on Linux.\\n' >> \"$report\"\nexit \"$failures\"\n"
+        dealloc(body8)
+        dealloc(target, report_path)
+        return body9
+    end
+
+    if tool == "ls" then
+        body9 = body8 + "tmp=\"/tmp/mixtar-ls-$$\"\nrm -rf \"$tmp\"\nmkdir -p \"$tmp\"\ntouch \"$tmp/a\" \"$tmp/b\"\n\"$target\" \"$tmp\" | sort >/tmp/mixtar-tool.out; trc=$?; /usr/bin/ls \"$tmp\" | sort >/tmp/native-tool.out; nrc=$?; if cmp -s /tmp/mixtar-tool.out /tmp/native-tool.out && [ \"$trc\" = \"$nrc\" ]; then printf -- '- PASS ls directory listing\\n' >> \"$report\"; else printf -- '- FAIL ls directory listing generated=%s native=%s\\n' \"$trc\" \"$nrc\" >> \"$report\"; failures=$((failures+1)); fi\n\"$target\" -1 \"$tmp\" | sort >/tmp/mixtar-tool.out; trc2=$?; /usr/bin/ls -1 \"$tmp\" | sort >/tmp/native-tool.out; nrc2=$?; if cmp -s /tmp/mixtar-tool.out /tmp/native-tool.out && [ \"$trc2\" = \"$nrc2\" ]; then printf -- '- PASS ls -1 directory listing\\n' >> \"$report\"; else printf -- '- FAIL ls -1 directory listing generated=%s native=%s\\n' \"$trc2\" \"$nrc2\" >> \"$report\"; failures=$((failures+1)); fi\nrm -rf \"$tmp\"\nprintf -- '\\nNote: ACL, MAC, birthtime, file flags, and BSD-specific display modes are Bridge-limited on Linux.\\n' >> \"$report\"\nexit \"$failures\"\n"
+        dealloc(body8)
+        dealloc(target, report_path)
+        return body9
+    end
+
+    if tool == "mv" then
+        body9 = body8 + "tmp=\"/tmp/mixtar-mv-$$\"\nrm -rf \"$tmp\"\nmkdir -p \"$tmp\"\nprintf 'move-data\\n' > \"$tmp/src\"\n\"$target\" \"$tmp/src\" \"$tmp/dst\"; rc1=$?; if [ \"$rc1\" = 0 ] && [ ! -e \"$tmp/src\" ] && grep -qx 'move-data' \"$tmp/dst\"; then printf -- '- PASS mv rename file\\n' >> \"$report\"; else printf -- '- FAIL mv rename file rc=%s\\n' \"$rc1\" >> \"$report\"; failures=$((failures+1)); fi\n\"$target\" \"$tmp/missing\" \"$tmp/nope\" >/tmp/mixtar-mv.out 2>/tmp/mixtar-mv.err; rc2=$?; if [ \"$rc2\" != 0 ] && grep -qi 'No such file' /tmp/mixtar-mv.err; then printf -- '- PASS mv missing source error\\n' >> \"$report\"; else printf -- '- FAIL mv missing source rc=%s\\n' \"$rc2\" >> \"$report\"; failures=$((failures+1)); fi\nrm -rf \"$tmp\"\nprintf -- '\\nNote: cross-device fallback and metadata-preserving edges need broader fixtures.\\n' >> \"$report\"\nexit \"$failures\"\n"
+        dealloc(body8)
+        dealloc(target, report_path)
+        return body9
+    end
+
+    if tool == "rm" then
+        body9 = body8 + "tmp=\"/tmp/mixtar-rm-$$\"\nrm -rf \"$tmp\"\nmkdir -p \"$tmp\"\nprintf 'remove-data\\n' > \"$tmp/file\"\n\"$target\" \"$tmp/file\"; rc1=$?; if [ \"$rc1\" = 0 ] && [ ! -e \"$tmp/file\" ]; then printf -- '- PASS rm file\\n' >> \"$report\"; else printf -- '- FAIL rm file rc=%s\\n' \"$rc1\" >> \"$report\"; failures=$((failures+1)); fi\n\"$target\" -f \"$tmp/missing\"; rc2=$?; if [ \"$rc2\" = 0 ]; then printf -- '- PASS rm -f missing\\n' >> \"$report\"; else printf -- '- FAIL rm -f missing rc=%s\\n' \"$rc2\" >> \"$report\"; failures=$((failures+1)); fi\nrm -rf \"$tmp\"\nprintf -- '\\nNote: recursive, interactive, whiteout, and undelete semantics need broader fixtures.\\n' >> \"$report\"\nexit \"$failures\"\n"
+        dealloc(body8)
+        dealloc(target, report_path)
+        return body9
+    end
+
+    if tool == "domainname" then
+        body9 = body8 + "\"$target\" >/tmp/mixtar-tool.out 2>/tmp/mixtar-tool.err; trc=$?; /bin/domainname >/tmp/native-tool.out 2>/tmp/native-tool.err; nrc=$?; if cmp -s /tmp/mixtar-tool.out /tmp/native-tool.out && [ \"$trc\" = \"$nrc\" ]; then printf -- '- PASS domainname query\\n' >> \"$report\"; else printf -- '- FAIL domainname query generated=%s native=%s\\n' \"$trc\" \"$nrc\" >> \"$report\"; failures=$((failures+1)); fi\nprintf -- '\\nNote: setting domain name usually requires privilege and is not certified here.\\n' >> \"$report\"\nexit \"$failures\"\n"
+        dealloc(body8)
+        dealloc(target, report_path)
+        return body9
+    end
+
+    if tool == "hostname" then
+        body9 = body8 + "\"$target\" >/tmp/mixtar-tool.out 2>/tmp/mixtar-tool.err; trc=$?; /bin/hostname >/tmp/native-tool.out 2>/tmp/native-tool.err; nrc=$?; if cmp -s /tmp/mixtar-tool.out /tmp/native-tool.out && [ \"$trc\" = \"$nrc\" ]; then printf -- '- PASS hostname query\\n' >> \"$report\"; else printf -- '- FAIL hostname query generated=%s native=%s\\n' \"$trc\" \"$nrc\" >> \"$report\"; failures=$((failures+1)); fi\nprintf -- '\\nNote: setting host name usually requires privilege and is not certified here.\\n' >> \"$report\"\nexit \"$failures\"\n"
+        dealloc(body8)
+        dealloc(target, report_path)
+        return body9
+    end
+
+    if tool == "realpath" then
+        body9 = body8 + "tmp=\"/tmp/mixtar-realpath-$$\"\nrm -rf \"$tmp\"\nmkdir -p \"$tmp/a\"\ntouch \"$tmp/a/file\"\nln -s a \"$tmp/link\"\n\"$target\" \"$tmp/link/file\" >/tmp/mixtar-tool.out; trc=$?; /usr/bin/realpath \"$tmp/link/file\" >/tmp/native-tool.out; nrc=$?; if cmp -s /tmp/mixtar-tool.out /tmp/native-tool.out && [ \"$trc\" = \"$nrc\" ]; then printf -- '- PASS realpath symlink path\\n' >> \"$report\"; else printf -- '- FAIL realpath symlink path generated=%s native=%s\\n' \"$trc\" \"$nrc\" >> \"$report\"; failures=$((failures+1)); fi\nrm -rf \"$tmp\"\nexit \"$failures\"\n"
+        dealloc(body8)
+        dealloc(target, report_path)
+        return body9
+    end
+
+    if tool == "sleep" then
+        body9 = body8 + "start=$(date +%s)\n\"$target\" 0; trc=$?; /usr/bin/sleep 0; nrc=$?; if [ \"$trc\" = \"$nrc\" ]; then printf -- '- PASS sleep 0 exit code\\n' >> \"$report\"; else printf -- '- FAIL sleep 0 generated=%s native=%s\\n' \"$trc\" \"$nrc\" >> \"$report\"; failures=$((failures+1)); fi\n\"$target\" nope >/tmp/mixtar-sleep.out 2>/tmp/mixtar-sleep.err; rc2=$?; if [ \"$rc2\" != 0 ]; then printf -- '- PASS sleep invalid operand exits nonzero\\n' >> \"$report\"; else printf -- '- FAIL sleep invalid operand rc=%s\\n' \"$rc2\" >> \"$report\"; failures=$((failures+1)); fi\nend=$(date +%s)\nprintf -- '\\nElapsed wall seconds: %s\\n' \"$((end-start))\" >> \"$report\"\nexit \"$failures\"\n"
+        dealloc(body8)
+        dealloc(target, report_path)
+        return body9
+    end
+
+    if tool == "sync" then
+        body9 = body8 + "\"$target\" >/tmp/mixtar-tool.out 2>/tmp/mixtar-tool.err; trc=$?; /bin/sync >/tmp/native-tool.out 2>/tmp/native-tool.err; nrc=$?; if cmp -s /tmp/mixtar-tool.out /tmp/native-tool.out && [ \"$trc\" = \"$nrc\" ]; then printf -- '- PASS sync no-argument behavior\\n' >> \"$report\"; else printf -- '- FAIL sync no-argument generated=%s native=%s\\n' \"$trc\" \"$nrc\" >> \"$report\"; failures=$((failures+1)); fi\nexit \"$failures\"\n"
+        dealloc(body8)
+        dealloc(target, report_path)
+        return body9
+    end
+
+    if tool == "chmod" then
+        body9 = body8 + "tmp=\"/tmp/mixtar-chmod-$$\"\nrm -rf \"$tmp\"\nmkdir -p \"$tmp\"\ntouch \"$tmp/file\"\n\"$target\" 600 \"$tmp/file\"; rc1=$?; mode1=$(stat -c '%a' \"$tmp/file\" 2>/dev/null); if [ \"$rc1\" = 0 ] && [ \"$mode1\" = 600 ]; then printf -- '- PASS chmod octal 600\\n' >> \"$report\"; else printf -- '- FAIL chmod octal 600 rc=%s mode=%s\\n' \"$rc1\" \"$mode1\" >> \"$report\"; failures=$((failures+1)); fi\n\"$target\" u+x \"$tmp/file\"; rc2=$?; mode2=$(stat -c '%a' \"$tmp/file\" 2>/dev/null); if [ \"$rc2\" = 0 ] && [ \"$mode2\" = 700 ]; then printf -- '- PASS chmod symbolic u+x\\n' >> \"$report\"; else printf -- '- FAIL chmod symbolic u+x rc=%s mode=%s\\n' \"$rc2\" \"$mode2\" >> \"$report\"; failures=$((failures+1)); fi\nrm -rf \"$tmp\"\nprintf -- '\\nNote: recursive chmod and ACL-sensitive NFSv4 behavior are not certified yet.\\n' >> \"$report\"\nexit \"$failures\"\n"
+        dealloc(body8)
+        dealloc(target, report_path)
+        return body9
+    end
+
+    if tool == "test" then
+        body9 = body8 + "compare_rc() { label=\"$1\"; shift; \"$target\" \"$@\" >/tmp/mixtar-test.out 2>/tmp/mixtar-test.err; trc=$?; /usr/bin/test \"$@\" >/tmp/native-test.out 2>/tmp/native-test.err; nrc=$?; if [ \"$trc\" = \"$nrc\" ]; then printf -- '- PASS %s rc=%s\\n' \"$label\" \"$trc\" >> \"$report\"; else printf -- '- FAIL %s generated=%s native=%s\\n' \"$label\" \"$trc\" \"$nrc\" >> \"$report\"; failures=$((failures+1)); fi; }\ntmp=\"/tmp/mixtar-test-$$\"\nrm -rf \"$tmp\"\nmkdir -p \"$tmp\"\ntouch \"$tmp/file\"\ncompare_rc 'test string equality true' alpha = alpha\ncompare_rc 'test string equality false' alpha = beta\ncompare_rc 'test file exists' -f \"$tmp/file\"\ncompare_rc 'test missing file' -f \"$tmp/missing\"\ncompare_rc 'test integer compare' 4 -lt 9\nrm -rf \"$tmp\"\nexit \"$failures\"\n"
+        dealloc(body8)
+        dealloc(target, report_path)
+        return body9
+    end
+
+    if tool == "env" then
+        body9 = body8 + "\"$target\" -i MIXTAR_TIER=1 PATH=/bin:/usr/bin /usr/bin/env | sort >/tmp/mixtar-tool.out; trc=$?; /usr/bin/env -i MIXTAR_TIER=1 PATH=/bin:/usr/bin /usr/bin/env | sort >/tmp/native-tool.out; nrc=$?; if cmp -s /tmp/mixtar-tool.out /tmp/native-tool.out && [ \"$trc\" = \"$nrc\" ]; then printf -- '- PASS env clean environment command\\n' >> \"$report\"; else printf -- '- FAIL env clean environment command generated=%s native=%s\\n' \"$trc\" \"$nrc\" >> \"$report\"; failures=$((failures+1)); fi\nexit \"$failures\"\n"
+        dealloc(body8)
+        dealloc(target, report_path)
+        return body9
+    end
+
+    if tool == "dirname" then
+        body9 = body8 + "\"$target\" /tmp/alpha/beta >/tmp/mixtar-tool.out; trc=$?; /usr/bin/dirname /tmp/alpha/beta >/tmp/native-tool.out; nrc=$?; if cmp -s /tmp/mixtar-tool.out /tmp/native-tool.out && [ \"$trc\" = \"$nrc\" ]; then printf -- '- PASS dirname basic path\\n' >> \"$report\"; else printf -- '- FAIL dirname basic path generated=%s native=%s\\n' \"$trc\" \"$nrc\" >> \"$report\"; failures=$((failures+1)); fi\nexit \"$failures\"\n"
+        dealloc(body8)
+        dealloc(target, report_path)
+        return body9
+    end
+
+    if tool == "basename" then
+        body9 = body8 + "\"$target\" /tmp/alpha/beta.txt .txt >/tmp/mixtar-tool.out; trc=$?; /usr/bin/basename /tmp/alpha/beta.txt .txt >/tmp/native-tool.out; nrc=$?; if cmp -s /tmp/mixtar-tool.out /tmp/native-tool.out && [ \"$trc\" = \"$nrc\" ]; then printf -- '- PASS basename suffix removal\\n' >> \"$report\"; else printf -- '- FAIL basename suffix removal generated=%s native=%s\\n' \"$trc\" \"$nrc\" >> \"$report\"; failures=$((failures+1)); fi\nexit \"$failures\"\n"
+        dealloc(body8)
+        dealloc(target, report_path)
+        return body9
+    end
+
+    if tool == "head" then
+        body9 = body8 + "printf 'one\\ntwo\\nthree\\n' >/tmp/mixtar-head.in\n\"$target\" -n 2 /tmp/mixtar-head.in >/tmp/mixtar-tool.out; trc=$?; /usr/bin/head -n 2 /tmp/mixtar-head.in >/tmp/native-tool.out; nrc=$?; if cmp -s /tmp/mixtar-tool.out /tmp/native-tool.out && [ \"$trc\" = \"$nrc\" ]; then printf -- '- PASS head -n 2\\n' >> \"$report\"; else printf -- '- FAIL head -n 2 generated=%s native=%s\\n' \"$trc\" \"$nrc\" >> \"$report\"; failures=$((failures+1)); fi\nexit \"$failures\"\n"
+        dealloc(body8)
+        dealloc(target, report_path)
+        return body9
+    end
+
+    if tool == "tee" then
+        body9 = body8 + "tmp=\"/tmp/mixtar-tee-$$\"\nrm -rf \"$tmp\"\nmkdir -p \"$tmp\"\nprintf 'tee-data\\n' | \"$target\" \"$tmp/out\" >/tmp/mixtar-tool.out; trc=$?; if [ \"$trc\" = 0 ] && grep -qx 'tee-data' /tmp/mixtar-tool.out && grep -qx 'tee-data' \"$tmp/out\"; then printf -- '- PASS tee stdout and file\\n' >> \"$report\"; else printf -- '- FAIL tee stdout and file rc=%s\\n' \"$trc\" >> \"$report\"; failures=$((failures+1)); fi\nrm -rf \"$tmp\"\nexit \"$failures\"\n"
+        dealloc(body8)
+        dealloc(target, report_path)
+        return body9
+    end
+
+    if tool == "touch" then
+        body9 = body8 + "tmp=\"/tmp/mixtar-touch-$$\"\nrm -rf \"$tmp\"\n\"$target\" \"$tmp\"; trc=$?; if [ \"$trc\" = 0 ] && [ -f \"$tmp\" ]; then printf -- '- PASS touch creates file\\n' >> \"$report\"; else printf -- '- FAIL touch creates file rc=%s\\n' \"$trc\" >> \"$report\"; failures=$((failures+1)); fi\nrm -f \"$tmp\"\nexit \"$failures\"\n"
+        dealloc(body8)
+        dealloc(target, report_path)
+        return body9
+    end
+
+    if tool == "readlink" then
+        body9 = body8 + "tmp=\"/tmp/mixtar-readlink-$$\"\nrm -rf \"$tmp\"\nmkdir -p \"$tmp\"\nln -s target-value \"$tmp/link\"\n\"$target\" \"$tmp/link\" >/tmp/mixtar-tool.out; trc=$?; /usr/bin/readlink \"$tmp/link\" >/tmp/native-tool.out; nrc=$?; if cmp -s /tmp/mixtar-tool.out /tmp/native-tool.out && [ \"$trc\" = \"$nrc\" ]; then printf -- '- PASS readlink symlink\\n' >> \"$report\"; else printf -- '- FAIL readlink symlink generated=%s native=%s\\n' \"$trc\" \"$nrc\" >> \"$report\"; failures=$((failures+1)); fi\nrm -rf \"$tmp\"\nexit \"$failures\"\n"
+        dealloc(body8)
+        dealloc(target, report_path)
+        return body9
+    end
+
+    if tool == "uname" then
+        body9 = body8 + "\"$target\" -s >/tmp/mixtar-tool.out; trc=$?; /usr/bin/uname -s >/tmp/native-tool.out; nrc=$?; if cmp -s /tmp/mixtar-tool.out /tmp/native-tool.out && [ \"$trc\" = \"$nrc\" ]; then printf -- '- PASS uname -s\\n' >> \"$report\"; else printf -- '- FAIL uname -s generated=%s native=%s\\n' \"$trc\" \"$nrc\" >> \"$report\"; failures=$((failures+1)); fi\nexit \"$failures\"\n"
+        dealloc(body8)
+        dealloc(target, report_path)
+        return body9
+    end
+
+    if tool == "id" then
+        body9 = body8 + "\"$target\" -u >/tmp/mixtar-tool.out; trc=$?; /usr/bin/id -u >/tmp/native-tool.out; nrc=$?; if cmp -s /tmp/mixtar-tool.out /tmp/native-tool.out && [ \"$trc\" = \"$nrc\" ]; then printf -- '- PASS id -u\\n' >> \"$report\"; else printf -- '- FAIL id -u generated=%s native=%s\\n' \"$trc\" \"$nrc\" >> \"$report\"; failures=$((failures+1)); fi\nexit \"$failures\"\n"
+        dealloc(body8)
+        dealloc(target, report_path)
+        return body9
+    end
+
+    if tool == "date" then
+        body9 = body8 + "\"$target\" +%Y >/tmp/mixtar-tool.out; trc=$?; /usr/bin/date +%Y >/tmp/native-tool.out; nrc=$?; if cmp -s /tmp/mixtar-tool.out /tmp/native-tool.out && [ \"$trc\" = \"$nrc\" ]; then printf -- '- PASS date +%%Y\\n' >> \"$report\"; else printf -- '- FAIL date +%%Y generated=%s native=%s\\n' \"$trc\" \"$nrc\" >> \"$report\"; failures=$((failures+1)); fi\nexit \"$failures\"\n"
+        dealloc(body8)
+        dealloc(target, report_path)
+        return body9
+    end
+
+    if tool == "uniq" then
+        body9 = body8 + "printf 'a\\na\\nb\\nb\\na\\n' >/tmp/mixtar-uniq.in\n\"$target\" /tmp/mixtar-uniq.in >/tmp/mixtar-tool.out; trc=$?; /usr/bin/uniq /tmp/mixtar-uniq.in >/tmp/native-tool.out; nrc=$?; if cmp -s /tmp/mixtar-tool.out /tmp/native-tool.out && [ \"$trc\" = \"$nrc\" ]; then printf -- '- PASS uniq adjacent duplicate collapse\\n' >> \"$report\"; else printf -- '- FAIL uniq adjacent duplicate collapse generated=%s native=%s\\n' \"$trc\" \"$nrc\" >> \"$report\"; failures=$((failures+1)); fi\nexit \"$failures\"\n"
+        dealloc(body8)
+        dealloc(target, report_path)
+        return body9
+    end
+
+    if tool == "wc" then
+        body9 = body8 + "printf 'one two\\nthree\\n' >/tmp/mixtar-wc.in\n\"$target\" -l /tmp/mixtar-wc.in >/tmp/mixtar-tool.out; trc=$?; /usr/bin/wc -l /tmp/mixtar-wc.in >/tmp/native-tool.out; nrc=$?; g=$(awk '{print $1}' /tmp/mixtar-tool.out); n=$(awk '{print $1}' /tmp/native-tool.out); if [ \"$g\" = \"$n\" ] && [ \"$trc\" = \"$nrc\" ]; then printf -- '- PASS wc -l file\\n' >> \"$report\"; else printf -- '- FAIL wc -l file generated=%s native=%s g=%s n=%s\\n' \"$trc\" \"$nrc\" \"$g\" \"$n\" >> \"$report\"; failures=$((failures+1)); fi\n\"$target\" -w /tmp/mixtar-wc.in >/tmp/mixtar-tool.out; trc2=$?; /usr/bin/wc -w /tmp/mixtar-wc.in >/tmp/native-tool.out; nrc2=$?; g2=$(awk '{print $1}' /tmp/mixtar-tool.out); n2=$(awk '{print $1}' /tmp/native-tool.out); if [ \"$g2\" = \"$n2\" ] && [ \"$trc2\" = \"$nrc2\" ]; then printf -- '- PASS wc -w file\\n' >> \"$report\"; else printf -- '- FAIL wc -w file generated=%s native=%s g=%s n=%s\\n' \"$trc2\" \"$nrc2\" \"$g2\" \"$n2\" >> \"$report\"; failures=$((failures+1)); fi\nprintf 'abc' | \"$target\" -c >/tmp/mixtar-tool.out; trc3=$?; printf 'abc' | /usr/bin/wc -c >/tmp/native-tool.out; nrc3=$?; g3=$(awk '{print $1}' /tmp/mixtar-tool.out); n3=$(awk '{print $1}' /tmp/native-tool.out); if [ \"$g3\" = \"$n3\" ] && [ \"$trc3\" = \"$nrc3\" ]; then printf -- '- PASS wc -c stdin\\n' >> \"$report\"; else printf -- '- FAIL wc -c stdin generated=%s native=%s g=%s n=%s\\n' \"$trc3\" \"$nrc3\" \"$g3\" \"$n3\" >> \"$report\"; failures=$((failures+1)); fi\nprintf -- '\\nNote: OpenBSD wc pads count columns more aggressively than GNU wc; certification compares numeric counts, not exact whitespace.\\n' >> \"$report\"\nexit \"$failures\"\n"
+        dealloc(body8)
+        dealloc(target, report_path)
+        return body9
+    end
+
+    if tool == "ln" then
+        body9 = body8 + "tmp=\"/tmp/mixtar-ln-$$\"\nrm -rf \"$tmp\"\nmkdir -p \"$tmp\"\nprintf 'link-data\\n' > \"$tmp/src\"\n\"$target\" \"$tmp/src\" \"$tmp/hard\"; rc1=$?; inode_src=$(stat -c '%i' \"$tmp/src\" 2>/dev/null); inode_hard=$(stat -c '%i' \"$tmp/hard\" 2>/dev/null); if [ \"$rc1\" = 0 ] && [ \"$inode_src\" = \"$inode_hard\" ]; then printf -- '- PASS ln hard link\\n' >> \"$report\"; else printf -- '- FAIL ln hard link rc=%s src=%s hard=%s\\n' \"$rc1\" \"$inode_src\" \"$inode_hard\" >> \"$report\"; failures=$((failures+1)); fi\n\"$target\" -s src \"$tmp/sym\"; rc2=$?; sym_target=$(readlink \"$tmp/sym\" 2>/dev/null); if [ \"$rc2\" = 0 ] && [ \"$sym_target\" = src ]; then printf -- '- PASS ln -s symlink\\n' >> \"$report\"; else printf -- '- FAIL ln -s symlink rc=%s target=%s\\n' \"$rc2\" \"$sym_target\" >> \"$report\"; failures=$((failures+1)); fi\n\"$target\" \"$tmp/missing\" \"$tmp/nope\" >/tmp/mixtar-ln.out 2>/tmp/mixtar-ln.err; rc3=$?; if [ \"$rc3\" != 0 ]; then printf -- '- PASS ln missing source nonzero\\n' >> \"$report\"; else printf -- '- FAIL ln missing source rc=%s\\n' \"$rc3\" >> \"$report\"; failures=$((failures+1)); fi\nrm -rf \"$tmp\"\nexit \"$failures\"\n"
+        dealloc(body8)
+        dealloc(target, report_path)
+        return body9
+    end
+
+    if tool == "cut" then
+        body9 = body8 + "printf 'alpha:beta:gamma\\n' >/tmp/mixtar-cut.in\n\"$target\" -d : -f 1,3 /tmp/mixtar-cut.in >/tmp/mixtar-tool.out; trc=$?; /usr/bin/cut -d : -f 1,3 /tmp/mixtar-cut.in >/tmp/native-tool.out; nrc=$?; if cmp -s /tmp/mixtar-tool.out /tmp/native-tool.out && [ \"$trc\" = \"$nrc\" ]; then printf -- '- PASS cut field selection\\n' >> \"$report\"; else printf -- '- FAIL cut field selection generated=%s native=%s\\n' \"$trc\" \"$nrc\" >> \"$report\"; failures=$((failures+1)); fi\nprintf 'abcdef\\n' >/tmp/mixtar-cut.in\n\"$target\" -c 2-4 /tmp/mixtar-cut.in >/tmp/mixtar-tool.out; trc2=$?; /usr/bin/cut -c 2-4 /tmp/mixtar-cut.in >/tmp/native-tool.out; nrc2=$?; if cmp -s /tmp/mixtar-tool.out /tmp/native-tool.out && [ \"$trc2\" = \"$nrc2\" ]; then printf -- '- PASS cut character range\\n' >> \"$report\"; else printf -- '- FAIL cut character range generated=%s native=%s\\n' \"$trc2\" \"$nrc2\" >> \"$report\"; failures=$((failures+1)); fi\n\"$target\" -b 1-3 /tmp/mixtar-cut.in >/tmp/mixtar-tool.out; trc3=$?; /usr/bin/cut -b 1-3 /tmp/mixtar-cut.in >/tmp/native-tool.out; nrc3=$?; if cmp -s /tmp/mixtar-tool.out /tmp/native-tool.out && [ \"$trc3\" = \"$nrc3\" ]; then printf -- '- PASS cut byte range\\n' >> \"$report\"; else printf -- '- FAIL cut byte range generated=%s native=%s\\n' \"$trc3\" \"$nrc3\" >> \"$report\"; failures=$((failures+1)); fi\nexit \"$failures\"\n"
+        dealloc(body8)
+        dealloc(target, report_path)
+        return body9
+    end
+
+    if tool == "sed" then
+        body9 = body8 + "printf 'alpha\\nbeta\\ngamma\\n' >/tmp/mixtar-sed.in\n\"$target\" 's/a/A/' /tmp/mixtar-sed.in >/tmp/mixtar-tool.out; trc=$?; /usr/bin/sed 's/a/A/' /tmp/mixtar-sed.in >/tmp/native-tool.out; nrc=$?; if cmp -s /tmp/mixtar-tool.out /tmp/native-tool.out && [ \"$trc\" = \"$nrc\" ]; then printf -- '- PASS sed substitute\\n' >> \"$report\"; else printf -- '- FAIL sed substitute generated=%s native=%s\\n' \"$trc\" \"$nrc\" >> \"$report\"; failures=$((failures+1)); fi\n\"$target\" '/beta/d' /tmp/mixtar-sed.in >/tmp/mixtar-tool.out; trc2=$?; /usr/bin/sed '/beta/d' /tmp/mixtar-sed.in >/tmp/native-tool.out; nrc2=$?; if cmp -s /tmp/mixtar-tool.out /tmp/native-tool.out && [ \"$trc2\" = \"$nrc2\" ]; then printf -- '- PASS sed delete pattern\\n' >> \"$report\"; else printf -- '- FAIL sed delete pattern generated=%s native=%s\\n' \"$trc2\" \"$nrc2\" >> \"$report\"; failures=$((failures+1)); fi\n\"$target\" -n '2p' /tmp/mixtar-sed.in >/tmp/mixtar-tool.out; trc3=$?; /usr/bin/sed -n '2p' /tmp/mixtar-sed.in >/tmp/native-tool.out; nrc3=$?; if cmp -s /tmp/mixtar-tool.out /tmp/native-tool.out && [ \"$trc3\" = \"$nrc3\" ]; then printf -- '- PASS sed -n print\\n' >> \"$report\"; else printf -- '- FAIL sed -n print generated=%s native=%s\\n' \"$trc3\" \"$nrc3\" >> \"$report\"; failures=$((failures+1)); fi\nexit \"$failures\"\n"
+        dealloc(body8)
+        dealloc(target, report_path)
+        return body9
+    end
+
+    if tool == "arch" then
+        body9 = body8 + "\"$target\" >/tmp/mixtar-tool.out; trc=$?; printf 'OpenBSD.amd64\\n' >/tmp/native-tool.out; nrc=0; if cmp -s /tmp/mixtar-tool.out /tmp/native-tool.out && [ \"$trc\" = \"$nrc\" ]; then printf -- '- PASS arch OpenBSD personality output\\n' >> \"$report\"; else printf -- '- FAIL arch OpenBSD personality output generated=%s expected=%s\\n' \"$trc\" \"$nrc\" >> \"$report\"; failures=$((failures+1)); fi\n\"$target\" -s >/tmp/mixtar-tool.out; trc2=$?; printf 'amd64\\n' >/tmp/native-tool.out; if cmp -s /tmp/mixtar-tool.out /tmp/native-tool.out && [ \"$trc2\" = \"0\" ]; then printf -- '- PASS arch -s short output\\n' >> \"$report\"; else printf -- '- FAIL arch -s short output generated=%s\\n' \"$trc2\" >> \"$report\"; failures=$((failures+1)); fi\nexit \"$failures\"\n"
+        dealloc(body8)
+        dealloc(target, report_path)
+        return body9
+    end
+
+    if tool == "printenv" then
+        body9 = body8 + "MIXTAR_PRINTENV=ok \"$target\" MIXTAR_PRINTENV >/tmp/mixtar-tool.out; trc=$?; MIXTAR_PRINTENV=ok /usr/bin/printenv MIXTAR_PRINTENV >/tmp/native-tool.out; nrc=$?; if cmp -s /tmp/mixtar-tool.out /tmp/native-tool.out && [ \"$trc\" = \"$nrc\" ]; then printf -- '- PASS printenv selected variable\\n' >> \"$report\"; else printf -- '- FAIL printenv selected variable generated=%s native=%s\\n' \"$trc\" \"$nrc\" >> \"$report\"; failures=$((failures+1)); fi\nexit \"$failures\"\n"
+        dealloc(body8)
+        dealloc(target, report_path)
+        return body9
+    end
+
+    if tool == "yes" then
+        body9 = body8 + "\"$target\" ok | head -n 2 >/tmp/mixtar-tool.out; /usr/bin/yes ok | head -n 2 >/tmp/native-tool.out; if cmp -s /tmp/mixtar-tool.out /tmp/native-tool.out; then printf -- '- PASS yes repeated output\\n' >> \"$report\"; else printf -- '- FAIL yes repeated output\\n' >> \"$report\"; failures=$((failures+1)); fi\nexit \"$failures\"\n"
+        dealloc(body8)
+        dealloc(target, report_path)
+        return body9
+    end
+
+    if tool == "tty" then
+        body9 = body8 + "\"$target\" >/tmp/mixtar-tool.out 2>/tmp/mixtar-tool.err; trc=$?; /usr/bin/tty >/tmp/native-tool.out 2>/tmp/native-tool.err; nrc=$?; if cmp -s /tmp/mixtar-tool.out /tmp/native-tool.out && [ \"$trc\" = \"$nrc\" ]; then printf -- '- PASS tty non-interactive status\\n' >> \"$report\"; else printf -- '- FAIL tty non-interactive status generated=%s native=%s\\n' \"$trc\" \"$nrc\" >> \"$report\"; failures=$((failures+1)); fi\nexit \"$failures\"\n"
+        dealloc(body8)
+        dealloc(target, report_path)
+        return body9
+    end
+
+    if tool == "rev" then
+        body9 = body8 + "printf 'abc\\nMixtar\\n' >/tmp/mixtar-rev.in\n\"$target\" /tmp/mixtar-rev.in >/tmp/mixtar-tool.out; trc=$?; /usr/bin/rev /tmp/mixtar-rev.in >/tmp/native-tool.out; nrc=$?; if cmp -s /tmp/mixtar-tool.out /tmp/native-tool.out && [ \"$trc\" = \"$nrc\" ]; then printf -- '- PASS rev file lines\\n' >> \"$report\"; else printf -- '- FAIL rev file lines generated=%s native=%s\\n' \"$trc\" \"$nrc\" >> \"$report\"; failures=$((failures+1)); fi\nexit \"$failures\"\n"
+        dealloc(body8)
+        dealloc(target, report_path)
+        return body9
+    end
+
+    if tool == "seq" then
+        body9 = body8 + "\"$target\" 1 3 >/tmp/mixtar-tool.out; trc=$?; /usr/bin/seq 1 3 >/tmp/native-tool.out; nrc=$?; if cmp -s /tmp/mixtar-tool.out /tmp/native-tool.out && [ \"$trc\" = \"$nrc\" ]; then printf -- '- PASS seq integer range\\n' >> \"$report\"; else printf -- '- FAIL seq integer range generated=%s native=%s\\n' \"$trc\" \"$nrc\" >> \"$report\"; failures=$((failures+1)); fi\nexit \"$failures\"\n"
+        dealloc(body8)
+        dealloc(target, report_path)
+        return body9
+    end
+
+    if tool == "mktemp" then
+        body9 = body8 + "tmp=$(\"$target\" /tmp/mixtar-mktemp.XXXXXX 2>/tmp/mixtar-tool.err); trc=$?; if [ \"$trc\" = 0 ] && [ -n \"$tmp\" ] && [ -e \"$tmp\" ]; then printf -- '- PASS mktemp creates file\\n' >> \"$report\"; rm -f \"$tmp\"; else printf -- '- FAIL mktemp creates file rc=%s tmp=%s\\n' \"$trc\" \"$tmp\" >> \"$report\"; failures=$((failures+1)); fi\nexit \"$failures\"\n"
+        dealloc(body8)
+        dealloc(target, report_path)
+        return body9
+    end
+
+    if tool == "paste" then
+        body9 = body8 + "printf 'a\\nb\\n' >/tmp/mixtar-paste-a\nprintf '1\\n2\\n' >/tmp/mixtar-paste-b\n\"$target\" /tmp/mixtar-paste-a /tmp/mixtar-paste-b >/tmp/mixtar-tool.out; trc=$?; /usr/bin/paste /tmp/mixtar-paste-a /tmp/mixtar-paste-b >/tmp/native-tool.out; nrc=$?; if cmp -s /tmp/mixtar-tool.out /tmp/native-tool.out && [ \"$trc\" = \"$nrc\" ]; then printf -- '- PASS paste two files\\n' >> \"$report\"; else printf -- '- FAIL paste two files generated=%s native=%s\\n' \"$trc\" \"$nrc\" >> \"$report\"; failures=$((failures+1)); fi\nexit \"$failures\"\n"
+        dealloc(body8)
+        dealloc(target, report_path)
+        return body9
+    end
+
+    if tool == "comm" then
+        body9 = body8 + "printf 'a\\nb\\n' >/tmp/mixtar-comm-a\nprintf 'b\\nc\\n' >/tmp/mixtar-comm-b\n\"$target\" /tmp/mixtar-comm-a /tmp/mixtar-comm-b >/tmp/mixtar-tool.out; trc=$?; /usr/bin/comm /tmp/mixtar-comm-a /tmp/mixtar-comm-b >/tmp/native-tool.out; nrc=$?; if cmp -s /tmp/mixtar-tool.out /tmp/native-tool.out && [ \"$trc\" = \"$nrc\" ]; then printf -- '- PASS comm sorted files\\n' >> \"$report\"; else printf -- '- FAIL comm sorted files generated=%s native=%s\\n' \"$trc\" \"$nrc\" >> \"$report\"; failures=$((failures+1)); fi\nexit \"$failures\"\n"
+        dealloc(body8)
+        dealloc(target, report_path)
+        return body9
+    end
+
+    if tool == "fold" then
+        body9 = body8 + "printf 'abcdef\\n' >/tmp/mixtar-fold.in\n\"$target\" -w 3 /tmp/mixtar-fold.in >/tmp/mixtar-tool.out; trc=$?; /usr/bin/fold -w 3 /tmp/mixtar-fold.in >/tmp/native-tool.out; nrc=$?; if cmp -s /tmp/mixtar-tool.out /tmp/native-tool.out && [ \"$trc\" = \"$nrc\" ]; then printf -- '- PASS fold width 3\\n' >> \"$report\"; else printf -- '- FAIL fold width 3 generated=%s native=%s\\n' \"$trc\" \"$nrc\" >> \"$report\"; failures=$((failures+1)); fi\nexit \"$failures\"\n"
+        dealloc(body8)
+        dealloc(target, report_path)
+        return body9
+    end
+
+    if tool == "nice" then
+        body9 = body8 + "\"$target\" /usr/bin/true >/tmp/mixtar-tool.out 2>/tmp/mixtar-tool.err; trc=$?; /usr/bin/nice /usr/bin/true >/tmp/native-tool.out 2>/tmp/native-tool.err; nrc=$?; if [ \"$trc\" = \"$nrc\" ]; then printf -- '- PASS nice true exit status\\n' >> \"$report\"; else printf -- '- FAIL nice true generated=%s native=%s\\n' \"$trc\" \"$nrc\" >> \"$report\"; failures=$((failures+1)); fi\nexit \"$failures\"\n"
+        dealloc(body8)
+        dealloc(target, report_path)
+        return body9
+    end
+
+    if tool == "what" then
+        body9 = body8 + "printf 'abc @(#)Mixtar tier3\\n' >/tmp/mixtar-what.in\n\"$target\" /tmp/mixtar-what.in >/tmp/mixtar-tool.out; trc=$?; if [ \"$trc\" = 0 ] && grep -q 'Mixtar tier3' /tmp/mixtar-tool.out; then printf -- '- PASS what SCCS marker\\n' >> \"$report\"; else printf -- '- FAIL what SCCS marker rc=%s\\n' \"$trc\" >> \"$report\"; failures=$((failures+1)); fi\nexit \"$failures\"\n"
+        dealloc(body8)
+        dealloc(target, report_path)
+        return body9
+    end
+
+    if tool == "cal" then
+        body9 = body8 + "\"$target\" 1 2024 >/tmp/mixtar-tool.out; trc=$?; if [ \"$trc\" = 0 ] && grep -q 'January 2024' /tmp/mixtar-tool.out && grep -q ' 1  2  3  4  5  6' /tmp/mixtar-tool.out; then printf -- '- PASS cal January 2024\\n' >> \"$report\"; else printf -- '- FAIL cal January 2024 rc=%s\\n' \"$trc\" >> \"$report\"; failures=$((failures+1)); fi\nexit \"$failures\"\n"
+        dealloc(body8)
+        dealloc(target, report_path)
+        return body9
+    end
+
+    if tool == "hexdump" then
+        body9 = body8 + "printf 'ABC' >/tmp/mixtar-hexdump.in\n\"$target\" -C /tmp/mixtar-hexdump.in >/tmp/mixtar-tool.out; trc=$?; /usr/bin/hexdump -C /tmp/mixtar-hexdump.in >/tmp/native-tool.out; nrc=$?; if cmp -s /tmp/mixtar-tool.out /tmp/native-tool.out && [ \"$trc\" = \"$nrc\" ]; then printf -- '- PASS hexdump -C bytes\\n' >> \"$report\"; else printf -- '- FAIL hexdump -C bytes generated=%s native=%s\\n' \"$trc\" \"$nrc\" >> \"$report\"; failures=$((failures+1)); fi\nexit \"$failures\"\n"
+        dealloc(body8)
+        dealloc(target, report_path)
+        return body9
+    end
+
+
+    if tool == "kill" then
+        body9 = body8 + "\"$target\" -l 1 >/tmp/mixtar-tool.out; trc=$?; printf 'hup\\n' >/tmp/native-tool.out; if cmp -s /tmp/mixtar-tool.out /tmp/native-tool.out && [ \"$trc\" = \"0\" ]; then printf -- '- PASS kill -l 1 OpenBSD signal name\\n' >> \"$report\"; else printf -- '- FAIL kill -l 1 rc=%s\\n' \"$trc\" >> \"$report\"; failures=$((failures+1)); fi\n\"$target\" -l 9 >/tmp/mixtar-tool.out; trc2=$?; printf 'kill\\n' >/tmp/native-tool.out; if cmp -s /tmp/mixtar-tool.out /tmp/native-tool.out && [ \"$trc2\" = \"0\" ]; then printf -- '- PASS kill -l 9 OpenBSD signal name\\n' >> \"$report\"; else printf -- '- FAIL kill -l 9 rc=%s\\n' \"$trc2\" >> \"$report\"; failures=$((failures+1)); fi\nexit \"$failures\"\n"
+        dealloc(body8)
+        dealloc(target, report_path)
+        return body9
+    end
+
+    if tool == "getopt" then
+        body9 = body8 + "\"$target\" ab: -a -b value rest >/tmp/mixtar-tool.out; trc=$?; printf ' -a -b value -- rest\\n' >/tmp/native-tool.out; if cmp -s /tmp/mixtar-tool.out /tmp/native-tool.out && [ \"$trc\" = \"0\" ]; then printf -- '- PASS getopt option parse\\n' >> \"$report\"; else printf -- '- FAIL getopt option parse rc=%s\\n' \"$trc\" >> \"$report\"; failures=$((failures+1)); fi\nexit \"$failures\"\n"
+        dealloc(body8)
+        dealloc(target, report_path)
+        return body9
+    end
+
+    if tool == "fmt" then
+        body9 = body8 + "printf 'alpha beta gamma\\n' | \"$target\" >/tmp/mixtar-tool.out; trc=$?; printf 'alpha beta gamma\\n' >/tmp/native-tool.out; if cmp -s /tmp/mixtar-tool.out /tmp/native-tool.out && [ \"$trc\" = \"0\" ]; then printf -- '- PASS fmt stable short line\\n' >> \"$report\"; else printf -- '- FAIL fmt stable short line rc=%s\\n' \"$trc\" >> \"$report\"; failures=$((failures+1)); fi\nexit \"$failures\"\n"
+        dealloc(body8)
+        dealloc(target, report_path)
+        return body9
+    end
+
+    if tool == "split" then
+        body9 = body8 + "tmp=\"/tmp/mixtar-split-$$\"\nrm -rf \"$tmp\"\nmkdir -p \"$tmp\"\nprintf 'a\\nb\\nc\\nd\\n' > \"$tmp/in\"\n(cd \"$tmp\" && \"$target\" -l 2 in part.) >/tmp/mixtar-tool.out 2>/tmp/mixtar-tool.err; trc=$?\nprintf 'a\\nb\\n' >/tmp/native-a\nprintf 'c\\nd\\n' >/tmp/native-b\nif [ \"$trc\" = \"0\" ] && cmp -s \"$tmp/part.aa\" /tmp/native-a && cmp -s \"$tmp/part.ab\" /tmp/native-b; then printf -- '- PASS split -l 2 files\\n' >> \"$report\"; else printf -- '- FAIL split -l 2 rc=%s\\n' \"$trc\" >> \"$report\"; failures=$((failures+1)); fi\nrm -rf \"$tmp\"\nexit \"$failures\"\n"
+        dealloc(body8)
+        dealloc(target, report_path)
+        return body9
+    end
+
+    if tool == "logname" then
+        body9 = body8 + "\"$target\" >/tmp/mixtar-tool.out 2>/tmp/mixtar-tool.err; trc=$?; if [ \"$trc\" != \"0\" ]; then printf -- '- PASS logname non-interactive exits nonzero\\n' >> \"$report\"; else printf -- '- FAIL logname non-interactive unexpectedly succeeded\\n' >> \"$report\"; failures=$((failures+1)); fi\nexit \"$failures\"\n"
+        dealloc(body8)
+        dealloc(target, report_path)
+        return body9
+    end
+
+    if tool == "nohup" then
+        body9 = body8 + "rm -f nohup.out /tmp/mixtar-nohup.out /tmp/mixtar-nohup.err\n\"$target\" /usr/bin/true >/tmp/mixtar-nohup.out 2>/tmp/mixtar-nohup.err; trc=$?; if [ \"$trc\" = \"0\" ] && [ ! -s /tmp/mixtar-nohup.err ]; then printf -- '- PASS nohup true redirected\\n' >> \"$report\"; else printf -- '- FAIL nohup true redirected rc=%s\\n' \"$trc\" >> \"$report\"; failures=$((failures+1)); fi\nrm -f nohup.out\nexit \"$failures\"\n"
+        dealloc(body8)
+        dealloc(target, report_path)
+        return body9
+    end
+
+    if tool == "timeout" then
+        body9 = body8 + "\"$target\" 1 /usr/bin/true >/tmp/mixtar-tool.out 2>/tmp/mixtar-tool.err; trc=$?; if [ \"$trc\" = \"0\" ]; then printf -- '- PASS timeout true exits zero\\n' >> \"$report\"; else printf -- '- FAIL timeout true rc=%s\\n' \"$trc\" >> \"$report\"; failures=$((failures+1)); fi\n\"$target\" 0.1 /usr/bin/sleep 1 >/tmp/mixtar-timeout.out 2>/tmp/mixtar-timeout.err; trc2=$?; if [ \"$trc2\" = \"124\" ]; then printf -- '- PASS timeout kills slow command\\n' >> \"$report\"; else printf -- '- FAIL timeout slow command rc=%s\\n' \"$trc2\" >> \"$report\"; failures=$((failures+1)); fi\nexit \"$failures\"\n"
+        dealloc(body8)
+        dealloc(target, report_path)
+        return body9
+    end
+
+    if tool == "unexpand" then
+        body9 = body8 + "printf '        x\\n' | \"$target\" -a >/tmp/mixtar-tool.out; trc=$?; printf '\\tx\\n' >/tmp/native-tool.out; if cmp -s /tmp/mixtar-tool.out /tmp/native-tool.out && [ \"$trc\" = \"0\" ]; then printf -- '- PASS unexpand spaces to tab\\n' >> \"$report\"; else printf -- '- FAIL unexpand spaces to tab rc=%s\\n' \"$trc\" >> \"$report\"; failures=$((failures+1)); fi\nexit \"$failures\"\n"
+        dealloc(body8)
+        dealloc(target, report_path)
+        return body9
+    end
+
+    if tool == "column" then
+        body9 = body8 + "printf 'a b\\ncc d\\n' | \"$target\" -t >/tmp/mixtar-tool.out; trc=$?; printf 'a   b\\ncc  d\\n' >/tmp/native-tool.out; if cmp -s /tmp/mixtar-tool.out /tmp/native-tool.out && [ \"$trc\" = \"0\" ]; then printf -- '- PASS column -t table alignment\\n' >> \"$report\"; else printf -- '- FAIL column -t table alignment rc=%s\\n' \"$trc\" >> \"$report\"; failures=$((failures+1)); fi\nexit \"$failures\"\n"
+        dealloc(body8)
+        dealloc(target, report_path)
+        return body9
+    end
+
+    if tool == "col" then
+        body9 = body8 + "printf 'alpha\\n' | \"$target\" >/tmp/mixtar-tool.out; trc=$?\nprintf 'alpha\\n' >/tmp/native-tool.out\nif cmp -s /tmp/mixtar-tool.out /tmp/native-tool.out && [ \"$trc\" = \"0\" ]; then printf -- '- PASS col plain line passthrough\\n' >> \"$report\"; else printf -- '- FAIL col plain line passthrough rc=%s\\n' \"$trc\" >> \"$report\"; failures=$((failures+1)); fi\nprintf 'a\\bb\\n' | \"$target\" >/tmp/mixtar-tool.out; trc2=$?\nif [ \"$trc2\" = \"0\" ] && [ -s /tmp/mixtar-tool.out ]; then printf -- '- PASS col overstrike input produces output\\n' >> \"$report\"; else printf -- '- FAIL col overstrike input rc=%s\\n' \"$trc2\" >> \"$report\"; failures=$((failures+1)); fi\nexit \"$failures\"\n"
+        dealloc(body8)
+        dealloc(target, report_path)
+        return body9
+    end
+
+    if tool == "rs" then
+        body9 = body8 + "printf 'a b c d\\n' | \"$target\" 2 2 >/tmp/mixtar-tool.out; trc=$?\nprintf 'a  b\\nc  d\\n' >/tmp/native-tool.out\nif cmp -s /tmp/mixtar-tool.out /tmp/native-tool.out && [ \"$trc\" = \"0\" ]; then printf -- '- PASS rs 2x2 reshape\\n' >> \"$report\"; else printf -- '- FAIL rs 2x2 reshape rc=%s\\n' \"$trc\" >> \"$report\"; failures=$((failures+1)); fi\nexit \"$failures\"\n"
+        dealloc(body8)
+        dealloc(target, report_path)
+        return body9
+    end
+
+    if tool == "from" then
+        body9 = body8 + "tmp=\"/tmp/mixtar-from-$$\"\nprintf 'From alice@example Thu Jan  1 00:00:00 1970\\nSubject: X\\n\\nbody\\n\\nFrom bob@example Thu Jan  1 00:00:00 1970\\n\\n' > \"$tmp\"\n\"$target\" -f \"$tmp\" >/tmp/mixtar-tool.out; trc=$?\nprintf 'From alice@example Thu Jan  1 00:00:00 1970\\nFrom bob@example Thu Jan  1 00:00:00 1970\\n' >/tmp/native-tool.out\nif cmp -s /tmp/mixtar-tool.out /tmp/native-tool.out && [ \"$trc\" = \"0\" ]; then printf -- '- PASS from mailbox sender scan\\n' >> \"$report\"; else printf -- '- FAIL from mailbox sender scan rc=%s\\n' \"$trc\" >> \"$report\"; failures=$((failures+1)); fi\n\"$target\" -f \"$tmp\" -s bob >/tmp/mixtar-tool.out; trc2=$?\nprintf 'From bob@example Thu Jan  1 00:00:00 1970\\n' >/tmp/native-tool.out\nif cmp -s /tmp/mixtar-tool.out /tmp/native-tool.out && [ \"$trc2\" = \"0\" ]; then printf -- '- PASS from sender filter\\n' >> \"$report\"; else printf -- '- FAIL from sender filter rc=%s\\n' \"$trc2\" >> \"$report\"; failures=$((failures+1)); fi\nrm -f \"$tmp\"\nexit \"$failures\"\n"
+        dealloc(body8)
+        dealloc(target, report_path)
+        return body9
+    end
+
+    if tool == "banner" then
+        body9 = body8 + "\"$target\" Hi >/tmp/mixtar-tool.out; trc=$?\nif [ \"$trc\" = \"0\" ] && grep -q '#' /tmp/mixtar-tool.out; then printf -- '- PASS banner renders visible glyphs\\n' >> \"$report\"; else printf -- '- FAIL banner renders visible glyphs rc=%s\\n' \"$trc\" >> \"$report\"; failures=$((failures+1)); fi\nexit \"$failures\"\n"
+        dealloc(body8)
+        dealloc(target, report_path)
+        return body9
+    end
+
+    if tool == "cmp" then
+        body9 = body8 + "tmp=\"/tmp/mixtar-cmp-$$\"\nprintf 'same' > \"$tmp.a\"\nprintf 'same' > \"$tmp.b\"\nprintf 'diff' > \"$tmp.c\"\n\"$target\" -s \"$tmp.a\" \"$tmp.b\"; rc1=$?\n\"$target\" -s \"$tmp.a\" \"$tmp.c\"; rc2=$?\nif [ \"$rc1\" = \"0\" ] && [ \"$rc2\" = \"1\" ]; then printf -- '- PASS cmp -s same/different status\\n' >> \"$report\"; else printf -- '- FAIL cmp -s statuses same=%s diff=%s\\n' \"$rc1\" \"$rc2\" >> \"$report\"; failures=$((failures+1)); fi\nrm -f \"$tmp.a\" \"$tmp.b\" \"$tmp.c\"\nexit \"$failures\"\n"
+        dealloc(body8)
+        dealloc(target, report_path)
+        return body9
+    end
+
+    if tool == "colrm" then
+        body9 = body8 + "printf 'abcdef\\n' | \"$target\" 3 4 >/tmp/mixtar-tool.out; trc=$?\nprintf 'abef\\n' >/tmp/native-tool.out\nif cmp -s /tmp/mixtar-tool.out /tmp/native-tool.out && [ \"$trc\" = \"0\" ]; then printf -- '- PASS colrm removes selected columns\\n' >> \"$report\"; else printf -- '- FAIL colrm removes selected columns rc=%s\\n' \"$trc\" >> \"$report\"; failures=$((failures+1)); fi\nexit \"$failures\"\n"
+        dealloc(body8)
+        dealloc(target, report_path)
+        return body9
+    end
+
+    if tool == "expand" then
+        body9 = body8 + "printf 'a\\tb\\n' | \"$target\" -t 4 >/tmp/mixtar-tool.out; trc=$?\nprintf 'a   b\\n' >/tmp/native-tool.out\nif cmp -s /tmp/mixtar-tool.out /tmp/native-tool.out && [ \"$trc\" = \"0\" ]; then printf -- '- PASS expand tab stop 4\\n' >> \"$report\"; else printf -- '- FAIL expand tab stop 4 rc=%s\\n' \"$trc\" >> \"$report\"; failures=$((failures+1)); fi\nexit \"$failures\"\n"
+        dealloc(body8)
+        dealloc(target, report_path)
+        return body9
+    end
+
+    if tool == "join" then
+        body9 = body8 + "printf '1 a\\n2 b\\n' >/tmp/mixtar-join-a\nprintf '1 x\\n3 y\\n' >/tmp/mixtar-join-b\n\"$target\" /tmp/mixtar-join-a /tmp/mixtar-join-b >/tmp/mixtar-tool.out; trc=$?\nprintf '1 a x\\n' >/tmp/native-tool.out\nif cmp -s /tmp/mixtar-tool.out /tmp/native-tool.out && [ \"$trc\" = \"0\" ]; then printf -- '- PASS join matching key\\n' >> \"$report\"; else printf -- '- FAIL join matching key rc=%s\\n' \"$trc\" >> \"$report\"; failures=$((failures+1)); fi\nrm -f /tmp/mixtar-join-a /tmp/mixtar-join-b\nexit \"$failures\"\n"
+        dealloc(body8)
+        dealloc(target, report_path)
+        return body9
+    end
+
+    if tool == "tr" then
+        body9 = body8 + "printf 'abc\\n' | \"$target\" 'a-z' 'A-Z' >/tmp/mixtar-tool.out; trc=$?\nprintf 'ABC\\n' >/tmp/native-tool.out\nif cmp -s /tmp/mixtar-tool.out /tmp/native-tool.out && [ \"$trc\" = \"0\" ]; then printf -- '- PASS tr lower to upper\\n' >> \"$report\"; else printf -- '- FAIL tr lower to upper rc=%s\\n' \"$trc\" >> \"$report\"; failures=$((failures+1)); fi\nprintf 'aabbcc\\n' | \"$target\" -d b >/tmp/mixtar-tool.out; trc2=$?\nprintf 'aacc\\n' >/tmp/native-tool.out\nif cmp -s /tmp/mixtar-tool.out /tmp/native-tool.out && [ \"$trc2\" = \"0\" ]; then printf -- '- PASS tr delete character\\n' >> \"$report\"; else printf -- '- FAIL tr delete character rc=%s\\n' \"$trc2\" >> \"$report\"; failures=$((failures+1)); fi\nexit \"$failures\"\n"
+        dealloc(body8)
+        dealloc(target, report_path)
+        return body9
+    end
+
+    if tool == "apply" then
+        body9 = body8 + "\"$target\" 'echo %1-%2' a b >/tmp/mixtar-tool.out; trc=$?\nprintf 'a-b\\n' >/tmp/native-tool.out\nif cmp -s /tmp/mixtar-tool.out /tmp/native-tool.out && [ \"$trc\" = \"0\" ]; then printf -- '- PASS apply placeholder substitution\\n' >> \"$report\"; else printf -- '- FAIL apply placeholder substitution rc=%s\\n' \"$trc\" >> \"$report\"; failures=$((failures+1)); fi\nexit \"$failures\"\n"
+        dealloc(body8)
+        dealloc(target, report_path)
+        return body9
+    end
+
+    if tool == "expr" then
+        body9 = body8 + "\"$target\" 1 + 2 >/tmp/mixtar-tool.out; trc=$?\nprintf '3\\n' >/tmp/native-tool.out\nif cmp -s /tmp/mixtar-tool.out /tmp/native-tool.out && [ \"$trc\" = \"0\" ]; then printf -- '- PASS expr integer addition\\n' >> \"$report\"; else printf -- '- FAIL expr integer addition rc=%s\\n' \"$trc\" >> \"$report\"; failures=$((failures+1)); fi\n\"$target\" abc : 'a.*' >/tmp/mixtar-tool.out; trc2=$?\nprintf '3\\n' >/tmp/native-tool.out\nif cmp -s /tmp/mixtar-tool.out /tmp/native-tool.out && [ \"$trc2\" = \"0\" ]; then printf -- '- PASS expr regex match length\\n' >> \"$report\"; else printf -- '- FAIL expr regex match length rc=%s\\n' \"$trc2\" >> \"$report\"; failures=$((failures+1)); fi\nexit \"$failures\"\n"
+        dealloc(body8)
+        dealloc(target, report_path)
+        return body9
+    end
+
+    if tool == "jot" then
+        body9 = body8 + "\"$target\" 3 1 >/tmp/mixtar-tool.out; trc=$?\nprintf '1\\n2\\n3\\n' >/tmp/native-tool.out\nif cmp -s /tmp/mixtar-tool.out /tmp/native-tool.out && [ \"$trc\" = \"0\" ]; then printf -- '- PASS jot integer range\\n' >> \"$report\"; else printf -- '- FAIL jot integer range rc=%s\\n' \"$trc\" >> \"$report\"; failures=$((failures+1)); fi\nexit \"$failures\"\n"
+        dealloc(body8)
+        dealloc(target, report_path)
+        return body9
+    end
+
+    if tool == "csplit" then
+        body9 = body8 + "tmp=\"/tmp/mixtar-csplit-$$\"\nrm -rf \"$tmp\"\nmkdir -p \"$tmp\"\nprintf 'aa\\nxx\\nbb\\n' > \"$tmp/in\"\n(cd \"$tmp\" && \"$target\" -s in /xx/) >/tmp/mixtar-tool.out 2>/tmp/mixtar-tool.err; trc=$?\nprintf 'aa\\n' >/tmp/native-tool.out\nif [ \"$trc\" = \"0\" ] && [ -f \"$tmp/xx00\" ] && [ -f \"$tmp/xx01\" ] && [ ! -s \"$tmp/xx00\" ] && cmp -s \"$tmp/xx01\" /tmp/native-tool.out; then printf -- '- PASS csplit regex split files\\n' >> \"$report\"; else printf -- '- FAIL csplit regex split rc=%s\\n' \"$trc\" >> \"$report\"; failures=$((failures+1)); fi\nrm -rf \"$tmp\"\nexit \"$failures\"\n"
+        dealloc(body8)
+        dealloc(target, report_path)
+        return body9
+    end
+
+
+    if tool == "chroot" then
+        body9 = body8 + "\"$target\" /tmp/mixtar-no-such-root /usr/bin/true >/tmp/mixtar-tool.out 2>/tmp/mixtar-tool.err; trc=$?\nif [ \"$trc\" != \"0\" ] && grep -qi 'No such file' /tmp/mixtar-tool.err; then printf -- '- PASS chroot missing root fails safely\\n' >> \"$report\"; else printf -- '- FAIL chroot missing root rc=%s\\n' \"$trc\" >> \"$report\"; failures=$((failures+1)); fi\nexit \"$failures\"\n"
+        dealloc(body8)
+        dealloc(target, report_path)
+        return body9
+    end
+
+    if tool == "dd" then
+        body9 = body8 + "printf 'abcdef' >/tmp/mixtar-dd.in\nrm -f /tmp/mixtar-dd.out\n\"$target\" if=/tmp/mixtar-dd.in of=/tmp/mixtar-dd.out bs=1 count=3 >/tmp/mixtar-tool.out 2>/tmp/mixtar-tool.err; trc=$?\nprintf 'abc' >/tmp/native-tool.out\nif cmp -s /tmp/mixtar-dd.out /tmp/native-tool.out && [ \"$trc\" = \"0\" ]; then printf -- '- PASS dd fixed byte copy\\n' >> \"$report\"; else printf -- '- FAIL dd fixed byte copy rc=%s\\n' \"$trc\" >> \"$report\"; failures=$((failures+1)); fi\nrm -f /tmp/mixtar-dd.in /tmp/mixtar-dd.out\nexit \"$failures\"\n"
+        dealloc(body8)
+        dealloc(target, report_path)
+        return body9
+    end
+
+    if tool == "du" then
+        body9 = body8 + "root=\"/tmp/mixtar-du-$$\"\nrm -rf \"$root\"; mkdir -p \"$root\"; printf x >\"$root/a\"\n\"$target\" -s -k \"$root\" >/tmp/mixtar-tool.out 2>/tmp/mixtar-tool.err; trc=$?\nif [ \"$trc\" = \"0\" ] && grep -Eq '^[0-9]+[[:space:]]+' /tmp/mixtar-tool.out && grep -q \"$root\" /tmp/mixtar-tool.out; then printf -- '- PASS du summary kilobytes\\n' >> \"$report\"; else printf -- '- FAIL du summary kilobytes rc=%s\\n' \"$trc\" >> \"$report\"; failures=$((failures+1)); fi\nrm -rf \"$root\"\nexit \"$failures\"\n"
+        dealloc(body8)
+        dealloc(target, report_path)
+        return body9
+    end
+
+    if tool == "locale" then
+        body9 = body8 + "\"$target\" charmap >/tmp/mixtar-tool.out 2>/tmp/mixtar-tool.err; trc=$?\nif [ \"$trc\" = \"0\" ] && [ -s /tmp/mixtar-tool.out ]; then printf -- '- PASS locale charmap\\n' >> \"$report\"; else printf -- '- FAIL locale charmap rc=%s\\n' \"$trc\" >> \"$report\"; failures=$((failures+1)); fi\nexit \"$failures\"\n"
+        dealloc(body8)
+        dealloc(target, report_path)
+        return body9
+    end
+
+    if tool == "logger" then
+        body9 = body8 + "\"$target\" -s mixtar-test >/tmp/mixtar-tool.out 2>/tmp/mixtar-tool.err; trc=$?\nif [ \"$trc\" = \"0\" ] && grep -q 'mixtar-test' /tmp/mixtar-tool.err; then printf -- '- PASS logger stderr mirror\\n' >> \"$report\"; else printf -- '- FAIL logger stderr mirror rc=%s\\n' \"$trc\" >> \"$report\"; failures=$((failures+1)); fi\nexit \"$failures\"\n"
+        dealloc(body8)
+        dealloc(target, report_path)
+        return body9
+    end
+
+    if tool == "look" then
+        body9 = body8 + "printf 'apple\\nbanana\\nband\\ncat\\n' >/tmp/mixtar-look.words\n\"$target\" ba /tmp/mixtar-look.words >/tmp/mixtar-tool.out 2>/tmp/mixtar-tool.err; trc=$?\nprintf 'banana\\nband\\n' >/tmp/native-tool.out\nif cmp -s /tmp/mixtar-tool.out /tmp/native-tool.out && [ \"$trc\" = \"0\" ]; then printf -- '- PASS look explicit word file\\n' >> \"$report\"; else printf -- '- FAIL look explicit word file rc=%s\\n' \"$trc\" >> \"$report\"; failures=$((failures+1)); fi\nrm -f /tmp/mixtar-look.words\nexit \"$failures\"\n"
+        dealloc(body8)
+        dealloc(target, report_path)
+        return body9
+    end
+
+    if tool == "nologin" then
+        body9 = body8 + "\"$target\" >/tmp/mixtar-tool.out 2>/tmp/mixtar-tool.err; trc=$?\nif [ \"$trc\" != \"0\" ] && grep -qi 'not available' /tmp/mixtar-tool.out; then printf -- '- PASS nologin denies login\\n' >> \"$report\"; else printf -- '- FAIL nologin denies login rc=%s\\n' \"$trc\" >> \"$report\"; failures=$((failures+1)); fi\nexit \"$failures\"\n"
+        dealloc(body8)
+        dealloc(target, report_path)
+        return body9
+    end
+
+    if tool == "pr" then
+        body9 = body8 + "printf 'a\\nb\\n' >/tmp/mixtar-pr.in\n\"$target\" -t /tmp/mixtar-pr.in >/tmp/mixtar-tool.out 2>/tmp/mixtar-tool.err; trc=$?\nprintf 'a\\nb\\n' >/tmp/native-tool.out\nif cmp -s /tmp/mixtar-tool.out /tmp/native-tool.out && [ \"$trc\" = \"0\" ]; then printf -- '- PASS pr no-header passthrough\\n' >> \"$report\"; else printf -- '- FAIL pr no-header passthrough rc=%s\\n' \"$trc\" >> \"$report\"; failures=$((failures+1)); fi\nrm -f /tmp/mixtar-pr.in\nexit \"$failures\"\n"
+        dealloc(body8)
+        dealloc(target, report_path)
+        return body9
+    end
+
+    if tool == "printf" then
+        body9 = body8 + "\"$target\" '%s %d\\n' hi 7 >/tmp/mixtar-tool.out 2>/tmp/mixtar-tool.err; trc=$?\nprintf 'hi 7\\n' >/tmp/native-tool.out\nif cmp -s /tmp/mixtar-tool.out /tmp/native-tool.out && [ \"$trc\" = \"0\" ]; then printf -- '- PASS printf string integer format\\n' >> \"$report\"; else printf -- '- FAIL printf string integer format rc=%s\\n' \"$trc\" >> \"$report\"; failures=$((failures+1)); fi\nexit \"$failures\"\n"
+        dealloc(body8)
+        dealloc(target, report_path)
+        return body9
+    end
+
+    if tool == "renice" then
+        body9 = body8 + "\"$target\" -n 0 -p $$ >/tmp/mixtar-tool.out 2>/tmp/mixtar-tool.err; trc=$?\nif [ \"$trc\" = \"0\" ] && grep -q 'new priority' /tmp/mixtar-tool.out; then printf -- '- PASS renice current shell no-op\\n' >> \"$report\"; else printf -- '- FAIL renice current shell no-op rc=%s\\n' \"$trc\" >> \"$report\"; failures=$((failures+1)); fi\nexit \"$failures\"\n"
+        dealloc(body8)
+        dealloc(target, report_path)
+        return body9
+    end
+
+    if tool == "sdiff" then
+        body9 = body8 + "printf 'same\\n' >/tmp/mixtar-sdiff-a\nprintf 'same\\n' >/tmp/mixtar-sdiff-b\n\"$target\" -s /tmp/mixtar-sdiff-a /tmp/mixtar-sdiff-b >/tmp/mixtar-tool.out 2>/tmp/mixtar-tool.err; trc=$?\nif [ \"$trc\" = \"0\" ] && [ ! -s /tmp/mixtar-tool.out ]; then printf -- '- PASS sdiff suppress identical\\n' >> \"$report\"; else printf -- '- FAIL sdiff suppress identical rc=%s\\n' \"$trc\" >> \"$report\"; failures=$((failures+1)); fi\nrm -f /tmp/mixtar-sdiff-a /tmp/mixtar-sdiff-b\nexit \"$failures\"\n"
+        dealloc(body8)
+        dealloc(target, report_path)
+        return body9
+    end
+
+    if tool == "stat" then
+        body9 = body8 + "printf x >/tmp/mixtar-stat-file\n\"$target\" -f %N /tmp/mixtar-stat-file >/tmp/mixtar-tool.out 2>/tmp/mixtar-tool.err; trc=$?\nprintf '/tmp/mixtar-stat-file\\n' >/tmp/native-tool.out\nif cmp -s /tmp/mixtar-tool.out /tmp/native-tool.out && [ \"$trc\" = \"0\" ]; then printf -- '- PASS stat filename format\\n' >> \"$report\"; else printf -- '- FAIL stat filename format rc=%s\\n' \"$trc\" >> \"$report\"; failures=$((failures+1)); fi\nrm -f /tmp/mixtar-stat-file\nexit \"$failures\"\n"
+        dealloc(body8)
+        dealloc(target, report_path)
+        return body9
+    end
+
+    if tool == "ul" then
+        body9 = body8 + "printf 'abc\\n' | \"$target\" >/tmp/mixtar-tool.out 2>/tmp/mixtar-tool.err; trc=$?\nprintf 'abc\\n' >/tmp/native-tool.out\nif cmp -s /tmp/mixtar-tool.out /tmp/native-tool.out && [ \"$trc\" = \"0\" ]; then printf -- '- PASS ul plain passthrough\\n' >> \"$report\"; else printf -- '- FAIL ul plain passthrough rc=%s\\n' \"$trc\" >> \"$report\"; failures=$((failures+1)); fi\nexit \"$failures\"\n"
+        dealloc(body8)
+        dealloc(target, report_path)
+        return body9
+    end
+
+
+    if tool == "grep" then
+        body9 = body8 + "printf 'alpha\\nbeta\\ngamma\\n' >/tmp/mixtar-grep.in\n\"$target\" -n beta /tmp/mixtar-grep.in >/tmp/mixtar-tool.out 2>/tmp/mixtar-tool.err; trc=$?\n/usr/bin/grep -n beta /tmp/mixtar-grep.in >/tmp/native-tool.out 2>/tmp/native-tool.err; nrc=$?\nif cmp -s /tmp/mixtar-tool.out /tmp/native-tool.out && [ \"$trc\" = \"$nrc\" ]; then printf -- '- PASS grep -n literal match\\n' >> \"$report\"; else printf -- '- FAIL grep -n literal match generated=%s native=%s\\n' \"$trc\" \"$nrc\" >> \"$report\"; failures=$((failures+1)); fi\n\"$target\" -v beta /tmp/mixtar-grep.in >/tmp/mixtar-tool.out 2>/tmp/mixtar-tool.err; trc2=$?\n/usr/bin/grep -v beta /tmp/mixtar-grep.in >/tmp/native-tool.out 2>/tmp/native-tool.err; nrc2=$?\nif cmp -s /tmp/mixtar-tool.out /tmp/native-tool.out && [ \"$trc2\" = \"$nrc2\" ]; then printf -- '- PASS grep -v inverse match\\n' >> \"$report\"; else printf -- '- FAIL grep -v inverse match generated=%s native=%s\\n' \"$trc2\" \"$nrc2\" >> \"$report\"; failures=$((failures+1)); fi\nrm -f /tmp/mixtar-grep.in\nexit \"$failures\"\n"
+        dealloc(body8)
+        dealloc(target, report_path)
+        return body9
+    end
+
+    if tool == "tail" then
+        body9 = body8 + "printf 'one\\ntwo\\nthree\\n' >/tmp/mixtar-tail.in\n\"$target\" -n 2 /tmp/mixtar-tail.in >/tmp/mixtar-tool.out 2>/tmp/mixtar-tool.err; trc=$?\n/usr/bin/tail -n 2 /tmp/mixtar-tail.in >/tmp/native-tool.out 2>/tmp/native-tool.err; nrc=$?\nif cmp -s /tmp/mixtar-tool.out /tmp/native-tool.out && [ \"$trc\" = \"$nrc\" ]; then printf -- '- PASS tail -n 2\\n' >> \"$report\"; else printf -- '- FAIL tail -n 2 generated=%s native=%s\\n' \"$trc\" \"$nrc\" >> \"$report\"; failures=$((failures+1)); fi\nrm -f /tmp/mixtar-tail.in\nprintf -- '\\nNote: tail -f is not certified yet; Bridge provides only a compile-time kqueue shim on Linux.\\n' >> \"$report\"\nexit \"$failures\"\n"
+        dealloc(body8)
+        dealloc(target, report_path)
+        return body9
+    end
+
+    if tool == "find" then
+        body9 = body8 + "root=\"/tmp/mixtar-find-$$\"\nrm -rf \"$root\"; mkdir -p \"$root/a\"; touch \"$root/a/one\" \"$root/two\"\n\"$target\" -- \"$root\" -type f -name one -print >/tmp/mixtar-tool.out 2>/tmp/mixtar-tool.err; trc=$?\n/usr/bin/find \"$root\" -type f -name one -print >/tmp/native-tool.out 2>/tmp/native-tool.err; nrc=$?\nif cmp -s /tmp/mixtar-tool.out /tmp/native-tool.out && [ \"$trc\" = \"$nrc\" ]; then printf -- '- PASS find type/name/print\\n' >> \"$report\"; else printf -- '- FAIL find type/name/print generated=%s native=%s\\n' \"$trc\" \"$nrc\" >> \"$report\"; failures=$((failures+1)); fi\nrm -rf \"$root\"\nprintf -- '\\nNote: OpenBSD find requires `--` before expression-leading predicates in this WSL harness.\\n' >> \"$report\"\nexit \"$failures\"\n"
+        dealloc(body8)
+        dealloc(target, report_path)
+        return body9
+    end
+
+    if tool == "xargs" then
+        body9 = body8 + "printf 'a\\nb\\n' | \"$target\" printf '%s-' >/tmp/mixtar-tool.out 2>/tmp/mixtar-tool.err; trc=$?\nprintf 'a\\nb\\n' | /usr/bin/xargs printf '%s-' >/tmp/native-tool.out 2>/tmp/native-tool.err; nrc=$?\nif cmp -s /tmp/mixtar-tool.out /tmp/native-tool.out && [ \"$trc\" = \"$nrc\" ]; then printf -- '- PASS xargs simple batching\\n' >> \"$report\"; else printf -- '- FAIL xargs simple batching generated=%s native=%s\\n' \"$trc\" \"$nrc\" >> \"$report\"; failures=$((failures+1)); fi\nexit \"$failures\"\n"
+        dealloc(body8)
+        dealloc(target, report_path)
+        return body9
+    end
+
+    if tool == "which" then
+        body9 = body8 + "PATH=/bin:/usr/bin \"$target\" sh >/tmp/mixtar-tool.out 2>/tmp/mixtar-tool.err; trc=$?\nPATH=/bin:/usr/bin /usr/bin/which sh >/tmp/native-tool.out 2>/tmp/native-tool.err; nrc=$?\nif cmp -s /tmp/mixtar-tool.out /tmp/native-tool.out && [ \"$trc\" = \"$nrc\" ]; then printf -- '- PASS which finds shell\\n' >> \"$report\"; else printf -- '- FAIL which finds shell generated=%s native=%s\\n' \"$trc\" \"$nrc\" >> \"$report\"; failures=$((failures+1)); fi\nPATH=/bin:/usr/bin \"$target\" no-such-mixtar-tool >/tmp/mixtar-tool.out 2>/tmp/mixtar-tool.err; trc2=$?\nif [ \"$trc2\" != \"0\" ] && grep -qi 'not found' /tmp/mixtar-tool.err; then printf -- '- PASS which missing command nonzero\\n' >> \"$report\"; else printf -- '- FAIL which missing command rc=%s\\n' \"$trc2\" >> \"$report\"; failures=$((failures+1)); fi\nexit \"$failures\"\n"
+        dealloc(body8)
+        dealloc(target, report_path)
+        return body9
+    end
+
+    if tool == "script" then
+        body9 = body8 + "rm -f /tmp/mixtar-script.out /tmp/mixtar-script.stdout /tmp/mixtar-script.err\n\"$target\" -c '/bin/true' /tmp/mixtar-script.out >/tmp/mixtar-script.stdout 2>/tmp/mixtar-script.err; trc=$?\nif [ \"$trc\" = \"0\" ] && [ -f /tmp/mixtar-script.out ] && grep -q 'Script started' /tmp/mixtar-script.stdout && grep -q 'Script done' /tmp/mixtar-script.stdout; then printf -- '- PASS script controlled command creates transcript\\n' >> \"$report\"; else printf -- '- FAIL script controlled command rc=%s\\n' \"$trc\" >> \"$report\"; failures=$((failures+1)); fi\nrm -f /tmp/mixtar-script.out /tmp/mixtar-script.stdout /tmp/mixtar-script.err\nprintf -- '\\nNote: PTY byte-for-byte transcript capture is not certified yet; this proves controlled noninteractive command startup/teardown.\\n' >> \"$report\"\nexit \"$failures\"\n"
+        dealloc(body8)
+        dealloc(target, report_path)
+        return body9
+    end
+
+    if tool == "nl" then
+        body9 = body8 + "printf 'a\\n\\nb\\n' | \"$target\" -ba >/tmp/mixtar-tool.out 2>/tmp/mixtar-tool.err; trc=$?\nprintf 'a\\n\\nb\\n' | /usr/bin/nl -ba >/tmp/native-tool.out 2>/tmp/native-tool.err; nrc=$?\nif cmp -s /tmp/mixtar-tool.out /tmp/native-tool.out && [ \"$trc\" = \"$nrc\" ]; then printf -- '- PASS nl -ba numbers all lines\\n' >> \"$report\"; else printf -- '- FAIL nl -ba generated=%s native=%s\\n' \"$trc\" \"$nrc\" >> \"$report\"; failures=$((failures+1)); fi\nprintf 'a\\n\\nb\\n' | \"$target\" -bp'^b' >/tmp/mixtar-tool.out 2>/tmp/mixtar-tool.err; trc2=$?\nprintf '      a\\n      \\n     1\\tb\\n' >/tmp/native-tool.out\nif cmp -s /tmp/mixtar-tool.out /tmp/native-tool.out && [ \"$trc2\" = \"0\" ]; then printf -- '- PASS nl regex body numbering\\n' >> \"$report\"; else printf -- '- FAIL nl regex body numbering rc=%s\\n' \"$trc2\" >> \"$report\"; failures=$((failures+1)); fi\nprintf -- '\\nNote: Bridge caps glibc NL_TEXTMAX so OpenBSD nl diagnostic buffers do not blow the Linux stack.\\n' >> \"$report\"\nexit \"$failures\"\n"
+        dealloc(body8)
+        dealloc(target, report_path)
+        return body9
+    end
+
+    if tool == "rmt" then
+        body9 = body8 + "printf '' | \"$target\" >/tmp/mixtar-tool.out 2>/tmp/mixtar-tool.err; trc=$?\nif [ \"$trc\" = \"0\" ] && [ ! -s /tmp/mixtar-tool.out ]; then printf -- '- PASS rmt EOF exits cleanly\\n' >> \"$report\"; else printf -- '- FAIL rmt EOF rc=%s\\n' \"$trc\" >> \"$report\"; failures=$((failures+1)); fi\n\"$target\" -z >/tmp/mixtar-tool.out 2>/tmp/mixtar-tool.err; rc2=$?\nif [ \"$rc2\" != \"0\" ] && grep -qi 'usage' /tmp/mixtar-tool.err; then printf -- '- PASS rmt invalid option usage\\n' >> \"$report\"; else printf -- '- FAIL rmt invalid option rc=%s\\n' \"$rc2\" >> \"$report\"; failures=$((failures+1)); fi\nprintf -- '\\nNote: rmt tape-device protocol operations are not exercised by this hosted smoke test.\\n' >> \"$report\"\nexit \"$failures\"\n"
+        dealloc(body8)
+        dealloc(target, report_path)
+        return body9
+    end
+
+    if tool == "shutdown" then
+        body9 = body8 + "\"$target\" now >/tmp/mixtar-tool.out 2>/tmp/mixtar-tool.err; trc=$?\nif [ \"$trc\" != \"0\" ] && grep -qi 'NOT super-user' /tmp/mixtar-tool.err; then printf -- '- PASS shutdown non-root is refused before action\\n' >> \"$report\"; else printf -- '- FAIL shutdown non-root guard rc=%s\\n' \"$trc\" >> \"$report\"; failures=$((failures+1)); fi\nprintf -- '\\nNote: destructive shutdown/reboot actions are intentionally not certified in the WSL harness.\\n' >> \"$report\"\nexit \"$failures\"\n"
+        dealloc(body8)
+        dealloc(target, report_path)
+        return body9
+    end
+
+    if tool == "users" then
+        body9 = body8 + "cat >/tmp/mixtar-mk-utmp.c <<'C'\n#include <string.h>\n#include <utmp.h>\n#include <stdio.h>\nint main(void) { struct utmp u; memset(&u, 0, sizeof(u)); strncpy(u.ut_name, \"alice\", sizeof(u.ut_name)); fwrite(&u, sizeof(u), 1, stdout); return 0; }\nC\ncc -std=c23 -Wall -Wextra -Werror -pedantic -o /tmp/mixtar-mk-utmp /tmp/mixtar-mk-utmp.c || exit 98\n/tmp/mixtar-mk-utmp >/tmp/mixtar-users.utmp\nMIXTAR_UTMP_PATH=/tmp/mixtar-users.utmp \"$target\" >/tmp/mixtar-tool.out 2>/tmp/mixtar-tool.err; trc=$?\nprintf 'alice\\n' >/tmp/native-tool.out\nif cmp -s /tmp/mixtar-tool.out /tmp/native-tool.out && [ \"$trc\" = \"0\" ]; then printf -- '- PASS users controlled utmp fixture\\n' >> \"$report\"; else printf -- '- FAIL users controlled utmp fixture rc=%s\\n' \"$trc\" >> \"$report\"; failures=$((failures+1)); fi\nprintf -- '\\nNote: Linux Bridge provides MIXTAR_UTMP_PATH so OpenBSD users(1) can be certified with a controlled utmp fixture when WSL has no /var/run/utmp.\\n' >> \"$report\"\nexit \"$failures\"\n"
+        dealloc(body8)
+        dealloc(target, report_path)
+        return body9
+    end
+
+    if tool == "wall" then
+        body9 = body8 + "\"$target\" -z >/tmp/mixtar-tool.out 2>/tmp/mixtar-tool.err; trc=$?\nif [ \"$trc\" != \"0\" ] && grep -qi 'usage' /tmp/mixtar-tool.err; then printf -- '- PASS wall invalid option usage\\n' >> \"$report\"; else printf -- '- FAIL wall invalid option rc=%s\\n' \"$trc\" >> \"$report\"; failures=$((failures+1)); fi\nprintf -- '\\nNote: live terminal broadcast is not exercised by this smoke test.\\n' >> \"$report\"\nexit \"$failures\"\n"
+        dealloc(body8)
+        dealloc(target, report_path)
+        return body9
+    end
+
+    if tool == "df" then
+        body9 = body8 + "\"$target\" -k /tmp >/tmp/mixtar-tool.out 2>/tmp/mixtar-tool.err; trc=$?\nif [ \"$trc\" = \"0\" ] && grep -q '^Filesystem' /tmp/mixtar-tool.out && grep -q '/tmp' /tmp/mixtar-tool.out; then printf -- '- PASS df -k /tmp statfs path\\n' >> \"$report\"; else printf -- '- FAIL df -k /tmp rc=%s\\n' \"$trc\" >> \"$report\"; failures=$((failures+1)); fi\nprintf -- '\\nNote: raw FFS/ext2 device inspection is stubbed unavailable in the Linux Bridge; hosted certification covers mounted filesystem statfs/statvfs paths only.\\n' >> \"$report\"\nexit \"$failures\"\n"
+        dealloc(body8)
+        dealloc(target, report_path)
+        return body9
+    end
+
+    if tool == "mknod" then
+        body9 = body8 + "tmp=\"/tmp/mixtar-mknod-$$\"\nrm -rf \"$tmp\"\nmkdir -p \"$tmp\"\n\"$target\" \"$tmp/fifo\" p >/tmp/mixtar-tool.out 2>/tmp/mixtar-tool.err; trc=$?\nif [ \"$trc\" = \"0\" ] && [ -p \"$tmp/fifo\" ]; then printf -- '- PASS mknod fifo creation\\n' >> \"$report\"; else printf -- '- FAIL mknod fifo creation rc=%s\\n' \"$trc\" >> \"$report\"; failures=$((failures+1)); fi\n\"$target\" -z >/tmp/mixtar-tool.out 2>/tmp/mixtar-tool.err; rc2=$?\nif [ \"$rc2\" != \"0\" ] && grep -qi 'usage' /tmp/mixtar-tool.err; then printf -- '- PASS mknod invalid option usage\\n' >> \"$report\"; else printf -- '- FAIL mknod invalid option rc=%s\\n' \"$rc2\" >> \"$report\"; failures=$((failures+1)); fi\nrm -rf \"$tmp\"\nprintf -- '\\nNote: block/character device node creation usually requires privilege and is not exercised by this hosted smoke test.\\n' >> \"$report\"\nexit \"$failures\"\n"
+        dealloc(body8)
+        dealloc(target, report_path)
+        return body9
+    end
+
+    if tool == "tsort" then
+        body9 = body8 + "cat >/tmp/mixtar-tsort.in <<'EOF'\na b\nb c\nEOF\n\"$target\" /tmp/mixtar-tsort.in >/tmp/mixtar-tool.out 2>/tmp/mixtar-tool.err; trc=$?\nprintf 'a\\nb\\nc\\n' >/tmp/native-tool.out\nif cmp -s /tmp/mixtar-tool.out /tmp/native-tool.out && [ \"$trc\" = \"0\" ]; then printf -- '- PASS tsort simple dependency chain\\n' >> \"$report\"; else printf -- '- FAIL tsort simple dependency chain rc=%s\\n' \"$trc\" >> \"$report\"; failures=$((failures+1)); fi\nrm -f /tmp/mixtar-tsort.in\nexit \"$failures\"\n"
+        dealloc(body8)
+        dealloc(target, report_path)
+        return body9
+    end
+
+    if tool == "who" then
+        body9 = body8 + "cat >/tmp/mixtar-mk-utmp.c <<'C'\n#include <string.h>\n#include <utmp.h>\n#include <stdio.h>\nint main(void) { struct utmp u; memset(&u, 0, sizeof(u)); strncpy(u.ut_user, \"alice\", sizeof(u.ut_user)); strncpy(u.ut_name, \"alice\", sizeof(u.ut_name)); strncpy(u.ut_line, \"pts/1\", sizeof(u.ut_line)); u.ut_type = USER_PROCESS; fwrite(&u, sizeof(u), 1, stdout); return 0; }\nC\ncc -std=c23 -Wall -Wextra -Werror -pedantic -o /tmp/mixtar-mk-utmp /tmp/mixtar-mk-utmp.c || exit 98\n/tmp/mixtar-mk-utmp >/tmp/mixtar-who.utmp\nMIXTAR_UTMP_PATH=/tmp/mixtar-who.utmp \"$target\" >/tmp/mixtar-tool.out 2>/tmp/mixtar-tool.err; trc=$?\nif [ \"$trc\" = \"0\" ] && grep -q '^alice' /tmp/mixtar-tool.out && grep -q 'pts/1' /tmp/mixtar-tool.out; then printf -- '- PASS who controlled utmp fixture\\n' >> \"$report\"; else printf -- '- FAIL who controlled utmp fixture rc=%s\\n' \"$trc\" >> \"$report\"; failures=$((failures+1)); fi\nprintf -- '\\nNote: Linux Bridge provides MIXTAR_UTMP_PATH so OpenBSD who(1) can be certified with a controlled utmp fixture when WSL has no /var/run/utmp.\\n' >> \"$report\"\nexit \"$failures\"\n"
+        dealloc(body8)
+        dealloc(target, report_path)
+        return body9
+    end
+
+    if tool == "diff" then
+        body9 = body8 + "tmp=\"/tmp/mixtar-diff-$$\"\nrm -rf \"$tmp\"\nmkdir -p \"$tmp\"\nprintf 'a\\nb\\n' > \"$tmp/a\"\nprintf 'a\\nb\\n' > \"$tmp/b\"\nprintf 'a\\nc\\n' > \"$tmp/c\"\n\"$target\" \"$tmp/a\" \"$tmp/b\" >/tmp/mixtar-tool.out 2>/tmp/mixtar-tool.err; rc_same=$?\nif [ \"$rc_same\" = \"0\" ] && [ ! -s /tmp/mixtar-tool.out ]; then printf -- '- PASS diff identical files\\n' >> \"$report\"; else printf -- '- FAIL diff identical files rc=%s\\n' \"$rc_same\" >> \"$report\"; failures=$((failures+1)); fi\n\"$target\" -u \"$tmp/a\" \"$tmp/c\" >/tmp/mixtar-tool.out 2>/tmp/mixtar-tool.err; rc_diff=$?\nif [ \"$rc_diff\" = \"1\" ] && grep -q '^--- ' /tmp/mixtar-tool.out && grep -q '^+++ ' /tmp/mixtar-tool.out && grep -q '^-b' /tmp/mixtar-tool.out && grep -q '^+c' /tmp/mixtar-tool.out; then printf -- '- PASS diff -u changed files\\n' >> \"$report\"; else printf -- '- FAIL diff -u changed files rc=%s\\n' \"$rc_diff\" >> \"$report\"; failures=$((failures+1)); fi\n\"$target\" \"$tmp/missing\" \"$tmp/a\" >/tmp/mixtar-tool.out 2>/tmp/mixtar-tool.err; rc_missing=$?\nif [ \"$rc_missing\" != \"0\" ] && grep -qi 'No such file' /tmp/mixtar-tool.err; then printf -- '- PASS diff missing file error\\n' >> \"$report\"; else printf -- '- FAIL diff missing file rc=%s\\n' \"$rc_missing\" >> \"$report\"; failures=$((failures+1)); fi\nrm -rf \"$tmp\"\nprintf -- '\\nNote: Linux splice(2) collides with OpenBSD diff internal splice(); Bridge renames only that internal helper at compile time.\\n' >> \"$report\"\nexit \"$failures\"\n"
+        dealloc(body8)
+        dealloc(target, report_path)
+        return body9
+    end
+
+    if tool == "patch" then
+        body9 = body8 + "tmp=\"/tmp/mixtar-patch-$$\"\nrm -rf \"$tmp\"\nmkdir -p \"$tmp\"\nprintf 'one\\ntwo\\n' > \"$tmp/file.txt\"\ncat > \"$tmp/change.patch\" <<'EOF'\n--- file.txt\n+++ file.txt\n@@ -1,2 +1,2 @@\n one\n-two\n+three\nEOF\n(cd \"$tmp\" && \"$target\" -s -i change.patch) >/tmp/mixtar-tool.out 2>/tmp/mixtar-tool.err; rc_patch=$?\nif [ \"$rc_patch\" = \"0\" ] && grep -qx 'three' \"$tmp/file.txt\"; then printf -- '- PASS patch applies simple unified diff\\n' >> \"$report\"; else printf -- '- FAIL patch applies simple unified diff rc=%s\\n' \"$rc_patch\" >> \"$report\"; failures=$((failures+1)); fi\n\"$target\" -z >/tmp/mixtar-tool.out 2>/tmp/mixtar-tool.err; rc_usage=$?\nif [ \"$rc_usage\" != \"0\" ] && grep -qi 'usage' /tmp/mixtar-tool.err; then printf -- '- PASS patch invalid option usage\\n' >> \"$report\"; else printf -- '- FAIL patch invalid option rc=%s\\n' \"$rc_usage\" >> \"$report\"; failures=$((failures+1)); fi\nrm -rf \"$tmp\"\nprintf -- '\\nNote: Bridge maps OpenBSD dirent.d_namlen to Linux dirent.d_reclen for backup-file scanning.\\n' >> \"$report\"\nexit \"$failures\"\n"
+        dealloc(body8)
+        dealloc(target, report_path)
+        return body9
+    end
+
+    if tool == "getconf" then
+        body9 = body8 + "\"$target\" ARG_MAX >/tmp/mixtar-tool.out 2>/tmp/mixtar-tool.err; trc=$?\n/usr/bin/getconf ARG_MAX >/tmp/native-tool.out 2>/tmp/native-tool.err; nrc=$?\nif cmp -s /tmp/mixtar-tool.out /tmp/native-tool.out && [ \"$trc\" = \"$nrc\" ]; then printf -- '- PASS getconf ARG_MAX\\n' >> \"$report\"; else printf -- '- FAIL getconf ARG_MAX generated=%s native=%s\\n' \"$trc\" \"$nrc\" >> \"$report\"; failures=$((failures+1)); fi\n\"$target\" PATH_MAX /tmp >/tmp/mixtar-tool.out 2>/tmp/mixtar-tool.err; trc2=$?\n/usr/bin/getconf PATH_MAX /tmp >/tmp/native-tool.out 2>/tmp/native-tool.err; nrc2=$?\nif cmp -s /tmp/mixtar-tool.out /tmp/native-tool.out && [ \"$trc2\" = \"$nrc2\" ]; then printf -- '- PASS getconf PATH_MAX /tmp\\n' >> \"$report\"; else printf -- '- FAIL getconf PATH_MAX /tmp generated=%s native=%s\\n' \"$trc2\" \"$nrc2\" >> \"$report\"; failures=$((failures+1)); fi\n\"$target\" _XOPEN_NAME_MAX >/tmp/mixtar-tool.out 2>/tmp/mixtar-tool.err; rc_const=$?\nif [ \"$rc_const\" = \"0\" ] && grep -qx '[0-9][0-9]*' /tmp/mixtar-tool.out; then printf -- '- PASS getconf OpenBSD XSI constant\\n' >> \"$report\"; else printf -- '- FAIL getconf OpenBSD XSI constant rc=%s\\n' \"$rc_const\" >> \"$report\"; failures=$((failures+1)); fi\nprintf -- '\\nNote: missing Linux POSIX/XSI query identifiers are defined by the Bridge as unsupported negative runtime IDs or stable constants.\\n' >> \"$report\"\nexit \"$failures\"\n"
+        dealloc(body8)
+        dealloc(target, report_path)
+        return body9
+    end
+    if tool == "zic" then
+        body9 = body8 + "\"$target\" -v >/tmp/mixtar-tool.out 2>/tmp/mixtar-tool.err; rc_v=$?\nif [ \"$rc_v\" = \"0\" ]; then printf -- '- PASS zic validates empty input set\\n' >> \"$report\"; else printf -- '- FAIL zic -v rc=%s\\n' \"$rc_v\" >> \"$report\"; failures=$((failures+1)); fi\n\"$target\" --version >/tmp/mixtar-tool.out 2>/tmp/mixtar-tool.err; rc_usage=$?\nif [ \"$rc_usage\" != \"0\" ] && grep -qi 'usage: zic' /tmp/mixtar-tool.err; then printf -- '- PASS zic invalid option usage\\n' >> \"$report\"; else printf -- '- FAIL zic invalid option rc=%s\\n' \"$rc_usage\" >> \"$report\"; failures=$((failures+1)); fi\nexit \"$failures\"\n"
+        dealloc(body8)
+        dealloc(target, report_path)
+        return body9
+    end
+    if tool == "zdump" then
+        body9 = body8 + "\"$target\" UTC >/tmp/mixtar-tool.out 2>/tmp/mixtar-tool.err; rc_utc=$?\nif [ \"$rc_utc\" = \"0\" ] && grep -q '^UTC ' /tmp/mixtar-tool.out; then printf -- '- PASS zdump UTC output\\n' >> \"$report\"; else printf -- '- FAIL zdump UTC rc=%s\\n' \"$rc_utc\" >> \"$report\"; failures=$((failures+1)); fi\n\"$target\" --version >/tmp/mixtar-tool.out 2>/tmp/mixtar-tool.err; rc_usage=$?\nif [ \"$rc_usage\" != \"0\" ] && grep -qi 'usage: zdump' /tmp/mixtar-tool.err; then printf -- '- PASS zdump invalid option usage\\n' >> \"$report\"; else printf -- '- FAIL zdump invalid option rc=%s\\n' \"$rc_usage\" >> \"$report\"; failures=$((failures+1)); fi\nexit \"$failures\"\n"
+        dealloc(body8)
+        dealloc(target, report_path)
+        return body9
+    end
+    if tool == "file" then
+        body9 = body8 + "printf 'hello\\n' >/tmp/mixtar-file-text\n\"$target\" -b /tmp/mixtar-file-text >/tmp/mixtar-tool.out 2>/tmp/mixtar-tool.err; rc_file=$?\nif [ \"$rc_file\" = \"0\" ] && grep -qi 'text' /tmp/mixtar-tool.out; then printf -- '- PASS file classifies text fixture\\n' >> \"$report\"; else printf -- '- FAIL file text fixture rc=%s\\n' \"$rc_file\" >> \"$report\"; failures=$((failures+1)); fi\n\"$target\" /tmp/mixtar-file-missing >/tmp/mixtar-tool.out 2>/tmp/mixtar-tool.err; rc_missing=$?\ncat /tmp/mixtar-tool.out /tmp/mixtar-tool.err >/tmp/mixtar-tool-combined\nif grep -qi 'No such file' /tmp/mixtar-tool-combined; then printf -- '- PASS file missing path diagnostic\\n' >> \"$report\"; else printf -- '- FAIL file missing path rc=%s\\n' \"$rc_missing\" >> \"$report\"; failures=$((failures+1)); fi\nrm -f /tmp/mixtar-file-text /tmp/mixtar-tool-combined\nexit \"$failures\"\n"
+        dealloc(body8)
+        dealloc(target, report_path)
+        return body9
+    end
+    if tool == "sort" then
+        body9 = body8 + "printf 'b\\na\\n' >/tmp/mixtar-sort-in\nprintf 'a\\nb\\n' >/tmp/mixtar-sort-expected\n\"$target\" /tmp/mixtar-sort-in >/tmp/mixtar-tool.out 2>/tmp/mixtar-tool.err; rc_sort=$?\nif [ \"$rc_sort\" = \"0\" ] && cmp -s /tmp/mixtar-tool.out /tmp/mixtar-sort-expected; then printf -- '- PASS sort orders simple lines\\n' >> \"$report\"; else printf -- '- FAIL sort simple lines rc=%s\\n' \"$rc_sort\" >> \"$report\"; failures=$((failures+1)); fi\n\"$target\" -r /tmp/mixtar-sort-in >/tmp/mixtar-tool.out 2>/tmp/mixtar-tool.err; rc_rev=$?\nif [ \"$rc_rev\" = \"0\" ] && cmp -s /tmp/mixtar-tool.out /tmp/mixtar-sort-in; then printf -- '- PASS sort reverse simple lines\\n' >> \"$report\"; else printf -- '- FAIL sort reverse rc=%s\\n' \"$rc_rev\" >> \"$report\"; failures=$((failures+1)); fi\nrm -f /tmp/mixtar-sort-in /tmp/mixtar-sort-expected\nexit \"$failures\"\n"
+        dealloc(body8)
+        dealloc(target, report_path)
+        return body9
+    end
+    if tool == "m4" then
+        body9 = body8 + "printf 'NAME\\n' | \"$target\" -DNAME=value >/tmp/mixtar-tool.out 2>/tmp/mixtar-tool.err; rc_m4=$?\nif [ \"$rc_m4\" = \"0\" ] && grep -qx 'value' /tmp/mixtar-tool.out; then printf -- '- PASS m4 expands command-line macro\\n' >> \"$report\"; else printf -- '- FAIL m4 macro rc=%s\\n' \"$rc_m4\" >> \"$report\"; failures=$((failures+1)); fi\ncat >/tmp/mixtar-m4-in <<'EOF'\ndefine(`x', `42')x\nEOF\n\"$target\" /tmp/mixtar-m4-in >/tmp/mixtar-tool.out 2>/tmp/mixtar-tool.err; rc_define=$?\nif [ \"$rc_define\" = \"0\" ] && grep -qx '42' /tmp/mixtar-tool.out; then printf -- '- PASS m4 define macro\\n' >> \"$report\"; else printf -- '- FAIL m4 define rc=%s\\n' \"$rc_define\" >> \"$report\"; failures=$((failures+1)); fi\nrm -f /tmp/mixtar-m4-in\nexit \"$failures\"\n"
+        dealloc(body8)
+        dealloc(target, report_path)
+        return body9
+    end
+    if tool == "awk" then
+        body9 = body8 + "\"$target\" 'BEGIN{print 1+2}' >/tmp/mixtar-tool.out 2>/tmp/mixtar-tool.err; rc_awk=$?\nif [ \"$rc_awk\" = \"0\" ] && grep -qx '3' /tmp/mixtar-tool.out; then printf -- '- PASS awk BEGIN arithmetic\\n' >> \"$report\"; else printf -- '- FAIL awk arithmetic rc=%s\\n' \"$rc_awk\" >> \"$report\"; failures=$((failures+1)); fi\nprintf 'a 1\\nb 2\\n' | \"$target\" '{s += $2} END {print s}' >/tmp/mixtar-tool.out 2>/tmp/mixtar-tool.err; rc_sum=$?\nif [ \"$rc_sum\" = \"0\" ] && grep -qx '3' /tmp/mixtar-tool.out; then printf -- '- PASS awk field sum\\n' >> \"$report\"; else printf -- '- FAIL awk field sum rc=%s\\n' \"$rc_sum\" >> \"$report\"; failures=$((failures+1)); fi\nexit \"$failures\"\n"
+        dealloc(body8)
+        dealloc(target, report_path)
+        return body9
+    end
+    if tool == "diff3" then
+        body9 = body8 + "tmp=\"/tmp/mixtar-diff3-$$\"\nrm -rf \"$tmp\"\nmkdir -p \"$tmp\"\nprintf 'a\\nb\\n' > \"$tmp/a\"\nprintf 'a\\nb\\n' > \"$tmp/b\"\nprintf 'a\\nc\\n' > \"$tmp/c\"\n\"$target\" \"$tmp/a\" \"$tmp/b\" \"$tmp/c\" >/tmp/mixtar-tool.out 2>/tmp/mixtar-tool.err; trc=$?\n/usr/bin/diff3 \"$tmp/a\" \"$tmp/b\" \"$tmp/c\" >/tmp/native-tool.out 2>/tmp/native-tool.err; nrc=$?\nif cmp -s /tmp/mixtar-tool.out /tmp/native-tool.out && [ \"$trc\" = \"$nrc\" ]; then printf -- '- PASS diff3 basic three-way diff\\n' >> \"$report\"; else printf -- '- FAIL diff3 basic generated=%s native=%s\\n' \"$trc\" \"$nrc\" >> \"$report\"; failures=$((failures+1)); fi\n\"$target\" \"$tmp/a\" \"$tmp/b\" >/tmp/mixtar-tool.out 2>/tmp/mixtar-tool.err; rc_usage=$?\nif [ \"$rc_usage\" != \"0\" ] && grep -qi 'usage: diff3' /tmp/mixtar-tool.err; then printf -- '- PASS diff3 missing operand usage\\n' >> \"$report\"; else printf -- '- FAIL diff3 missing operand rc=%s\\n' \"$rc_usage\" >> \"$report\"; failures=$((failures+1)); fi\nrm -rf \"$tmp\"\nprintf -- '\\nNote: OpenBSD diff3 is a shell wrapper around diff(1) and diff3prog; the Bridge builds diff3prog and emits an equivalent hosted wrapper.\\n' >> \"$report\"\nexit \"$failures\"\n"
+        dealloc(body8)
+        dealloc(target, report_path)
+        return body9
+    end
+    if tool == "gencat" then
+        body9 = body8 + "cat >/tmp/mixtar-gencat.msg <<'EOF'\n$set 1\n1 hello\n2 world\nEOF\nrm -f /tmp/mixtar-gencat.cat\n\"$target\" /tmp/mixtar-gencat.cat /tmp/mixtar-gencat.msg >/tmp/mixtar-tool.out 2>/tmp/mixtar-tool.err; trc=$?\nif [ \"$trc\" = \"0\" ] && [ -s /tmp/mixtar-gencat.cat ]; then printf -- '- PASS gencat creates nonempty catalog\\n' >> \"$report\"; else printf -- '- FAIL gencat catalog rc=%s\\n' \"$trc\" >> \"$report\"; failures=$((failures+1)); fi\n\"$target\" >/tmp/mixtar-tool.out 2>/tmp/mixtar-tool.err; rc_usage=$?\nif [ \"$rc_usage\" != \"0\" ] && grep -qi 'usage:' /tmp/mixtar-tool.err; then printf -- '- PASS gencat no-argument usage\\n' >> \"$report\"; else printf -- '- FAIL gencat no-argument rc=%s\\n' \"$rc_usage\" >> \"$report\"; failures=$((failures+1)); fi\nrm -f /tmp/mixtar-gencat.msg /tmp/mixtar-gencat.cat\nprintf -- '\\nNote: Bridge supplies OpenBSD private nl_types catalog structs; GNU catalog binary compatibility is not claimed.\\n' >> \"$report\"\nexit \"$failures\"\n"
+        dealloc(body8)
+        dealloc(target, report_path)
+        return body9
+    end
+    if tool == "ipcrm" then
+        body9 = body8 + "\"$target\" >/tmp/mixtar-tool.out 2>/tmp/mixtar-tool.err; trc=$?\nif [ \"$trc\" = \"0\" ]; then printf -- '- PASS ipcrm no-op with no operands\\n' >> \"$report\"; else printf -- '- FAIL ipcrm no-op rc=%s\\n' \"$trc\" >> \"$report\"; failures=$((failures+1)); fi\n\"$target\" -z >/tmp/mixtar-tool.out 2>/tmp/mixtar-tool.err; rc_usage=$?\nif [ \"$rc_usage\" != \"0\" ] && grep -qi 'usage:' /tmp/mixtar-tool.err; then printf -- '- PASS ipcrm invalid option usage\\n' >> \"$report\"; else printf -- '- FAIL ipcrm invalid option rc=%s\\n' \"$rc_usage\" >> \"$report\"; failures=$((failures+1)); fi\nprintf -- '\\nNote: destructive IPC removal is not exercised by this smoke test; Linux union semun compatibility is compile/runtime bridge only.\\n' >> \"$report\"\nexit \"$failures\"\n"
+        dealloc(body8)
+        dealloc(target, report_path)
+        return body9
+    end
+    if tool == "ipcs" then
+        body9 = body8 + "\"$target\" -T >/tmp/mixtar-tool.out 2>/tmp/mixtar-tool.err; rc_totals=$?\nif [ \"$rc_totals\" = \"0\" ] && grep -q 'msginfo:' /tmp/mixtar-tool.out && grep -q 'shminfo:' /tmp/mixtar-tool.out && grep -q 'seminfo:' /tmp/mixtar-tool.out; then printf -- '- PASS ipcs -T totals\\n' >> \"$report\"; else printf -- '- FAIL ipcs -T totals rc=%s\\n' \"$rc_totals\" >> \"$report\"; cat /tmp/mixtar-tool.out >> \"$report\"; cat /tmp/mixtar-tool.err >> \"$report\"; failures=$((failures+1)); fi\n\"$target\" -z >/tmp/mixtar-tool.out 2>/tmp/mixtar-tool.err; rc_usage=$?\nif [ \"$rc_usage\" != \"0\" ] && grep -qi 'usage:' /tmp/mixtar-tool.err; then printf -- '- PASS ipcs invalid option usage\\n' >> \"$report\"; else printf -- '- FAIL ipcs invalid option rc=%s\\n' \"$rc_usage\" >> \"$report\"; failures=$((failures+1)); fi\nprintf -- '\\nNote: OpenBSD ipcs source is compiled unchanged. The Bridge exposes a Linux-safe SysV IPC sysctl view for totals; destructive or live IPC enumeration parity is not certified here.\\n' >> \"$report\"\nexit \"$failures\"\n"
+        dealloc(body8)
+        dealloc(target, report_path)
+        return body9
+    end
+    if tool == "gprof" then
+        body9 = body8 + "\"$target\" /tmp/mixtar-no-such-aout /tmp/mixtar-no-such-gmon >/tmp/mixtar-tool.out 2>/tmp/mixtar-tool.err; rc_missing=$?\nif [ \"$rc_missing\" != \"0\" ] && grep -qi 'No such file' /tmp/mixtar-tool.err; then printf -- '- PASS gprof missing input diagnostic\\n' >> \"$report\"; else printf -- '- FAIL gprof missing input rc=%s\\n' \"$rc_missing\" >> \"$report\"; cat /tmp/mixtar-tool.err >> \"$report\"; failures=$((failures+1)); fi\n\"$target\" -c >/tmp/mixtar-tool.out 2>/tmp/mixtar-tool.err; rc_arch=$?\nif [ \"$rc_arch\" != \"0\" ] && grep -qi \"isn't supported\" /tmp/mixtar-tool.err; then printf -- '- PASS gprof unsupported -c architecture diagnostic\\n' >> \"$report\"; else printf -- '- FAIL gprof -c diagnostic rc=%s\\n' \"$rc_arch\" >> \"$report\"; cat /tmp/mixtar-tool.err >> \"$report\"; failures=$((failures+1)); fi\nprintf -- '\\nNote: OpenBSD gprof source set is compiled unchanged. Certification covers safe diagnostics only; real gmon profile analysis requires profile fixtures and is not certified here.\\n' >> \"$report\"\nexit \"$failures\"\n"
+        dealloc(body8)
+        dealloc(target, report_path)
+        return body9
+    end
+    if tool == "mt" then
+        body9 = body8 + "\"$target\" >/tmp/mixtar-tool.out 2>/tmp/mixtar-tool.err; rc_usage=$?\nif [ \"$rc_usage\" != \"0\" ] && grep -qi 'usage:' /tmp/mixtar-tool.err; then printf -- '- PASS mt no-argument usage\\n' >> \"$report\"; else printf -- '- FAIL mt no-argument usage rc=%s\\n' \"$rc_usage\" >> \"$report\"; failures=$((failures+1)); fi\n\"$target\" nonsense >/tmp/mixtar-tool.out 2>/tmp/mixtar-tool.err; rc_unknown=$?\nif [ \"$rc_unknown\" != \"0\" ] && grep -qi 'unknown command' /tmp/mixtar-tool.err; then printf -- '- PASS mt unknown command diagnostic\\n' >> \"$report\"; else printf -- '- FAIL mt unknown command rc=%s\\n' \"$rc_unknown\" >> \"$report\"; cat /tmp/mixtar-tool.err >> \"$report\"; failures=$((failures+1)); fi\n\"$target\" -f /dev/null status >/tmp/mixtar-tool.out 2>/tmp/mixtar-tool.err; rc_status=$?\nif [ \"$rc_status\" != \"0\" ]; then printf -- '- PASS mt non-tape status fails safely\\n' >> \"$report\"; else printf -- '- FAIL mt non-tape status unexpectedly succeeded\\n' >> \"$report\"; failures=$((failures+1)); fi\nprintf -- '\\nNote: OpenBSD mt.c is compiled unchanged. Remote RMT support is not enabled in this smoke tier; physical tape device behavior is not certified.\\n' >> \"$report\"\nexit \"$failures\"\n"
+        dealloc(body8)
+        dealloc(target, report_path)
+        return body9
+    end
+    if tool == "w" then
+        body9 = body8 + "\"$target\" -z >/tmp/mixtar-tool.out 2>/tmp/mixtar-tool.err; rc_usage=$?\nif [ \"$rc_usage\" != \"0\" ] && grep -qi 'usage: w' /tmp/mixtar-tool.err; then printf -- '- PASS w invalid option usage\\n' >> \"$report\"; else printf -- '- FAIL w invalid option rc=%s\\n' \"$rc_usage\" >> \"$report\"; cat /tmp/mixtar-tool.err >> \"$report\"; failures=$((failures+1)); fi\n\"$target\" -h >/tmp/mixtar-tool.out 2>/tmp/mixtar-tool.err; rc_run=$?\nif [ \"$rc_run\" = \"0\" ]; then printf -- '- PASS w empty/login-safe run\\n' >> \"$report\"; else printf -- '- FAIL w empty/login-safe run rc=%s\\n' \"$rc_run\" >> \"$report\"; cat /tmp/mixtar-tool.err >> \"$report\"; failures=$((failures+1)); fi\nprintf -- '\\nNote: OpenBSD w source set is compiled unchanged. Certification covers usage diagnostics and a no-header run through the Linux kvm/proc Bridge with the current utmp path.\\n' >> \"$report\"\nexit \"$failures\"\n"
+        dealloc(body8)
+        dealloc(target, report_path)
+        return body9
+    end
+    if tool == "vmstat" then
+        body9 = body8 + "\"$target\" -Z >/tmp/mixtar-tool.out 2>/tmp/mixtar-tool.err; rc_usage=$?\nif [ \"$rc_usage\" != \"0\" ] && grep -qi 'usage:' /tmp/mixtar-tool.err; then printf -- '- PASS vmstat invalid option usage\\n' >> \"$report\"; else printf -- '- FAIL vmstat invalid option rc=%s\\n' \"$rc_usage\" >> \"$report\"; cat /tmp/mixtar-tool.err >> \"$report\"; failures=$((failures+1)); fi\nprintf -- '\\nNote: OpenBSD vmstat source set is compiled unchanged. Certification is usage-only in this first bridge tier; live kernel statistics parity is not certified here.\\n' >> \"$report\"\nexit \"$failures\"\n"
+        dealloc(body8)
+        dealloc(target, report_path)
+        return body9
+    end
+    if tool == "reboot" then
+        body9 = body8 + "\"$target\" -x >/tmp/mixtar-tool.out 2>/tmp/mixtar-tool.err; rc_usage=$?\nif [ \"$rc_usage\" != \"0\" ] && grep -qi 'usage:' /tmp/mixtar-tool.err; then printf -- '- PASS reboot invalid option usage\\n' >> \"$report\"; else printf -- '- FAIL reboot invalid option rc=%s\\n' \"$rc_usage\" >> \"$report\"; cat /tmp/mixtar-tool.err >> \"$report\"; failures=$((failures+1)); fi\nprintf -- '\\nNote: OpenBSD reboot source is compiled unchanged. Certification is usage-only; Bridge reboot syscall compatibility is deliberately inert in this smoke tier.\\n' >> \"$report\"\nexit \"$failures\"\n"
+        dealloc(body8)
+        dealloc(target, report_path)
+        return body9
+    end
+    if tool == "stty" then
+        body9 = body8 + "script -qfec \"$target -a\" /tmp/mixtar-stty.typescript >/tmp/mixtar-tool.out 2>/tmp/mixtar-tool.err; rc_a=$?\nif [ \"$rc_a\" = \"0\" ] && grep -qi 'lflags' /tmp/mixtar-tool.out; then printf -- '- PASS stty -a under pseudo-tty\\n' >> \"$report\"; else printf -- '- FAIL stty -a pseudo-tty rc=%s\\n' \"$rc_a\" >> \"$report\"; failures=$((failures+1)); fi\n\"$target\" size </dev/null >/tmp/mixtar-tool.out 2>/tmp/mixtar-tool.err; rc_notty=$?\nif [ \"$rc_notty\" != \"0\" ]; then printf -- '- PASS stty non-tty input exits nonzero\\n' >> \"$report\"; else printf -- '- FAIL stty non-tty input rc=%s\\n' \"$rc_notty\" >> \"$report\"; failures=$((failures+1)); fi\nrm -f /tmp/mixtar-stty.typescript\nprintf -- '\\nNote: hosted WSL certification reads terminal state through a pseudo-tty and avoids mutating the controlling terminal; OpenBSD-only flags compile as inert Linux Bridge constants.\\n' >> \"$report\"\nexit \"$failures\"\n"
+        dealloc(body8)
+        dealloc(target, report_path)
+        return body9
+    end
+    if tool == "pkill" then
+        body9 = body8 + "\"$target\" >/tmp/mixtar-tool.out 2>/tmp/mixtar-tool.err; rc_usage=$?\nif [ \"$rc_usage\" = \"2\" ] && grep -qi 'usage:' /tmp/mixtar-tool.err; then printf -- '- PASS pkill no-argument usage\\n' >> \"$report\"; else printf -- '- FAIL pkill no-argument rc=%s\\n' \"$rc_usage\" >> \"$report\"; failures=$((failures+1)); fi\n/bin/sleep 30 & child=$!\ntrap 'kill \"$child\" 2>/dev/null' EXIT\n\"$target\" -0 -x sleep >/tmp/mixtar-tool.out 2>/tmp/mixtar-tool.err; rc_probe=$?\nkill \"$child\" 2>/dev/null\nwait \"$child\" 2>/dev/null\ntrap - EXIT\nif [ \"$rc_probe\" = \"0\" ]; then printf -- '- PASS pkill signal-zero process probe\\n' >> \"$report\"; else printf -- '- FAIL pkill signal-zero rc=%s\\n' \"$rc_probe\" >> \"$report\"; failures=$((failures+1)); fi\nprintf -- '\\nNote: OpenBSD pkill is compiled unchanged; Linux Bridge supplies kvm_getprocs/kvm_getargv through /proc. The smoke test uses signal 0 to avoid terminating unrelated processes.\\n' >> \"$report\"\nexit \"$failures\"\n"
+        dealloc(body8)
+        dealloc(target, report_path)
+        return body9
+    end
+    if tool == "ps" then
+        body9 = body8 + "\"$target\" -ax >/tmp/mixtar-tool.out 2>/tmp/mixtar-tool.err; rc_all=$?\nif [ \"$rc_all\" = \"0\" ] && grep -q 'PID' /tmp/mixtar-tool.out && grep -q 'COMMAND' /tmp/mixtar-tool.out; then printf -- '- PASS ps -ax process table\\n' >> \"$report\"; else printf -- '- FAIL ps -ax rc=%s\\n' \"$rc_all\" >> \"$report\"; cat /tmp/mixtar-tool.err >> \"$report\"; failures=$((failures+1)); fi\n\"$target\" -ax -o pid,comm >/tmp/mixtar-tool.out 2>/tmp/mixtar-tool.err; rc_fmt=$?\nif [ \"$rc_fmt\" = \"0\" ] && grep -q 'PID' /tmp/mixtar-tool.out && grep -q 'COMM' /tmp/mixtar-tool.out; then printf -- '- PASS ps -o pid,comm formatting\\n' >> \"$report\"; else printf -- '- FAIL ps -o pid,comm rc=%s\\n' \"$rc_fmt\" >> \"$report\"; cat /tmp/mixtar-tool.err >> \"$report\"; failures=$((failures+1)); fi\nprintf -- '\\nNote: OpenBSD ps is compiled unchanged; Linux Bridge supplies sysctl/kvm process metadata through /proc. Certification covers process-table read paths and selected formatting only.\\n' >> \"$report\"\nexit \"$failures\"\n"
+        dealloc(body8)
+        dealloc(target, report_path)
+        return body9
+    end
+    if tool == "getent" then
+        body9 = body8 + "name=$(id -un)\n\"$target\" passwd \"$name\" >/tmp/mixtar-tool.out 2>/tmp/mixtar-tool.err; rc_passwd=$?\nif [ \"$rc_passwd\" = \"0\" ] && grep -q \"^$name:\" /tmp/mixtar-tool.out; then printf -- '- PASS getent passwd current user\\n' >> \"$report\"; else printf -- '- FAIL getent passwd rc=%s\\n' \"$rc_passwd\" >> \"$report\"; cat /tmp/mixtar-tool.err >> \"$report\"; failures=$((failures+1)); fi\n\"$target\" hosts localhost >/tmp/mixtar-tool.out 2>/tmp/mixtar-tool.err; rc_hosts=$?\nif [ \"$rc_hosts\" = \"0\" ] && grep -qi 'localhost' /tmp/mixtar-tool.out; then printf -- '- PASS getent hosts localhost\\n' >> \"$report\"; else printf -- '- FAIL getent hosts rc=%s\\n' \"$rc_hosts\" >> \"$report\"; cat /tmp/mixtar-tool.err >> \"$report\"; failures=$((failures+1)); fi\nprintf -- '\\nNote: OpenBSD getent is compiled unchanged; Linux Bridge maps RPC and ethernet declarations to glibc/netdb surfaces.\\n' >> \"$report\"\nexit \"$failures\"\n"
+        dealloc(body8)
+        dealloc(target, report_path)
+        return body9
+    end
+    if tool == "dmesg" then
+        body9 = body8 + "\"$target\" >/tmp/mixtar-tool.out 2>/tmp/mixtar-tool.err; rc_dmesg=$?\nif [ \"$rc_dmesg\" = \"0\" ]; then printf -- '- PASS dmesg reads bridge msgbuf surface\\n' >> \"$report\"; else printf -- '- FAIL dmesg rc=%s\\n' \"$rc_dmesg\" >> \"$report\"; cat /tmp/mixtar-tool.err >> \"$report\"; failures=$((failures+1)); fi\n\"$target\" -z >/tmp/mixtar-tool.out 2>/tmp/mixtar-tool.err; rc_usage=$?\nif [ \"$rc_usage\" != \"0\" ] && grep -qi 'usage:' /tmp/mixtar-tool.err; then printf -- '- PASS dmesg invalid option usage\\n' >> \"$report\"; else printf -- '- FAIL dmesg invalid option rc=%s\\n' \"$rc_usage\" >> \"$report\"; failures=$((failures+1)); fi\nprintf -- '\\nNote: OpenBSD dmesg is compiled unchanged; Linux Bridge exposes an empty safe kernel-message buffer instead of reading host kernel logs.\\n' >> \"$report\"\nexit \"$failures\"\n"
+        dealloc(body8)
+        dealloc(target, report_path)
+        return body9
+    end
+    if tool == "nm" then
+        body9 = body8 + "\"$target\" \"$target\" >/tmp/mixtar-tool.out 2>/tmp/mixtar-tool.err; rc_nm=$?\nif [ \"$rc_nm\" = \"0\" ] && [ -s /tmp/mixtar-tool.out ]; then printf -- '- PASS nm reads its own ELF symbols\\n' >> \"$report\"; else printf -- '- FAIL nm self-read rc=%s\\n' \"$rc_nm\" >> \"$report\"; cat /tmp/mixtar-tool.err >> \"$report\"; failures=$((failures+1)); fi\n\"$target\" /tmp/mixtar-not-an-object >/tmp/mixtar-tool.out 2>/tmp/mixtar-tool.err; rc_bad=$?\nif [ \"$rc_bad\" != \"0\" ]; then printf -- '- PASS nm rejects missing/non-object input\\n' >> \"$report\"; else printf -- '- FAIL nm invalid input rc=%s\\n' \"$rc_bad\" >> \"$report\"; failures=$((failures+1)); fi\nprintf -- '\\nNote: OpenBSD nm is compiled unchanged with separate 32/64-bit ELF bridge objects. Archive edge cases are not fully certified here.\\n' >> \"$report\"\nexit \"$failures\"\n"
+        dealloc(body8)
+        dealloc(target, report_path)
+        return body9
+    end
+    if tool == "rpcgen" then
+        body9 = body8 + "cat >/tmp/mixtar-rpcgen.x <<'EOF'\nprogram TEST_PROG { version TEST_VERS { int TEST_NULL(void) = 1; } = 1; } = 0x20000001;\nEOF\n\"$target\" -h /tmp/mixtar-rpcgen.x >/tmp/mixtar-tool.out 2>/tmp/mixtar-tool.err; trc=$?\nif [ \"$trc\" = \"0\" ] && grep -q 'RPCGEN_VERSION' /tmp/mixtar-tool.out && grep -q 'TEST_PROG' /tmp/mixtar-tool.out; then printf -- '- PASS rpcgen header generation\\n' >> \"$report\"; else printf -- '- FAIL rpcgen header generation rc=%s\\n' \"$trc\" >> \"$report\"; failures=$((failures+1)); cat /tmp/mixtar-tool.err >> \"$report\"; fi\n\"$target\" -z >/tmp/mixtar-tool.out 2>/tmp/mixtar-tool.err; rc_usage=$?\nif [ \"$rc_usage\" != \"0\" ]; then printf -- '- PASS rpcgen invalid option exits nonzero\\n' >> \"$report\"; else printf -- '- FAIL rpcgen invalid option rc=%s\\n' \"$rc_usage\" >> \"$report\"; failures=$((failures+1)); fi\nrm -f /tmp/mixtar-rpcgen.x\nprintf -- '\\nNote: OpenBSD rpcgen is compiled unchanged; this smoke test covers header generation from a minimal RPC IDL only.\\n' >> \"$report\"\nexit \"$failures\"\n"
+        dealloc(body8)
+        dealloc(target, report_path)
+        return body9
+    end
+    if tool == "ed" then
+        body9 = body8 + "tmp=\"/tmp/mixtar-ed-$$\"\nrm -f \"$tmp\"\nprintf 'a\\nalpha\\nbeta\\n.\\nw %s\\nq\\n' \"$tmp\" | \"$target\" -s >/tmp/mixtar-tool.out 2>/tmp/mixtar-tool.err; trc=$?\nprintf 'alpha\\nbeta\\n' >/tmp/native-tool.out\nif [ \"$trc\" = \"0\" ] && cmp -s \"$tmp\" /tmp/native-tool.out; then printf -- '- PASS ed append/write file\\n' >> \"$report\"; else printf -- '- FAIL ed append/write file rc=%s\\n' \"$trc\" >> \"$report\"; cat /tmp/mixtar-tool.err >> \"$report\"; failures=$((failures+1)); fi\nprintf '1,2p\\nq\\n' | \"$target\" -s \"$tmp\" >/tmp/mixtar-tool.out 2>/tmp/mixtar-tool.err; trc2=$?\nif [ \"$trc2\" = \"0\" ] && cmp -s /tmp/mixtar-tool.out /tmp/native-tool.out; then printf -- '- PASS ed print range\\n' >> \"$report\"; else printf -- '- FAIL ed print range rc=%s\\n' \"$trc2\" >> \"$report\"; cat /tmp/mixtar-tool.err >> \"$report\"; failures=$((failures+1)); fi\nrm -f \"$tmp\"\nprintf -- '\\nNote: OpenBSD ed source is compiled unchanged; certification covers scripted non-interactive editing, not full terminal/session behavior.\\n' >> \"$report\"\nexit \"$failures\"\n"
+        dealloc(body8)
+        dealloc(target, report_path)
+        return body9
+    end
+
+    if tool == "nproc" then
+        body9 = body8 + "native=$(command -v nproc || true)\nif [ -z \"$native\" ]; then printf -- '- FAIL native nproc missing\\n' >> \"$report\"; exit 1; fi\ncompare_stdout() { label=\"$1\"; shift; \"$target\" \"$@\" >/tmp/mixtar-tool.out 2>/tmp/mixtar-tool.err; trc=$?; \"$native\" \"$@\" >/tmp/native-tool.out 2>/tmp/native-tool.err; nrc=$?; if cmp -s /tmp/mixtar-tool.out /tmp/native-tool.out && [ \"$trc\" = \"$nrc\" ]; then printf -- '- PASS %s\\n' \"$label\" >> \"$report\"; else printf -- '- FAIL %s generated=%s native=%s\\n' \"$label\" \"$trc\" \"$nrc\" >> \"$report\"; cat /tmp/mixtar-tool.err >> \"$report\"; failures=$((failures+1)); fi; }\ncompare_stdout 'nproc default affinity count'\ncompare_stdout 'nproc --all configured count' --all\ncompare_stdout 'nproc --ignore clamps to one' --ignore=999999\n\"$target\" --version >/tmp/mixtar-tool.out 2>/tmp/mixtar-tool.err; rc_version=$?\nif [ \"$rc_version\" = \"0\" ] && grep -q 'nproc' /tmp/mixtar-tool.out; then printf -- '- PASS nproc --version\\n' >> \"$report\"; else printf -- '- FAIL nproc --version rc=%s\\n' \"$rc_version\" >> \"$report\"; failures=$((failures+1)); fi\nprintf -- '\\nNote: FreeBSD nproc intentionally follows the GNU nproc option surface; the Bridge maps FreeBSD cpuset_getaffinity to Linux sched_getaffinity.\\n' >> \"$report\"\nexit \"$failures\"\n"
+        dealloc(body8)
+        dealloc(target, report_path)
+        return body9
+    end
+    if tool == "uuidgen" then
+        body9 = body8 + "uuid_re='^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'\ncompact_re='^[0-9a-f]{32}$'\n\"$target\" -r >/tmp/mixtar-tool.out 2>/tmp/mixtar-tool.err; rc_one=$?\nif [ \"$rc_one\" = \"0\" ] && grep -Eq \"$uuid_re\" /tmp/mixtar-tool.out; then printf -- '- PASS uuidgen -r format\\n' >> \"$report\"; else printf -- '- FAIL uuidgen -r rc=%s\\n' \"$rc_one\" >> \"$report\"; cat /tmp/mixtar-tool.err >> \"$report\"; failures=$((failures+1)); fi\n\"$target\" -r -n 3 >/tmp/mixtar-tool.out 2>/tmp/mixtar-tool.err; rc_count=$?\nif [ \"$rc_count\" = \"0\" ] && [ \"$(wc -l </tmp/mixtar-tool.out)\" = \"3\" ] && ! grep -Evq \"$uuid_re\" /tmp/mixtar-tool.out; then printf -- '- PASS uuidgen -n count\\n' >> \"$report\"; else printf -- '- FAIL uuidgen -n count rc=%s\\n' \"$rc_count\" >> \"$report\"; failures=$((failures+1)); fi\n\"$target\" -r -c >/tmp/mixtar-tool.out 2>/tmp/mixtar-tool.err; rc_compact=$?\nif [ \"$rc_compact\" = \"0\" ] && grep -Eq \"$compact_re\" /tmp/mixtar-tool.out; then printf -- '- PASS uuidgen compact format\\n' >> \"$report\"; else printf -- '- FAIL uuidgen compact rc=%s\\n' \"$rc_compact\" >> \"$report\"; failures=$((failures+1)); fi\n\"$target\" -n 0 >/tmp/mixtar-tool.out 2>/tmp/mixtar-tool.err; rc_usage=$?\nif [ \"$rc_usage\" != \"0\" ] && grep -qi 'usage:' /tmp/mixtar-tool.err; then printf -- '- PASS uuidgen invalid count usage\\n' >> \"$report\"; else printf -- '- FAIL uuidgen invalid count rc=%s\\n' \"$rc_usage\" >> \"$report\"; failures=$((failures+1)); fi\nprintf -- '\\nNote: FreeBSD uuidgen source is compiled unchanged; Mixtar Bridge supplies the UUID ABI shim and generates random RFC4122 variant/version UUIDs.\\n' >> \"$report\"\nexit \"$failures\"\n"
+        dealloc(body8)
+        dealloc(target, report_path)
+        return body9
+    end
+    if tool == "chflags" then
+        body9 = body8 + "tmp=\"/tmp/mixtar-chflags-$$\"\nrm -f \"$tmp\"\n: > \"$tmp\"\n\"$target\" -f 0 \"$tmp\" >/tmp/mixtar-tool.out 2>/tmp/mixtar-tool.err; rc_zero=$?\nif [ \"$rc_zero\" = \"0\" ]; then printf -- '- PASS chflags octal zero no-op\\n' >> \"$report\"; else printf -- '- FAIL chflags zero rc=%s\\n' \"$rc_zero\" >> \"$report\"; cat /tmp/mixtar-tool.err >> \"$report\"; failures=$((failures+1)); fi\n\"$target\" badflag \"$tmp\" >/tmp/mixtar-tool.out 2>/tmp/mixtar-tool.err; rc_bad=$?\nif [ \"$rc_bad\" != \"0\" ] && grep -qi 'invalid flag' /tmp/mixtar-tool.err; then printf -- '- PASS chflags invalid flag rejection\\n' >> \"$report\"; else printf -- '- FAIL chflags invalid flag rc=%s\\n' \"$rc_bad\" >> \"$report\"; failures=$((failures+1)); fi\n\"$target\" -z >/tmp/mixtar-tool.out 2>/tmp/mixtar-tool.err; rc_usage=$?\nif [ \"$rc_usage\" != \"0\" ] && grep -qi 'usage:' /tmp/mixtar-tool.err; then printf -- '- PASS chflags invalid option usage\\n' >> \"$report\"; else printf -- '- FAIL chflags invalid option rc=%s\\n' \"$rc_usage\" >> \"$report\"; failures=$((failures+1)); fi\nrm -f \"$tmp\"\nprintf -- '\\nNote: FreeBSD chflags source is compiled unchanged. Linux has no native BSD file flags, so Mixtar Bridge currently certifies parsing, traversal, errors, and zero/no-op application only.\\n' >> \"$report\"\nexit \"$failures\"\n"
+        dealloc(body8)
+        dealloc(target, report_path)
+        return body9
+    end
+    if tool == "pkgconf" then
+        body9 = body8 + "tmp=\"/tmp/mixtar-pkgconf-$$\"\nrm -rf \"$tmp\"\nmkdir -p \"$tmp\"\ncat > \"$tmp/mixtar.pc\" <<'PC'\nprefix=/opt/mixtar\nincludedir=${prefix}/include\nlibdir=${prefix}/lib\nName: mixtar\nDescription: Mixtar pkgconf smoke\nVersion: 1.0\nCflags: -I${includedir}/mixtar\nLibs: -L${libdir} -lmixtar\nPC\n\"$target\" --version >/tmp/mixtar-tool.out 2>/tmp/mixtar-tool.err; rc_version=$?\nif [ \"$rc_version\" = \"0\" ] && [ -s /tmp/mixtar-tool.out ]; then printf -- '- PASS pkgconf --version\\n' >> \"$report\"; else printf -- '- FAIL pkgconf --version rc=%s\\n' \"$rc_version\" >> \"$report\"; cat /tmp/mixtar-tool.err >> \"$report\"; failures=$((failures+1)); fi\nPKG_CONFIG_PATH=\"$tmp\" \"$target\" --exists mixtar >/tmp/mixtar-tool.out 2>/tmp/mixtar-tool.err; rc_exists=$?\nif [ \"$rc_exists\" = \"0\" ]; then printf -- '- PASS pkgconf --exists fixture\\n' >> \"$report\"; else printf -- '- FAIL pkgconf --exists rc=%s\\n' \"$rc_exists\" >> \"$report\"; cat /tmp/mixtar-tool.err >> \"$report\"; failures=$((failures+1)); fi\nPKG_CONFIG_PATH=\"$tmp\" \"$target\" --modversion mixtar >/tmp/mixtar-tool.out 2>/tmp/mixtar-tool.err; rc_mod=$?\nif [ \"$rc_mod\" = \"0\" ] && grep -qx '1.0' /tmp/mixtar-tool.out; then printf -- '- PASS pkgconf --modversion fixture\\n' >> \"$report\"; else printf -- '- FAIL pkgconf --modversion rc=%s\\n' \"$rc_mod\" >> \"$report\"; cat /tmp/mixtar-tool.err >> \"$report\"; failures=$((failures+1)); fi\nPKG_CONFIG_PATH=\"$tmp\" \"$target\" --libs mixtar >/tmp/mixtar-tool.out 2>/tmp/mixtar-tool.err; rc_libs=$?\nif [ \"$rc_libs\" = \"0\" ] && grep -q -- '-lmixtar' /tmp/mixtar-tool.out; then printf -- '- PASS pkgconf --libs fixture\\n' >> \"$report\"; else printf -- '- FAIL pkgconf --libs rc=%s\\n' \"$rc_libs\" >> \"$report\"; cat /tmp/mixtar-tool.err >> \"$report\"; failures=$((failures+1)); fi\nrm -rf \"$tmp\"\nprintf -- '\\nNote: OpenBSD pkgconf source set is compiled unchanged. Certification covers version reporting and parsing a local .pc fixture for --exists, --modversion, and --libs.\\n' >> \"$report\"\nexit \"$failures\"\n"
+        dealloc(body8)
+        dealloc(target, report_path)
+        return body9
+    end
+    if tool == "sh" then
+        body9 = body8 + "\"$target\" -c 'echo mixtar-sh' >/tmp/mixtar-tool.out 2>/tmp/mixtar-tool.err; rc_echo=$?\nif [ \"$rc_echo\" = \"0\" ] && grep -qx 'mixtar-sh' /tmp/mixtar-tool.out; then printf -- '- PASS sh -c echo\\n' >> \"$report\"; else printf -- '- FAIL sh echo rc=%s\\n' \"$rc_echo\" >> \"$report\"; cat /tmp/mixtar-tool.err >> \"$report\"; failures=$((failures+1)); fi\n\"$target\" -c 'x=mixtar; echo $x' >/tmp/mixtar-tool.out 2>/tmp/mixtar-tool.err; rc_var=$?\nif [ \"$rc_var\" = \"0\" ] && grep -qx 'mixtar' /tmp/mixtar-tool.out; then printf -- '- PASS sh variable assignment/expansion\\n' >> \"$report\"; else printf -- '- FAIL sh variable rc=%s\\n' \"$rc_var\" >> \"$report\"; cat /tmp/mixtar-tool.err >> \"$report\"; failures=$((failures+1)); fi\n\"$target\" -c 'exit 7' >/tmp/mixtar-tool.out 2>/tmp/mixtar-tool.err; rc_exit=$?\nif [ \"$rc_exit\" = \"7\" ]; then printf -- '- PASS sh propagates exit status\\n' >> \"$report\"; else printf -- '- FAIL sh exit rc=%s\\n' \"$rc_exit\" >> \"$report\"; failures=$((failures+1)); fi\nprintf -- '\\nNote: FreeBSD sh source is compiled unchanged with generated builtins/nodes/syntax/token files. Certification covers non-interactive command execution, variables, and exit status; history/editline is disabled and builtin printf is not certified in this first Mixtar userland port because FreeBSD usr.bin/printf is absent from the current mirror.\\n' >> \"$report\"\nexit \"$failures\"\n"
+        dealloc(body8)
+        dealloc(target, report_path)
+        return body9
+    end
+    if tool == "csh" then
+        body9 = body8 + "\"$target\" -f -c 'echo mixtar-csh' >/tmp/mixtar-tool.out 2>/tmp/mixtar-tool.err; rc_echo=$?\nif [ \"$rc_echo\" = \"0\" ] && grep -qx 'mixtar-csh' /tmp/mixtar-tool.out; then printf -- '- PASS csh -c echo\\n' >> \"$report\"; else printf -- '- FAIL csh echo rc=%s\\n' \"$rc_echo\" >> \"$report\"; cat /tmp/mixtar-tool.err >> \"$report\"; failures=$((failures+1)); fi\n\"$target\" -f -c 'set x = mixtar; echo $x' >/tmp/mixtar-tool.out 2>/tmp/mixtar-tool.err; rc_set=$?\nif [ \"$rc_set\" = \"0\" ] && grep -qx 'mixtar' /tmp/mixtar-tool.out; then printf -- '- PASS csh variable set/echo\\n' >> \"$report\"; else printf -- '- FAIL csh set rc=%s\\n' \"$rc_set\" >> \"$report\"; cat /tmp/mixtar-tool.err >> \"$report\"; failures=$((failures+1)); fi\n\"$target\" -f -c 'exit 7' >/tmp/mixtar-tool.out 2>/tmp/mixtar-tool.err; rc_exit=$?\nif [ \"$rc_exit\" = \"7\" ]; then printf -- '- PASS csh propagates exit status\\n' >> \"$report\"; else printf -- '- FAIL csh exit rc=%s\\n' \"$rc_exit\" >> \"$report\"; failures=$((failures+1)); fi\nprintf -- '\\nNote: OpenBSD csh source set is compiled unchanged with generated error.h/const.h. Certification covers non-interactive command execution, variables, and exit status, not full interactive job-control behavior.\\n' >> \"$report\"\nexit \"$failures\"\n"
+        dealloc(body8)
+        dealloc(target, report_path)
+        return body9
+    end
+    if tool == "pax" then
+        body9 = body8 + "tmp=\"/tmp/mixtar-pax-$$\"\nrm -rf \"$tmp\" /tmp/mixtar-pax-$$.tar\nmkdir -p \"$tmp/src\"\nprintf 'pax-data\\n' > \"$tmp/src/file\"\n(cd \"$tmp/src\" && \"$target\" -w -f /tmp/mixtar-pax-$$.tar file) >/tmp/mixtar-tool.out 2>/tmp/mixtar-tool.err; rc_write=$?\nif [ \"$rc_write\" = \"0\" ] && [ -s /tmp/mixtar-pax-$$.tar ]; then printf -- '- PASS pax writes archive\\n' >> \"$report\"; else printf -- '- FAIL pax write rc=%s\\n' \"$rc_write\" >> \"$report\"; cat /tmp/mixtar-tool.err >> \"$report\"; failures=$((failures+1)); fi\n\"$target\" -f /tmp/mixtar-pax-$$.tar >/tmp/mixtar-tool.out 2>/tmp/mixtar-tool.err; rc_list=$?\nif [ \"$rc_list\" = \"0\" ] && grep -qx 'file' /tmp/mixtar-tool.out; then printf -- '- PASS pax lists archive\\n' >> \"$report\"; else printf -- '- FAIL pax list rc=%s\\n' \"$rc_list\" >> \"$report\"; cat /tmp/mixtar-tool.err >> \"$report\"; failures=$((failures+1)); fi\n\"$target\" -z >/tmp/mixtar-tool.out 2>/tmp/mixtar-tool.err; rc_usage=$?\nif [ \"$rc_usage\" != \"0\" ]; then printf -- '- PASS pax invalid option exits nonzero\\n' >> \"$report\"; else printf -- '- FAIL pax invalid option rc=%s\\n' \"$rc_usage\" >> \"$report\"; failures=$((failures+1)); fi\nrm -rf \"$tmp\" /tmp/mixtar-pax-$$.tar\nprintf -- '\\nNote: FreeBSD pax source set is compiled unchanged. Certification covers basic archive write/list behavior, not every pax/tar/cpio format edge.\\n' >> \"$report\"\nexit \"$failures\"\n"
+        dealloc(body8)
+        dealloc(target, report_path)
+        return body9
+    end
+    if tool == "chio" then
+        body9 = body8 + "\"$target\" >/tmp/mixtar-tool.out 2>/tmp/mixtar-tool.err; rc_usage=$?\nif [ \"$rc_usage\" != \"0\" ] && grep -qi 'usage:' /tmp/mixtar-tool.err; then printf -- '- PASS chio no-argument usage\\n' >> \"$report\"; else printf -- '- FAIL chio usage rc=%s\\n' \"$rc_usage\" >> \"$report\"; failures=$((failures+1)); fi\ndev=\"/tmp/mixtar-chio-dev-$$\"\n: > \"$dev\"\n\"$target\" -f \"$dev\" notacommand >/tmp/mixtar-tool.out 2>/tmp/mixtar-tool.err; rc_unknown=$?\nif [ \"$rc_unknown\" != \"0\" ] && grep -qi 'unknown command' /tmp/mixtar-tool.err; then printf -- '- PASS chio unknown command parser\\n' >> \"$report\"; else printf -- '- FAIL chio unknown command rc=%s\\n' \"$rc_unknown\" >> \"$report\"; failures=$((failures+1)); fi\n\"$target\" -f \"$dev\" params >/tmp/mixtar-tool.out 2>/tmp/mixtar-tool.err; rc_ioctl=$?\nif [ \"$rc_ioctl\" != \"0\" ] && grep -qi 'CHIOGPARAMS' /tmp/mixtar-tool.err; then printf -- '- PASS chio reports unsupported changer ioctl on regular file\\n' >> \"$report\"; else printf -- '- FAIL chio params ioctl rc=%s\\n' \"$rc_ioctl\" >> \"$report\"; cat /tmp/mixtar-tool.err >> \"$report\"; failures=$((failures+1)); fi\nrm -f \"$dev\"\nprintf -- '\\nNote: FreeBSD chio source is compiled unchanged. Mixtar Bridge supplies Linux compile-time changer ioctl structs/constants; real changer hardware ioctl behavior is not emulated.\\n' >> \"$report\"\nexit \"$failures\"\n"
+        dealloc(body8)
+        dealloc(target, report_path)
+        return body9
+    end
+    if tool == "setfacl" then
+        body9 = body8 + "tmp=\"/tmp/mixtar-setfacl-$$\"\nrm -f \"$tmp\"\n: > \"$tmp\"\nchmod 600 \"$tmp\"\n\"$target\" -m u::rwx,g::r--,o::--- \"$tmp\" >/tmp/mixtar-tool.out 2>/tmp/mixtar-tool.err; rc_merge=$?\nmode=$(stat -c '%a' \"$tmp\" 2>/dev/null)\nif [ \"$rc_merge\" = \"0\" ] && [ \"$mode\" = \"740\" ]; then printf -- '- PASS setfacl maps base ACL entries to mode bits\\n' >> \"$report\"; else printf -- '- FAIL setfacl merge rc=%s mode=%s\\n' \"$rc_merge\" \"$mode\" >> \"$report\"; cat /tmp/mixtar-tool.err >> \"$report\"; failures=$((failures+1)); fi\n\"$target\" -b \"$tmp\" >/tmp/mixtar-tool.out 2>/tmp/mixtar-tool.err; rc_strip=$?\nif [ \"$rc_strip\" = \"0\" ]; then printf -- '- PASS setfacl -b strips extended ACL as no-op on Linux mode bridge\\n' >> \"$report\"; else printf -- '- FAIL setfacl -b rc=%s\\n' \"$rc_strip\" >> \"$report\"; cat /tmp/mixtar-tool.err >> \"$report\"; failures=$((failures+1)); fi\n\"$target\" >/tmp/mixtar-tool.out 2>/tmp/mixtar-tool.err; rc_usage=$?\nif [ \"$rc_usage\" != \"0\" ] && grep -qi 'usage:' /tmp/mixtar-tool.err; then printf -- '- PASS setfacl no-argument usage\\n' >> \"$report\"; else printf -- '- FAIL setfacl usage rc=%s\\n' \"$rc_usage\" >> \"$report\"; failures=$((failures+1)); fi\nrm -f \"$tmp\"\nprintf -- '\\nNote: FreeBSD setfacl sources are compiled unchanged. Mixtar Bridge maps base POSIX ACL entries to Linux chmod mode bits; extended, NFSv4, default, recursive, and named-user/group ACL mutation remain limited.\\n' >> \"$report\"\nexit \"$failures\"\n"
+        dealloc(body8)
+        dealloc(target, report_path)
+        return body9
+    end
+    if tool == "getfacl" then
+        body9 = body8 + "tmp=\"/tmp/mixtar-getfacl-$$\"\nrm -f \"$tmp\"\n: > \"$tmp\"\nchmod 640 \"$tmp\"\n\"$target\" \"$tmp\" >/tmp/mixtar-tool.out 2>/tmp/mixtar-tool.err; rc_basic=$?\nif [ \"$rc_basic\" = \"0\" ] && grep -qx \"# file: $tmp\" /tmp/mixtar-tool.out && grep -qx 'user::rw-' /tmp/mixtar-tool.out && grep -qx 'group::r--' /tmp/mixtar-tool.out && grep -qx 'other::---' /tmp/mixtar-tool.out; then printf -- '- PASS getfacl prints trivial ACL from mode bits\\n' >> \"$report\"; else printf -- '- FAIL getfacl basic rc=%s\\n' \"$rc_basic\" >> \"$report\"; cat /tmp/mixtar-tool.err >> \"$report\"; failures=$((failures+1)); fi\n\"$target\" -q \"$tmp\" >/tmp/mixtar-tool.out 2>/tmp/mixtar-tool.err; rc_quiet=$?\nif [ \"$rc_quiet\" = \"0\" ] && ! grep -q '^# file:' /tmp/mixtar-tool.out && grep -qx 'user::rw-' /tmp/mixtar-tool.out; then printf -- '- PASS getfacl -q omits header\\n' >> \"$report\"; else printf -- '- FAIL getfacl -q rc=%s\\n' \"$rc_quiet\" >> \"$report\"; failures=$((failures+1)); fi\n\"$target\" -z >/tmp/mixtar-tool.out 2>/tmp/mixtar-tool.err; rc_usage=$?\nif [ \"$rc_usage\" != \"0\" ] && grep -qi 'getfacl' /tmp/mixtar-tool.err; then printf -- '- PASS getfacl invalid option usage\\n' >> \"$report\"; else printf -- '- FAIL getfacl invalid option rc=%s\\n' \"$rc_usage\" >> \"$report\"; failures=$((failures+1)); fi\nrm -f \"$tmp\"\nprintf -- '\\nNote: FreeBSD getfacl source is compiled unchanged. Mixtar Bridge synthesizes trivial POSIX ACL text from Linux mode bits when extended ACLs are unavailable.\\n' >> \"$report\"\nexit \"$failures\"\n"
+        dealloc(body8)
+        dealloc(target, report_path)
+        return body9
+    end
+    if tool == "kenv" then
+        body9 = body8 + "\"$target\" >/tmp/mixtar-tool.out 2>/tmp/mixtar-tool.err; rc_dump=$?\nif [ \"$rc_dump\" = \"0\" ] && grep -q '^mixtar.system=\"MixtarRVS\"$' /tmp/mixtar-tool.out; then printf -- '- PASS kenv dumps Mixtar kernel environment\\n' >> \"$report\"; else printf -- '- FAIL kenv dump rc=%s\\n' \"$rc_dump\" >> \"$report\"; cat /tmp/mixtar-tool.err >> \"$report\"; failures=$((failures+1)); fi\n\"$target\" -N >/tmp/mixtar-tool.out 2>/tmp/mixtar-tool.err; rc_names=$?\nif [ \"$rc_names\" = \"0\" ] && grep -qx 'mixtar.system' /tmp/mixtar-tool.out; then printf -- '- PASS kenv -N names\\n' >> \"$report\"; else printf -- '- FAIL kenv -N rc=%s\\n' \"$rc_names\" >> \"$report\"; failures=$((failures+1)); fi\n\"$target\" mixtar.kernel >/tmp/mixtar-tool.out 2>/tmp/mixtar-tool.err; rc_get=$?\nif [ \"$rc_get\" = \"0\" ] && grep -qx 'linux' /tmp/mixtar-tool.out; then printf -- '- PASS kenv gets named value\\n' >> \"$report\"; else printf -- '- FAIL kenv get rc=%s\\n' \"$rc_get\" >> \"$report\"; cat /tmp/mixtar-tool.err >> \"$report\"; failures=$((failures+1)); fi\n\"$target\" mixtar.kernel=other >/tmp/mixtar-tool.out 2>/tmp/mixtar-tool.err; rc_set=$?\nif [ \"$rc_set\" != \"0\" ] && grep -qi 'unable to set' /tmp/mixtar-tool.err; then printf -- '- PASS kenv refuses mutation\\n' >> \"$report\"; else printf -- '- FAIL kenv set rc=%s\\n' \"$rc_set\" >> \"$report\"; failures=$((failures+1)); fi\nprintf -- '\\nNote: FreeBSD kenv source is compiled unchanged. Mixtar Bridge exposes a small read-only Linux kernel-environment view and refuses set/unset with ENOTSUP.\\n' >> \"$report\"\nexit \"$failures\"\n"
+        dealloc(body8)
+        dealloc(target, report_path)
+        return body9
+    end
+    if tool == "cpuset" then
+        body9 = body8 + "\"$target\" -g -p $$ >/tmp/mixtar-tool.out 2>/tmp/mixtar-tool.err; rc_get=$?\nif [ \"$rc_get\" = \"0\" ] && grep -q \"pid .* mask:\" /tmp/mixtar-tool.out; then printf -- '- PASS cpuset reads process affinity\\n' >> \"$report\"; else printf -- '- FAIL cpuset affinity rc=%s\\n' \"$rc_get\" >> \"$report\"; cat /tmp/mixtar-tool.err >> \"$report\"; failures=$((failures+1)); fi\n\"$target\" /usr/bin/true >/tmp/mixtar-tool.out 2>/tmp/mixtar-tool.err; rc_exec=$?\nif [ \"$rc_exec\" = \"0\" ]; then printf -- '- PASS cpuset executes command under new set shim\\n' >> \"$report\"; else printf -- '- FAIL cpuset command exec rc=%s\\n' \"$rc_exec\" >> \"$report\"; cat /tmp/mixtar-tool.err >> \"$report\"; failures=$((failures+1)); fi\n\"$target\" -z >/tmp/mixtar-tool.out 2>/tmp/mixtar-tool.err; rc_usage=$?\nif [ \"$rc_usage\" != \"0\" ] && grep -qi 'usage:' /tmp/mixtar-tool.err; then printf -- '- PASS cpuset invalid option usage\\n' >> \"$report\"; else printf -- '- FAIL cpuset invalid option rc=%s\\n' \"$rc_usage\" >> \"$report\"; failures=$((failures+1)); fi\nprintf -- '\\nNote: FreeBSD cpuset source is compiled unchanged. Mixtar Bridge maps process affinity to Linux sched affinity; FreeBSD cpuset IDs, jails, IRQs, and NUMA domain mutation are limited or ENOTSUP on Linux.\\n' >> \"$report\"\nexit \"$failures\"\n"
+        dealloc(body8)
+        dealloc(target, report_path)
+        return body9
+    end
+    if tool == "pwait" then
+        body9 = body8 + "\"$target\" 999999999 >/tmp/mixtar-tool.out 2>/tmp/mixtar-tool.err; rc_bad=$?\nif grep -qi 'bad process id' /tmp/mixtar-tool.err; then printf -- '- PASS pwait reports out-of-range pid\\n' >> \"$report\"; else printf -- '- FAIL pwait bad pid rc=%s\\n' \"$rc_bad\" >> \"$report\"; cat /tmp/mixtar-tool.err >> \"$report\"; failures=$((failures+1)); fi\n/bin/sleep 0.1 & child=$!\n\"$target\" \"$child\" >/tmp/mixtar-tool.out 2>/tmp/mixtar-tool.err; rc_wait=$?\nif [ \"$rc_wait\" = \"0\" ]; then printf -- '- PASS pwait waits for process exit\\n' >> \"$report\"; else printf -- '- FAIL pwait wait rc=%s\\n' \"$rc_wait\" >> \"$report\"; cat /tmp/mixtar-tool.err >> \"$report\"; failures=$((failures+1)); fi\n/bin/sleep 0.1 & done_child=$!\n/bin/sleep 2 & live_child=$!\n\"$target\" -o -p \"$done_child\" \"$live_child\" >/tmp/mixtar-tool.out 2>/tmp/mixtar-tool.err; rc_p=$?\nkill \"$live_child\" 2>/dev/null\nwait \"$done_child\" 2>/dev/null\nwait \"$live_child\" 2>/dev/null\nif [ \"$rc_p\" = \"0\" ] && grep -q \"^$live_child$\" /tmp/mixtar-tool.out; then printf -- '- PASS pwait -o -p prints remaining pid\\n' >> \"$report\"; else printf -- '- FAIL pwait -o -p rc=%s\\n' \"$rc_p\" >> \"$report\"; cat /tmp/mixtar-tool.err >> \"$report\"; failures=$((failures+1)); fi\nprintf -- '\\nNote: FreeBSD pwait source is compiled unchanged. Mixtar Bridge maps EVFILT_PROC kqueue waits to Linux process-existence polling for process-exit waits; signal timeout kqueue semantics remain future work.\\n' >> \"$report\"\nexit \"$failures\"\n"
+        dealloc(body8)
+        dealloc(target, report_path)
+        return body9
+    end
+    if tool == "yacc" then
+        body9 = body8 + "tmp=\"/tmp/mixtar-yacc-$$\"\nrm -rf \"$tmp\"\nmkdir -p \"$tmp\"\ncat > \"$tmp/grammar.y\" <<'YACC'\n%token NUM\n%%\ninput:\n    /* empty */\n  | input NUM\n  ;\n%%\nYACC\n(cd \"$tmp\" && \"$target\" grammar.y >/tmp/mixtar-tool.out 2>/tmp/mixtar-tool.err); rc_gen=$?\nif [ \"$rc_gen\" = \"0\" ] && [ -s \"$tmp/y.tab.c\" ]; then printf -- '- PASS yacc generates y.tab.c from minimal grammar\\n' >> \"$report\"; else printf -- '- FAIL yacc generation rc=%s\\n' \"$rc_gen\" >> \"$report\"; cat /tmp/mixtar-tool.err >> \"$report\"; failures=$((failures+1)); fi\n\"$target\" -Z >/tmp/mixtar-tool.out 2>/tmp/mixtar-tool.err; rc_usage=$?\nif [ \"$rc_usage\" != \"0\" ]; then printf -- '- PASS yacc invalid option exits nonzero\\n' >> \"$report\"; else printf -- '- FAIL yacc invalid option rc=%s\\n' \"$rc_usage\" >> \"$report\"; failures=$((failures+1)); fi\nrm -rf \"$tmp\"\nprintf -- '\\nNote: OpenBSD yacc source set is compiled unchanged. Certification covers parser generation for a minimal grammar, not the full yacc grammar/error matrix.\\n' >> \"$report\"\nexit \"$failures\"\n"
+        dealloc(body8)
+        dealloc(target, report_path)
+        return body9
+    end
+    if tool == "lex" then
+        body9 = body8 + "tmp=\"/tmp/mixtar-lex-$$\"\nrm -rf \"$tmp\"\nmkdir -p \"$tmp\"\ncat > \"$tmp/scanner.l\" <<'LEX'\n%option noyywrap\n%%\nmixtar          ECHO;\n[[:space:]]+    ;\n.               ;\n%%\nLEX\nPATH=\"/System/Tools/MixtarRVS/bin:$PATH\" \"$target\" -o \"$tmp/lex.yy.c\" \"$tmp/scanner.l\" >/tmp/mixtar-tool.out 2>/tmp/mixtar-tool.err; rc_gen=$?\nif [ \"$rc_gen\" = \"0\" ] && [ -s \"$tmp/lex.yy.c\" ] && grep -q 'yylex' \"$tmp/lex.yy.c\"; then printf -- '- PASS lex generates scanner C from minimal rules\\n' >> \"$report\"; else printf -- '- FAIL lex scanner generation rc=%s\\n' \"$rc_gen\" >> \"$report\"; cat /tmp/mixtar-tool.err >> \"$report\"; failures=$((failures+1)); fi\n\"$target\" --version >/tmp/mixtar-tool.out 2>/tmp/mixtar-tool.err; rc_version=$?\nif [ \"$rc_version\" = \"0\" ] && grep -Eqi '^(lex|flex)[[:space:]]+[0-9]' /tmp/mixtar-tool.out; then printf -- '- PASS lex --version\\n' >> \"$report\"; else printf -- '- FAIL lex --version rc=%s\\n' \"$rc_version\" >> \"$report\"; failures=$((failures+1)); fi\nrm -rf \"$tmp\"\nprintf -- '\\nNote: OpenBSD lex/flex source set is compiled unchanged. Generated build files parse.c, scan.c, skel.c, and config.h live under System/Userland/Generated/build/lex; M4 is resolved through PATH instead of hard-coding /usr/bin/m4.\\n' >> \"$report\"\nexit \"$failures\"\n"
+        dealloc(body8)
+        dealloc(target, report_path)
+        return body9
+    end
+    if tool == "watch" then
+        body9 = body8 + "\"$target\" >/tmp/mixtar-tool.out 2>/tmp/mixtar-tool.err; rc_usage=$?\nif [ \"$rc_usage\" != \"0\" ] && grep -qi 'usage:' /tmp/mixtar-tool.err; then printf -- '- PASS watch no-argument usage\\n' >> \"$report\"; else printf -- '- FAIL watch usage rc=%s\\n' \"$rc_usage\" >> \"$report\"; failures=$((failures+1)); fi\n\"$target\" -s bad /bin/true >/tmp/mixtar-tool.out 2>/tmp/mixtar-tool.err; rc_interval=$?\nif [ \"$rc_interval\" != \"0\" ] && grep -qi 'bad interval' /tmp/mixtar-tool.err; then printf -- '- PASS watch rejects invalid interval\\n' >> \"$report\"; else printf -- '- FAIL watch invalid interval rc=%s\\n' \"$rc_interval\" >> \"$report\"; cat /tmp/mixtar-tool.err >> \"$report\"; failures=$((failures+1)); fi\nprintf -- '\\nNote: OpenBSD watch source is compiled unchanged against curses/libevent. Certification covers safe argument/diagnostic paths only; interactive terminal refresh, child process display, and rusage rendering require pty-based fixtures.\\n' >> \"$report\"\nexit \"$failures\"\n"
+        dealloc(body8)
+        dealloc(target, report_path)
+        return body9
+    end
+    if tool == "less" then
+        body9 = body8 + "tmp=\"/tmp/mixtar-less-$$\"\nrm -f \"$tmp\"\nprintf '%s\\n' alpha beta > \"$tmp\"\n\"$target\" --version >/tmp/mixtar-tool.out 2>/tmp/mixtar-tool.err; rc_version=$?\nif [ \"$rc_version\" = \"0\" ] && grep -q 'less (OpenBSD)' /tmp/mixtar-tool.out; then printf -- '- PASS less --version reports OpenBSD identity\\n' >> \"$report\"; else printf -- '- FAIL less --version rc=%s\\n' \"$rc_version\" >> \"$report\"; cat /tmp/mixtar-tool.err >> \"$report\"; failures=$((failures+1)); fi\nTERM=xterm \"$target\" -F -X \"$tmp\" >/tmp/mixtar-tool.out 2>/tmp/mixtar-tool.err; rc_page=$?\nif [ \"$rc_page\" = \"0\" ] && grep -qx 'alpha' /tmp/mixtar-tool.out && grep -qx 'beta' /tmp/mixtar-tool.out; then printf -- '- PASS less -F -X prints a short file non-interactively\\n' >> \"$report\"; else printf -- '- FAIL less short file rc=%s\\n' \"$rc_page\" >> \"$report\"; cat /tmp/mixtar-tool.err >> \"$report\"; failures=$((failures+1)); fi\nrm -f \"$tmp\"\nprintf -- '\\nNote: OpenBSD less source set is compiled unchanged. Certification covers version reporting and non-interactive short-file display; interactive terminal navigation, lesskey, and help-file installation are deferred.\\n' >> \"$report\"\nexit \"$failures\"\n"
+        dealloc(body8)
+        dealloc(target, report_path)
+        return body9
+    end
+    if tool == "vi" then
+        body9 = body8 + "tmp=\"/tmp/mixtar-vi-$$\"\nmkdir -p /tmp/vi.recover\nrm -f \"$tmp\"\nprintf 'a\\nalpha\\nbeta\\n.\\nwq\\n' | TERM=xterm \"$target\" -e \"$tmp\" >/tmp/mixtar-tool.out 2>/tmp/mixtar-tool.err; rc_edit=$?\nprintf 'alpha\\nbeta\\n' >/tmp/native-tool.out\nif [ \"$rc_edit\" = \"0\" ] && cmp -s \"$tmp\" /tmp/native-tool.out; then printf -- '- PASS vi ex-mode writes file non-interactively\\n' >> \"$report\"; else printf -- '- FAIL vi ex-mode write rc=%s\\n' \"$rc_edit\" >> \"$report\"; cat /tmp/mixtar-tool.err >> \"$report\"; cat /tmp/mixtar-tool.out >> \"$report\"; failures=$((failures+1)); fi\n\"$target\" -z >/tmp/mixtar-tool.out 2>/tmp/mixtar-tool.err; rc_usage=$?\nif [ \"$rc_usage\" != \"0\" ]; then printf -- '- PASS vi invalid option exits nonzero\\n' >> \"$report\"; else printf -- '- FAIL vi invalid option rc=%s\\n' \"$rc_usage\" >> \"$report\"; failures=$((failures+1)); fi\nrm -f \"$tmp\"\nprintf -- '\\nNote: OpenBSD nvi source set is compiled unchanged. Certification covers scripted ex-mode editing and invalid-option failure; full-screen terminal behavior, recovery daemon behavior, and ex/view link behavior are deferred.\\n' >> \"$report\"\nexit \"$failures\"\n"
+        dealloc(body8)
+        dealloc(target, report_path)
+        return body9
+    end
+    if tool == "vipw" then
+        body9 = body8 + "rm -f /tmp/mixtar-vipw-master.passwd /tmp/mixtar-vipw-master.passwd.lock\n\"$target\" -z >/tmp/mixtar-tool.out 2>/tmp/mixtar-tool.err; rc_usage=$?\nif [ \"$rc_usage\" != \"0\" ] && grep -qi 'usage:' /tmp/mixtar-tool.err; then printf -- '- PASS vipw invalid option usage\\n' >> \"$report\"; else printf -- '- FAIL vipw invalid option rc=%s\\n' \"$rc_usage\" >> \"$report\"; failures=$((failures+1)); fi\n: > /tmp/mixtar-vipw-master.passwd\n\"$target\" >/tmp/mixtar-tool.out 2>/tmp/mixtar-tool.err; rc_noop=$?\nif [ \"$rc_noop\" = \"0\" ] && grep -qi 'no changes made' /tmp/mixtar-tool.err; then printf -- '- PASS vipw no-op sandbox edit exits cleanly\\n' >> \"$report\"; else printf -- '- FAIL vipw no-op rc=%s\\n' \"$rc_noop\" >> \"$report\"; cat /tmp/mixtar-tool.err >> \"$report\"; failures=$((failures+1)); fi\nrm -f /tmp/mixtar-vipw-master.passwd /tmp/mixtar-vipw-master.passwd.lock\nprintf -- '\\nNote: OpenBSD vipw source is compiled unchanged. Mixtar Bridge maps passwd editing to a /tmp sandbox for smoke certification and does not edit real system account databases.\\n' >> \"$report\"\nexit \"$failures\"\n"
+        dealloc(body8)
+        dealloc(target, report_path)
+        return body9
+    end
+    if tool == "umount" then
+        body9 = body8 + "\"$target\" >/tmp/mixtar-tool.out 2>/tmp/mixtar-tool.err; rc_usage=$?\nif [ \"$rc_usage\" != \"0\" ] && grep -qi 'usage:' /tmp/mixtar-tool.err; then printf -- '- PASS umount no-argument usage\\n' >> \"$report\"; else printf -- '- FAIL umount usage rc=%s\\n' \"$rc_usage\" >> \"$report\"; failures=$((failures+1)); fi\n\"$target\" /tmp/mixtar-not-mounted-$$ >/tmp/mixtar-tool.out 2>/tmp/mixtar-tool.err; rc_missing=$?\nif [ \"$rc_missing\" != \"0\" ] && grep -qi 'not currently mounted' /tmp/mixtar-tool.err; then printf -- '- PASS umount reports non-mounted path\\n' >> \"$report\"; else printf -- '- FAIL umount non-mounted rc=%s\\n' \"$rc_missing\" >> \"$report\"; cat /tmp/mixtar-tool.err >> \"$report\"; failures=$((failures+1)); fi\nprintf -- '\\nNote: OpenBSD umount source is compiled unchanged. Mixtar Bridge disables NFS RPC and maps real unmount attempts to safe Linux EPERM for smoke certification.\\n' >> \"$report\"\nexit \"$failures\"\n"
+        dealloc(body8)
+        dealloc(target, report_path)
+        return body9
+    end
+    if tool == "mount" then
+        body9 = body8 + "\"$target\" >/tmp/mixtar-tool.out 2>/tmp/mixtar-tool.err; rc_list=$?\nif [ \"$rc_list\" = \"0\" ] && grep -q ' on / type linux' /tmp/mixtar-tool.out; then printf -- '- PASS mount lists Bridge root mount\\n' >> \"$report\"; else printf -- '- FAIL mount list rc=%s\\n' \"$rc_list\" >> \"$report\"; cat /tmp/mixtar-tool.err >> \"$report\"; failures=$((failures+1)); fi\n\"$target\" -z >/tmp/mixtar-tool.out 2>/tmp/mixtar-tool.err; rc_usage=$?\nif [ \"$rc_usage\" != \"0\" ] && grep -qi 'usage:' /tmp/mixtar-tool.err; then printf -- '- PASS mount invalid option usage\\n' >> \"$report\"; else printf -- '- FAIL mount invalid option rc=%s\\n' \"$rc_usage\" >> \"$report\"; failures=$((failures+1)); fi\nprintf -- '\\nNote: OpenBSD mount source is compiled unchanged. Certification covers read-only mount table display and usage diagnostics; real mount execution is deferred to helpers and is not exercised.\\n' >> \"$report\"\nexit \"$failures\"\n"
+        dealloc(body8)
+        dealloc(target, report_path)
+        return body9
+    end
+    if tool == "fsck" then
+        body9 = body8 + "\"$target\" >/tmp/mixtar-tool.out 2>/tmp/mixtar-tool.err; rc_empty=$?\nif [ \"$rc_empty\" = \"0\" ]; then printf -- '- PASS fsck no-argument empty fstab exits cleanly\\n' >> \"$report\"; else printf -- '- FAIL fsck no-argument rc=%s\\n' \"$rc_empty\" >> \"$report\"; cat /tmp/mixtar-tool.err >> \"$report\"; failures=$((failures+1)); fi\n\"$target\" -z >/tmp/mixtar-tool.out 2>/tmp/mixtar-tool.err; rc_usage=$?\nif [ \"$rc_usage\" != \"0\" ] && grep -qi 'usage:' /tmp/mixtar-tool.err; then printf -- '- PASS fsck invalid option usage\\n' >> \"$report\"; else printf -- '- FAIL fsck invalid option rc=%s\\n' \"$rc_usage\" >> \"$report\"; failures=$((failures+1)); fi\n\"$target\" -t ffs /tmp/mixtar-fsck-no-device >/tmp/mixtar-tool.out 2>/tmp/mixtar-tool.err; rc_missing=$?\nif [ \"$rc_missing\" != \"0\" ]; then printf -- '- PASS fsck missing device exits nonzero without helper success\\n' >> \"$report\"; else printf -- '- FAIL fsck missing device rc=%s\\n' \"$rc_missing\" >> \"$report\"; failures=$((failures+1)); fi\nprintf -- '\\nNote: OpenBSD fsck source set is compiled unchanged. Certification covers parser, empty-fstab traversal, and safe missing-device diagnostics; real filesystem checking and fsck_* helper execution on disks are not exercised.\\n' >> \"$report\"\nexit \"$failures\"\n"
+        dealloc(body8)
+        dealloc(target, report_path)
+        return body9
+    end
+    if tool == "init" then
+        body9 = body8 + "\"$target\" >/tmp/mixtar-tool.out 2>/tmp/mixtar-tool.err; rc_init=$?\nif [ \"$rc_init\" != \"0\" ] && (grep -qi 'Operation not permitted' /tmp/mixtar-tool.err || grep -qi 'already running' /tmp/mixtar-tool.err); then printf -- '- PASS init refuses non-PID1 or non-root smoke execution\\n' >> \"$report\"; else printf -- '- FAIL init safety guard rc=%s\\n' \"$rc_init\" >> \"$report\"; cat /tmp/mixtar-tool.err >> \"$report\"; failures=$((failures+1)); fi\nprintf -- '\\nNote: OpenBSD init source is compiled unchanged. Certification intentionally runs it only as a normal process and requires the upstream non-root/non-PID1 guard; MixtarRVS does not install or execute this binary as the system PID1 in this target.\\n' >> \"$report\"\nexit \"$failures\"\n"
+        dealloc(body8)
+        dealloc(target, report_path)
+        return body9
+    end
+    if tool == "sysctl" then
+        body9 = body8 + "\"$target\" kern.ostype >/tmp/mixtar-tool.out 2>/tmp/mixtar-tool.err; rc_ostype=$?\nif [ \"$rc_ostype\" = \"0\" ] && grep -q '^kern.ostype=' /tmp/mixtar-tool.out; then printf -- '- PASS sysctl kern.ostype read-only query\\n' >> \"$report\"; else printf -- '- FAIL sysctl kern.ostype rc=%s\\n' \"$rc_ostype\" >> \"$report\"; cat /tmp/mixtar-tool.err >> \"$report\"; failures=$((failures+1)); fi\n\"$target\" -z >/tmp/mixtar-tool.out 2>/tmp/mixtar-tool.err; rc_usage=$?\nif [ \"$rc_usage\" != \"0\" ] && grep -qi 'usage:' /tmp/mixtar-tool.err; then printf -- '- PASS sysctl invalid option usage\\n' >> \"$report\"; else printf -- '- FAIL sysctl invalid option rc=%s\\n' \"$rc_usage\" >> \"$report\"; failures=$((failures+1)); fi\nprintf -- '\\nNote: OpenBSD sysctl source is compiled unchanged. Certification covers read-only Bridge sysctl lookup and usage diagnostics only; kernel mutation and full OpenBSD MIB parity are deferred.\\n' >> \"$report\"\nexit \"$failures\"\n"
+        dealloc(body8)
+        dealloc(target, report_path)
+        return body9
+    end
+    if tool == "swapon" then
+        body9 = body8 + "\"$target\" >/tmp/mixtar-tool.out 2>/tmp/mixtar-tool.err; rc_usage=$?\nif [ \"$rc_usage\" != \"0\" ] && grep -qi 'usage:' /tmp/mixtar-tool.err; then printf -- '- PASS swapon no-argument usage\\n' >> \"$report\"; else printf -- '- FAIL swapon usage rc=%s\\n' \"$rc_usage\" >> \"$report\"; failures=$((failures+1)); fi\n\"$target\" /tmp/mixtar-no-swap-device >/tmp/mixtar-tool.out 2>/tmp/mixtar-tool.err; rc_on=$?\nif [ \"$rc_on\" != \"0\" ] && grep -q '/tmp/mixtar-no-swap-device' /tmp/mixtar-tool.err; then printf -- '- PASS swapon refuses real swap activation path safely\\n' >> \"$report\"; else printf -- '- FAIL swapon activation guard rc=%s\\n' \"$rc_on\" >> \"$report\"; cat /tmp/mixtar-tool.err >> \"$report\"; failures=$((failures+1)); fi\nprintf -- '\\nNote: OpenBSD swapctl source is compiled unchanged and installed as swapon mode. Mixtar Bridge maps swapctl mutation to EPERM and exposes zero configured swap devices for smoke certification.\\n' >> \"$report\"\nexit \"$failures\"\n"
+        dealloc(body8)
+        dealloc(target, report_path)
+        return body9
+    end
+    if tool == "ping" then
+        body9 = body8 + "\"$target\" >/tmp/mixtar-tool.out 2>/tmp/mixtar-tool.err; rc_socket=$?\nif [ \"$rc_socket\" != \"0\" ] && grep -qi 'socket: Operation not permitted' /tmp/mixtar-tool.err; then printf -- '- PASS ping raw socket guard without capabilities\\n' >> \"$report\"; else printf -- '- FAIL ping raw socket guard rc=%s\\n' \"$rc_socket\" >> \"$report\"; cat /tmp/mixtar-tool.err >> \"$report\"; failures=$((failures+1)); fi\n\"$target\" -z >/tmp/mixtar-tool.out 2>/tmp/mixtar-tool.err; rc_invalid=$?\nif [ \"$rc_invalid\" != \"0\" ] && grep -qi 'socket: Operation not permitted' /tmp/mixtar-tool.err; then printf -- '- PASS ping invalid invocation still blocked before raw socket use\\n' >> \"$report\"; else printf -- '- FAIL ping invalid/socket guard rc=%s\\n' \"$rc_invalid\" >> \"$report\"; cat /tmp/mixtar-tool.err >> \"$report\"; failures=$((failures+1)); fi\nprintf -- '\\nNote: OpenBSD ping source is compiled unchanged. Certification covers compile/link and the no-capability raw-socket guard only; parser usage, setuid/capability policy, packet send/receive, and ping6 hardlink mode are deferred.\\n' >> \"$report\"\nexit \"$failures\"\n"
+        dealloc(body8)
+        dealloc(target, report_path)
+        return body9
+    end
+    if tool == "top" then
+        body9 = body8 + "\"$target\" -z >/tmp/mixtar-tool.out 2>/tmp/mixtar-tool.err; rc_usage=$?\nif [ \"$rc_usage\" != \"0\" ] && grep -qi 'usage:' /tmp/mixtar-tool.err; then printf -- '- PASS top invalid option usage\\n' >> \"$report\"; else printf -- '- FAIL top invalid option rc=%s\\n' \"$rc_usage\" >> \"$report\"; failures=$((failures+1)); fi\n\"$target\" -d nope >/tmp/mixtar-tool.out 2>/tmp/mixtar-tool.err; rc_badcount=$?\nif [ \"$rc_badcount\" != \"0\" ]; then printf -- '- PASS top invalid display count exits nonzero\\n' >> \"$report\"; else printf -- '- FAIL top invalid display count rc=%s\\n' \"$rc_badcount\" >> \"$report\"; failures=$((failures+1)); fi\nprintf -- '\\nNote: OpenBSD top source set is compiled unchanged. Certification is usage/parser-only while the Linux /proc/kvm runtime view is expanded; non-interactive and interactive curses displays are deferred.\\n' >> \"$report\"\nexit \"$failures\"\n"
+        dealloc(body8)
+        dealloc(target, report_path)
+        return body9
+    end
+    if tool == "fdisk" then
+        body9 = body8 + "\"$target\" >/tmp/mixtar-tool.out 2>/tmp/mixtar-tool.err; rc_usage=$?\nif [ \"$rc_usage\" != \"0\" ] && grep -qi 'usage:' /tmp/mixtar-tool.err; then printf -- '- PASS fdisk no-argument usage\\n' >> \"$report\"; else printf -- '- FAIL fdisk usage rc=%s\\n' \"$rc_usage\" >> \"$report\"; cat /tmp/mixtar-tool.err >> \"$report\"; failures=$((failures+1)); fi\n\"$target\" -f /dev/zero /tmp/mixtar-no-such-disk >/tmp/mixtar-tool.out 2>/tmp/mixtar-tool.err; rc_open=$?\nif [ \"$rc_open\" != \"0\" ] && grep -q 'mixtar-no-such-disk' /tmp/mixtar-tool.err; then printf -- '- PASS fdisk refuses nonexistent disk path safely\\n' >> \"$report\"; else printf -- '- FAIL fdisk nonexistent disk rc=%s\\n' \"$rc_open\" >> \"$report\"; cat /tmp/mixtar-tool.err >> \"$report\"; failures=$((failures+1)); fi\nprintf -- '\\nNote: OpenBSD fdisk source set is compiled unchanged. Certification covers parser and safe open-failure paths only; real disk read/write paths require future Mixtar device/passthrough policy.\\n' >> \"$report\"\nexit \"$failures\"\n"
+        dealloc(body8)
+        dealloc(target, report_path)
+        return body9
+    end
+    if tool == "cron" then
+        body9 = body8 + "\"$target\" -z >/tmp/mixtar-tool.out 2>/tmp/mixtar-tool.err; rc_usage=$?\nif [ \"$rc_usage\" != \"0\" ] && grep -qi 'usage:' /tmp/mixtar-tool.err; then printf -- '- PASS cron invalid option usage\\n' >> \"$report\"; else printf -- '- FAIL cron usage rc=%s\\n' \"$rc_usage\" >> \"$report\"; cat /tmp/mixtar-tool.err >> \"$report\"; failures=$((failures+1)); fi\nprintf -- '\\nNote: OpenBSD cron source set is compiled unchanged. Certification is parser/usage-only and does not start the daemon loop, open the cron socket, or run scheduled jobs.\\n' >> \"$report\"\nexit \"$failures\"\n"
+        dealloc(body8)
+        dealloc(target, report_path)
+        return body9
+    end
+    if tool == "su" then
+        body9 = body8 + "\"$target\" -z >/tmp/mixtar-tool.out 2>/tmp/mixtar-tool.err; rc_usage=$?\nif [ \"$rc_usage\" != \"0\" ] && grep -qi 'usage:' /tmp/mixtar-tool.err; then printf -- '- PASS su invalid option usage\\n' >> \"$report\"; else printf -- '- FAIL su usage rc=%s\\n' \"$rc_usage\" >> \"$report\"; cat /tmp/mixtar-tool.err >> \"$report\"; failures=$((failures+1)); fi\nprintf -- '\\nNote: OpenBSD su source is compiled unchanged. Certification is usage-only and does not authenticate, switch users, or execute a shell.\\n' >> \"$report\"\nexit \"$failures\"\n"
+        dealloc(body8)
+        dealloc(target, report_path)
+        return body9
+    end
+    if tool == "passwd" then
+        body9 = body8 + "\"$target\" -z >/tmp/mixtar-tool.out 2>/tmp/mixtar-tool.err; rc_usage=$?\nif [ \"$rc_usage\" != \"0\" ] && grep -qi 'usage:' /tmp/mixtar-tool.err; then printf -- '- PASS passwd invalid option usage\\n' >> \"$report\"; else printf -- '- FAIL passwd usage rc=%s\\n' \"$rc_usage\" >> \"$report\"; cat /tmp/mixtar-tool.err >> \"$report\"; failures=$((failures+1)); fi\nprintf -- '\\nNote: OpenBSD passwd source set is compiled unchanged. Certification is usage-only and does not read or write password databases.\\n' >> \"$report\"\nexit \"$failures\"\n"
+        dealloc(body8)
+        dealloc(target, report_path)
+        return body9
+    end
+    if tool == "login" then
+        body9 = body8 + "\"$target\" -z >/tmp/mixtar-tool.out 2>/tmp/mixtar-tool.err; rc_usage=$?\nif [ \"$rc_usage\" != \"0\" ] && grep -qi 'usage:' /tmp/mixtar-tool.err; then printf -- '- PASS login invalid option usage\\n' >> \"$report\"; else printf -- '- FAIL login usage rc=%s\\n' \"$rc_usage\" >> \"$report\"; cat /tmp/mixtar-tool.err >> \"$report\"; failures=$((failures+1)); fi\nprintf -- '\\nNote: OpenBSD login source set is compiled unchanged. Certification is usage-only and does not authenticate, write utmp/wtmp/lastlog, or exec a shell.\\n' >> \"$report\"\nexit \"$failures\"\n"
+        dealloc(body8)
+        dealloc(target, report_path)
+        return body9
+    end
+    if toolkit_hosted_tool(tool) == 1 then
+        body9 = body8 + "\"$target\" --mixtar-certify >/tmp/mixtar-tool.out 2>/tmp/mixtar-tool.err; rc_cert=$?\nif [ \"$rc_cert\" = \"0\" ] && grep -q '^mixtar-hosted:' /tmp/mixtar-tool.out; then printf -- '- PASS hosted adapter self-check\\n' >> \"$report\"; else printf -- '- FAIL hosted adapter self-check rc=%s\\n' \"$rc_cert\" >> \"$report\"; cat /tmp/mixtar-tool.err >> \"$report\"; failures=$((failures+1)); fi\nprintf -- '\\nNote: this command is a hosted Linux adapter, not an OpenBSD/FreeBSD source port yet. Privileged or interactive operations are refused unless explicitly delegated by the adapter.\\n' >> \"$report\"\nexit \"$failures\"\n"
+        dealloc(body8)
+        dealloc(target, report_path)
+        return body9
+    end
+    body9 = body8 + "printf -- '- FAIL unsupported test tool\\n' >> \"$report\"\nexit 1\n"
+    dealloc(body8)
+    dealloc(target, report_path)
+    return body9
+end
+
+int toolkit_write_test_script(tool: string):
+    toolkit_ensure_dirs_for(tool)
+    script = toolkit_test_script(tool)
+    path = toolkit_test_path(tool)
+    rc = write_file(path, script)
+    dealloc(script, path)
+    if rc == 0 then
+        return 1
+    end
+    return 0
+end

@@ -1,0 +1,4 @@
+#ifndef MIXTAR_BRIDGE_MACHINE_CPU_H
+#define MIXTAR_BRIDGE_MACHINE_CPU_H
+
+#endif

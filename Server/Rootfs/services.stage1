@@ -1,5 +1,0 @@
-# name|command|args|pidfile|process-match
-dbus|/usr/bin/dbus-daemon|--system --nofork --nopidfile --syslog-only|/System/Runtime/services/dbus.pid|dbus-daemon
-iwd|/usr/libexec/iwd||/System/Runtime/services/iwd.pid|iwd
-dhcpcd|/sbin/dhcpcd|-q -B|/run/dhcpcd/pid|dhcpcd
-sshd|/usr/sbin/sshd|-D -e|/System/Runtime/services/sshd.pid|sshd

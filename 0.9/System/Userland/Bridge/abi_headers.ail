@@ -1,0 +1,490 @@
+// abi_headers.ail
+// AILang-owned ABI bridge headers for simple Mixtar Toolkit compatibility.
+//
+// This file is source-of-truth only for headers that fit the abi-header model:
+// includes, include_next wrappers, constants, typedefs, structs, prototypes,
+// conditional blocks, tiny macro wrappers, and small static inline helpers.
+// Macro generator headers such as sys/tree.h stay as handwritten C headers.
+
+abi header "sys/event.h":
+    guard MIXTAR_BRIDGE_SYS_EVENT_H
+    include <errno.h>
+    include <stdint.h>
+    include <time.h>
+
+    define EVFILT_READ = -1
+    define EVFILT_VNODE = -4
+
+    define EV_ADD = 0x0001
+    define EV_ENABLE = 0x0004
+    define EV_CLEAR = 0x0020
+
+    define NOTE_DELETE = 0x0001
+    define NOTE_WRITE = 0x0002
+    define NOTE_EXTEND = 0x0004
+    define NOTE_ATTRIB = 0x0008
+    define NOTE_LINK = 0x0010
+    define NOTE_RENAME = 0x0020
+    define NOTE_REVOKE = 0x0040
+    define NOTE_TRUNCATE = 0x0080
+
+    struct kevent:
+        ident: uintptr_t
+        filter: short
+        flags: ushort
+        fflags: uint
+        data: intptr_t
+        udata: pointer
+    end
+
+    macro EV_SET(kevp, a, b, c, d, e, f):
+        c_emit """
+        do {
+            (kevp)->ident = (uintptr_t)(a);
+            (kevp)->filter = (b);
+            (kevp)->flags = (c);
+            (kevp)->fflags = (d);
+            (kevp)->data = (e);
+            (kevp)->udata = (f);
+        } while (0)
+        """
+    end
+
+    prototype int kqueue()
+    prototype int kevent(
+        kq: int,
+        changelist: "const struct kevent *",
+        nchanges: int,
+        eventlist: "struct kevent *",
+        nevents: int,
+        timeout: "const struct timespec *"
+    )
+end
+
+abi header "sys/mac.h":
+    guard MIXTAR_BRIDGE_SYS_MAC_H
+    include <errno.h>
+    include <stdlib.h>
+    include <string.h>
+
+    typedef mac_t = charptr
+
+    prototype int mac_prepare_file_label(label: "mac_t *")
+    prototype int mac_get_file(path: cstring, label: mac_t)
+    prototype int mac_get_link(path: cstring, label: mac_t)
+    prototype int mac_to_text(label: mac_t, text: charpp)
+    prototype int mac_free(label: pointer)
+end
+
+abi header "capsicum_helpers.h":
+    guard MIXTAR_BRIDGE_CAPSICUM_HELPERS_H
+    include "sys/capsicum.h"
+
+    prototype int caph_limit_stdio()
+    prototype int caph_enter()
+    prototype void caph_cache_catpages()
+    prototype int caph_enter_casper()
+    prototype int caph_rights_limit(fd: int, rights: "const cap_rights_t *")
+end
+
+abi header "libcasper.h":
+    guard MIXTAR_BRIDGE_LIBCASPER_H
+
+    typedef cap_channel_t = "struct mixtar_cap_channel"
+
+    struct mixtar_cap_channel:
+        unused: int
+    end
+
+    prototype "cap_channel_t *" cap_init()
+    prototype int cap_close(channel: "cap_channel_t *")
+    prototype "cap_channel_t *" cap_service_open(
+        channel: "cap_channel_t *",
+        name: cstring
+    )
+end
+
+abi header "vis.h":
+    guard MIXTAR_BRIDGE_VIS_H
+    include <errno.h>
+    include <ctype.h>
+    include <stdlib.h>
+    include <string.h>
+
+    define VIS_OCTAL = 0x0001
+    define VIS_CSTYLE = 0x0002
+    define VIS_SP = 0x0004
+    define VIS_TAB = 0x0008
+    define VIS_NL = 0x0010
+    define VIS_WHITE = VIS_SP | VIS_TAB | VIS_NL
+    define VIS_SAFE = 0x0020
+    define VIS_NOSLASH = 0x0040
+    define VIS_HTTPSTYLE = 0x0080
+    define VIS_GLOB = 0x0100
+    define VIS_SHELL = 0x0200
+    define VIS_META = 0x0400
+    define VIS_NOLOCALE = 0x0800
+    define VIS_ALL = 0x1000
+
+    define UNVIS_VALID = 1
+    define UNVIS_VALIDPUSH = 2
+    define UNVIS_NOCHAR = 3
+    define UNVIS_SYNBAD = -1
+    define UNVIS_ERROR = -2
+    define UNVIS_END = 1
+
+    prototype "char *" vis(dst: charptr, c: int, flag: int, nextc: int)
+    prototype int strvis(dst: charptr, src: cstring, flag: int)
+    prototype int strnvis(dst: charptr, src: cstring, dstlen: size_t, flag: int)
+    prototype int strvisx(dst: charptr, src: cstring, srclen: size_t, flag: int)
+    prototype int strnvisx(
+        dst: charptr,
+        src: cstring,
+        srclen: size_t,
+        dstlen: size_t,
+        flag: int
+    )
+    prototype int stravis(out: charpp, src: cstring, flag: int)
+    prototype int stravisx(out: charpp, src: cstring, srclen: size_t, flag: int)
+    prototype int strunvis(dst: charptr, src: cstring)
+    prototype int strnunvis(dst: charptr, src: cstring, dstlen: size_t)
+    prototype int unvis(cp: charptr, c: int, astate: "int *", flag: int)
+
+    macro mbsavis(out, src, flag):
+        c_emit """
+        stravis((out), (src), (flag))
+        """
+    end
+end
+
+abi header "event.h":
+    guard MIXTAR_BRIDGE_EVENT_H
+    include "../../OpenBSD/src/lib/libevent/event.h"
+end
+
+abi header "imsg.h":
+    guard MIXTAR_BRIDGE_IMSG_H
+    include "../../OpenBSD/src/lib/libutil/imsg.h"
+end
+
+abi header "rpc/rpc.h":
+    guard MIXTAR_BRIDGE_RPC_RPC_H
+    include <netdb.h>
+end
+
+abi header "rpc/types.h":
+    guard MIXTAR_BRIDGE_RPC_TYPES_H
+    include <stdint.h>
+    include <sys/types.h>
+
+    typedef bool_t = int32_t
+    typedef enum_t = int32_t
+
+    ifndef TRUE:
+        define TRUE = 1
+    end
+
+    ifndef FALSE:
+        define FALSE = 0
+    end
+end
+
+abi header "netinet/if_ether.h":
+    guard MIXTAR_BRIDGE_NETINET_IF_ETHER_H
+    include_next <netinet/if_ether.h>
+    include <netinet/ether.h>
+end
+
+abi header "sys/capsicum.h":
+    guard MIXTAR_BRIDGE_SYS_CAPSICUM_H
+    include <stdarg.h>
+
+    define CAP_READ = 0x0001ULL
+    define CAP_WRITE = 0x0002ULL
+    define CAP_FSTAT = 0x0004ULL
+    define CAP_FCNTL = 0x0008ULL
+    define CAP_SEEK = 0x0010ULL
+    define CAP_CONNECT = 0x0020ULL
+    define CAP_SHUTDOWN = 0x0040ULL
+
+    struct mixtar_cap_rights:
+        bits: "unsigned long long"
+    end
+
+    typedef cap_rights_t = "struct mixtar_cap_rights"
+
+    static inline "cap_rights_t *" cap_rights_init(rights: "cap_rights_t *", ...):
+        c_emit """
+        if (rights != 0)
+            rights->bits = 0;
+        return rights;
+        """
+    end
+
+    static inline "cap_rights_t *" cap_rights_clear(rights: "cap_rights_t *", ...):
+        c_emit """
+        return rights;
+        """
+    end
+end
+
+abi header "sys/cpuset.h":
+    guard MIXTAR_BRIDGE_SYS_CPUSET_H
+    include <sched.h>
+    include <stddef.h>
+    include <sys/types.h>
+
+    define CPU_LEVEL_WHICH = 3
+    define CPU_WHICH_TID = 1
+
+    typedef cpulevel_t = int
+    typedef cpuwhich_t = int
+    typedef cpuset_t = cpu_set_t
+
+    static inline int cpuset_getaffinity(
+        level: cpulevel_t,
+        which: cpuwhich_t,
+        id: id_t,
+        setsize: size_t,
+        mask: "cpuset_t *"
+    ):
+        c_emit """
+        (void)level;
+        (void)which;
+        (void)id;
+        return sched_getaffinity(0, setsize, mask);
+        """
+    end
+end
+
+abi header "casper/cap_net.h":
+    guard MIXTAR_BRIDGE_CASPER_CAP_NET_H
+    include <netdb.h>
+    include <sys/socket.h>
+    include <libcasper.h>
+
+    define CAPNET_NAME2ADDR = 0x01
+    define CAPNET_CONNECTDNS = 0x02
+
+    struct mixtar_cap_net_limit:
+        unused: int
+    end
+
+    typedef cap_net_limit_t = "struct mixtar_cap_net_limit"
+
+    prototype "cap_net_limit_t *" cap_net_limit_init(
+        channel: "cap_channel_t *",
+        flags: int
+    )
+    prototype int cap_net_limit_name2addr_family(
+        limit: "cap_net_limit_t *",
+        families: "const int *",
+        count: int
+    )
+    prototype int cap_net_limit(limit: "cap_net_limit_t *")
+
+    static inline int cap_getaddrinfo(
+        channel: "cap_channel_t *",
+        node: cstring,
+        service: cstring,
+        hints: "const struct addrinfo *",
+        res: "struct addrinfo **"
+    ):
+        c_emit """
+        (void)channel;
+        return getaddrinfo(node, service, hints, res);
+        """
+    end
+
+    static inline int cap_connect(
+        channel: "cap_channel_t *",
+        fd: int,
+        addr: "const struct sockaddr *",
+        len: socklen_t
+    ):
+        c_emit """
+        (void)channel;
+        return connect(fd, addr, len);
+        """
+    end
+end
+
+abi header "casper/cap_fileargs.h":
+    guard MIXTAR_BRIDGE_CASPER_CAP_FILEARGS_H
+    include <fcntl.h>
+    include <limits.h>
+    include <stdlib.h>
+    include <unistd.h>
+    include <sys/capsicum.h>
+    include <libcasper.h>
+
+    define FA_OPEN = 0x01
+    define FA_REALPATH = 0x02
+
+    struct mixtar_fileargs:
+        flags: int
+    end
+
+    typedef fileargs_t = "struct mixtar_fileargs"
+
+    prototype "fileargs_t *" fileargs_cinit(
+        casper: "cap_channel_t *",
+        argc: int,
+        argv: charpp,
+        oflags: int,
+        mode: mode_t,
+        rights: "cap_rights_t *",
+        flags: int
+    )
+
+    static inline int fileargs_open(fa: "fileargs_t *", path: cstring):
+        c_emit """
+        (void)fa;
+        return open(path, O_RDONLY);
+        """
+    end
+
+    static inline charptr fileargs_realpath(
+        fa: "fileargs_t *",
+        path: cstring,
+        resolved: charptr
+    ):
+        c_emit """
+        (void)fa;
+        return realpath(path, resolved);
+        """
+    end
+end
+
+abi header "sys/_null.h":
+    guard MIXTAR_BRIDGE_SYS__NULL_H
+    include <stddef.h>
+end
+
+abi header "sys/dirent.h":
+    guard MIXTAR_BRIDGE_SYS_DIRENT_H
+    include <dirent.h>
+end
+
+abi header "sys/limits.h":
+    guard MIXTAR_BRIDGE_SYS_LIMITS_H
+    include <limits.h>
+end
+
+abi header "sys/malloc.h":
+    guard MIXTAR_BRIDGE_SYS_MALLOC_H
+    include <stdlib.h>
+end
+
+abi header "sys/tty.h":
+    guard MIXTAR_BRIDGE_SYS_TTY_H
+
+    struct tty:
+        dummy: int
+    end
+end
+
+abi header "util.h":
+    guard MIXTAR_BRIDGE_UTIL_H
+    include "libutil.h"
+    include "mixtar_bridge_compat.h"
+end
+
+abi header "sys/acl.h":
+    guard MIXTAR_BRIDGE_SYS_ACL_H
+    include <errno.h>
+    include <stdlib.h>
+    include <unistd.h>
+
+    define _PC_ACL_NFS4 = 20001
+    define _PC_ACL_EXTENDED = 20002
+    define ACL_TYPE_ACCESS = 1
+    define ACL_TYPE_NFS4 = 2
+    define ACL_BRAND_POSIX = 1
+    define ACL_BRAND_NFS4 = 2
+    define ACL_EXTENDED = 1
+
+    typedef acl_t = pointer
+    typedef acl_type_t = int
+
+    prototype acl_t acl_get_fd_np(fd: int, type: acl_type_t)
+    prototype acl_t acl_get_link_np(path: cstring, type: acl_type_t)
+    prototype int acl_set_fd_np(fd: int, acl: acl_t, type: acl_type_t)
+    prototype int acl_is_trivial_np(acl: acl_t, trivial: "int *")
+    prototype int acl_is_trivial(acl: acl_t, trivial: "int *")
+    prototype int acl_free(obj: pointer)
+    prototype int acl_supported(path: cstring, type: acl_type_t)
+end
+
+abi header "login_cap.h":
+    guard MIXTAR_BRIDGE_LOGIN_CAP_H
+    include <pwd.h>
+    include <stdint.h>
+    include <stdlib.h>
+    include <sys/types.h>
+
+    define LOGIN_DEFCLASS = "default"
+    define LOGIN_DEFSTYLE = "passwd"
+    define LOGIN_DEFSERVICE = "login"
+    define LOGIN_DEFUMASK = 022
+    define _PATH_LOGIN_CONF = "/etc/login.conf"
+    define _PATH_LOGIN_CONF_D = "/etc/login.conf.d"
+
+    define LOGIN_SETGROUP = 0x0001
+    define LOGIN_SETLOGIN = 0x0002
+    define LOGIN_SETPATH = 0x0004
+    define LOGIN_SETPRIORITY = 0x0008
+    define LOGIN_SETRESOURCES = 0x0010
+    define LOGIN_SETUMASK = 0x0020
+    define LOGIN_SETUSER = 0x0040
+    define LOGIN_SETENV = 0x0080
+    define LOGIN_SETRTABLE = 0x0100
+    define LOGIN_SETALL = 0x01ff
+
+    define pw_class = pw_gecos
+
+    typedef login_cap_t = "struct login_cap"
+
+    struct login_cap:
+        lc_class: charptr
+        lc_cap: charptr
+        lc_style: charptr
+    end
+
+    prototype "login_cap_t *" login_getclass(class_name: charptr)
+    prototype void login_close(lc: "login_cap_t *")
+    prototype int login_getcapbool(lc: "login_cap_t *", cap: charptr, def: uint)
+    prototype "quad_t" login_getcapnum(
+        lc: "login_cap_t *",
+        cap: charptr,
+        def: "quad_t",
+        error: "quad_t"
+    )
+    prototype "quad_t" login_getcapsize(
+        lc: "login_cap_t *",
+        cap: charptr,
+        def: "quad_t",
+        error: "quad_t"
+    )
+    prototype charptr login_getcapstr(
+        lc: "login_cap_t *",
+        cap: charptr,
+        def: charptr,
+        error: charptr
+    )
+    prototype "quad_t" login_getcaptime(
+        lc: "login_cap_t *",
+        cap: charptr,
+        def: "quad_t",
+        error: "quad_t"
+    )
+    prototype charptr login_getstyle(lc: "login_cap_t *", style: charptr, type: charptr)
+    prototype int setclasscontext(class_name: charptr, flags: uint)
+    prototype int setusercontext(
+        lc: "login_cap_t *",
+        pwd: "struct passwd *",
+        uid: uid_t,
+        flags: uint
+    )
+end
+

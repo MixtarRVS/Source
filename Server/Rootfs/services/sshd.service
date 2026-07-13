@@ -1,7 +1,0 @@
-name=sshd
-title=OpenSSH remote access
-role=remote_access
-backend=openrc
-backend_name=sshd
-runlevel=default
-enabled=true

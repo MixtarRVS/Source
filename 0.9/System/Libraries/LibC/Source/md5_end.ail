@@ -1,0 +1,40 @@
+// md5_end.ail
+// AILang-owned MD5End adapter for OpenBSD-derived Toolkit code.
+//
+// The MD5 algorithm remains upstream OpenBSD source. This file only provides
+// the libc-style "final digest as lowercase hex string" helper expected by
+// OpenBSD sort's random-collation path.
+
+extern fn MD5Final(digest: pointer, ctx: pointer): void
+
+int md5_hex_char(v: i64):
+    if v < 10 then
+        return 48 + v
+    end
+    return 87 + v
+end
+
+@export("MD5End")
+pointer libc_md5_end(ctx: pointer, buf: pointer):
+    out = reinterpret(i64, buf)
+    if out == 0 then
+        out = alloc(33)
+    end
+
+    digest = alloc(16)
+    MD5Final(reinterpret(pointer, digest), ctx)
+
+    i = 0
+    while i < 16 then
+        value = peek8(digest, i)
+        hi = value / 16
+        lo = value % 16
+        poke8(out, i * 2, md5_hex_char(hi))
+        poke8(out, i * 2 + 1, md5_hex_char(lo))
+        i++
+    end
+
+    poke8(out, 32, 0)
+    dealloc(digest)
+    return reinterpret(pointer, out)
+end

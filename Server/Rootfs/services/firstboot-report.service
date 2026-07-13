@@ -1,7 +1,0 @@
-name=firstboot-report
-title=Mixtar first boot report
-role=boot_observation
-backend=openrc
-backend_name=mixtar-firstboot-report
-runlevel=default
-enabled=true

@@ -1,0 +1,65 @@
+const int UPDATES_CONFIG_OK = 0
+const int UPDATES_CONFIG_ERROR = 65
+const int UPDATES_CONFIG_USAGE = 64
+
+void config_error(message: string):
+    line = "updates-config: " + message
+    print line
+    dealloc(line)
+end
+
+int apply_sql(db: int, sql: string, label: string):
+    rc = sql_exec(db, sql)
+    if rc != UPDATES_CONFIG_OK then
+        config_error(label)
+        return UPDATES_CONFIG_ERROR
+    end
+    return UPDATES_CONFIG_OK
+end
+
+def main(): int
+    if argc() != 5 then
+        print "usage: updates-config build SCHEMA.sql SEED.sql Updates.config"
+        return UPDATES_CONFIG_USAGE
+    end
+    if argv(1) != "build" then
+        print "updates-config: only the build operation is supported"
+        return UPDATES_CONFIG_USAGE
+    end
+
+    schema_path = argv(2)
+    seed_path = argv(3)
+    output_path = argv(4)
+    schema = read_file(schema_path)
+    seed = read_file(seed_path)
+    if strlen(schema) == 0 then
+        dealloc(schema, seed)
+        config_error("schema is missing or empty")
+        return UPDATES_CONFIG_ERROR
+    end
+    if strlen(seed) == 0 then
+        dealloc(schema, seed)
+        config_error("seed is missing or empty")
+        return UPDATES_CONFIG_ERROR
+    end
+
+    db = sql_open(output_path)
+    if db == 0 then
+        dealloc(schema, seed)
+        config_error("cannot open output database")
+        return UPDATES_CONFIG_ERROR
+    end
+
+    rc = apply_sql(db, schema, "schema transaction failed")
+    if rc == UPDATES_CONFIG_OK then
+        rc = apply_sql(db, seed, "seed transaction failed")
+    end
+    sql_close(db)
+    dealloc(schema, seed)
+    if rc != UPDATES_CONFIG_OK then
+        return rc
+    end
+
+    print "updates-config: built SQLite Updates.config"
+    return UPDATES_CONFIG_OK
+end

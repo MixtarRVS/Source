@@ -1,0 +1,76 @@
+// kernel_source.ail
+// AILang wrapper for controlled Linux kernel source acquisition.
+
+void kernel_source_usage():
+    print "Usage: kernel_source [status|fetch|verify|extract|all|help] [target-id]"
+    print "  status   Show selected kernel target and local generated-source state"
+    print "  fetch    Download tarball + signature through WSL"
+    print "  verify   Record SHA256 and try local GPG signature verification"
+    print "  extract  Extract tarball into System/Kernel/Generated/src"
+    print "  all      fetch + verify + extract + status"
+    print "Targets are defined in System/Kernel/Manifests/linux-kernel.json"
+end
+
+string kernel_source_target_arg():
+    if argc() >= 3 then
+        return argv(2)
+    end
+    return "" + ""
+end
+
+int kernel_source_run(op: string):
+    target = kernel_source_target_arg()
+    prefix = "" + "wsl.exe -d Debian -- bash System/Kernel/scripts/kernel_fetch.sh "
+    with_op = prefix + op
+    dealloc(prefix)
+    if strlen(target) > 0 then
+        with_space = with_op + " "
+        dealloc(with_op)
+        cmd = with_space + target
+        dealloc(with_space)
+    else
+        cmd = with_op
+    end
+    rc = system(cmd)
+    dealloc(cmd, target)
+    return rc
+end
+
+int kernel_source_main():
+    op = "status"
+    if argc() >= 2 then
+        op = argv(1)
+    end
+
+    match op then
+        case "status":
+            return kernel_source_run("status")
+        case "fetch":
+            return kernel_source_run("fetch")
+        case "verify":
+            return kernel_source_run("verify")
+        case "extract":
+            return kernel_source_run("extract")
+        case "all":
+            return kernel_source_run("all")
+        case "help":
+            kernel_source_usage()
+            return 0
+        case "--help":
+            kernel_source_usage()
+            return 0
+        case "-h":
+            kernel_source_usage()
+            return 0
+        default:
+            msg = "kernel_source: unknown operation: " + op
+            print msg
+            dealloc(msg)
+            kernel_source_usage()
+            return 1
+    end
+end
+
+int main():
+    return kernel_source_main()
+end

@@ -1,0 +1,246 @@
+const int UPDATE_BUILD_OK = 0
+const int UPDATE_BUILD_USAGE = 64
+const int UPDATE_BUILD_ERROR = 65
+const int MI_BUILD_SQLITE_ROW = 100
+const int MI_BUILD_SQLITE_DONE = 101
+
+void build_line(prefix: string, value: string):
+    line = prefix + value
+    print line
+    dealloc(line)
+end
+
+int build_fail(message: string):
+    build_line("updates-build: ", message)
+    return UPDATE_BUILD_ERROR
+end
+
+string query_text(db: int, sql: string):
+    stmt = sql_prepare(db, sql)
+    if stmt == 0 then
+        return "" + ""
+    end
+    rc = sql_step(stmt)
+    if rc != MI_BUILD_SQLITE_ROW then
+        sql_finalize(stmt)
+        return "" + ""
+    end
+    value = "" + sql_column_text(stmt, 0)
+    sql_finalize(stmt)
+    return value
+end
+
+int query_count(db: int, sql: string):
+    stmt = sql_prepare(db, sql)
+    if stmt == 0 then
+        return -1
+    end
+    rc = sql_step(stmt)
+    if rc != MI_BUILD_SQLITE_ROW then
+        sql_finalize(stmt)
+        return -1
+    end
+    value = sql_column_int(stmt, 0)
+    sql_finalize(stmt)
+    return value
+end
+
+int insert_setting(db: int, key: string, value: string):
+    stmt = sql_prepare(db, "INSERT INTO setting(key,value) VALUES(?,?)")
+    if stmt == 0 then
+        return UPDATE_BUILD_ERROR
+    end
+    sql_bind_text(stmt, 1, key)
+    sql_bind_text(stmt, 2, value)
+    rc = sql_step(stmt)
+    sql_finalize(stmt)
+    if rc != MI_BUILD_SQLITE_DONE then
+        return UPDATE_BUILD_ERROR
+    end
+    return UPDATE_BUILD_OK
+end
+
+int write_bundle_config(path: string, version: string):
+    db = sql_open(path)
+    if db == 0 then
+        return build_fail("cannot create zsh.config")
+    end
+    if sql_exec(db, "PRAGMA journal_mode=DELETE") != 0 then
+        sql_close(db)
+        return build_fail("cannot set deterministic zsh.config journal mode")
+    end
+    if sql_exec(db, "CREATE TABLE setting(key TEXT PRIMARY KEY,value TEXT NOT NULL)") != 0 then
+        sql_close(db)
+        return build_fail("cannot create zsh.config schema")
+    end
+    if sql_exec(db, "BEGIN IMMEDIATE") != 0 then
+        sql_close(db)
+        return build_fail("cannot begin zsh.config transaction")
+    end
+    failed = 0
+    if insert_setting(db, "app.id", "org.mixtar.shell.zsh") != 0 then
+        failed = 1
+    end
+    if insert_setting(db, "app.name", "ZSH") != 0 then
+        failed = 1
+    end
+    if insert_setting(db, "app.version", version) != 0 then
+        failed = 1
+    end
+    if insert_setting(db, "entry.type", "native") != 0 then
+        failed = 1
+    end
+    if insert_setting(db, "entry.path", "Program/zsh") != 0 then
+        failed = 1
+    end
+    if insert_setting(db, "runtime", "mixtar") != 0 then
+        failed = 1
+    end
+    if failed != 0 then
+        sql_exec(db, "ROLLBACK")
+        sql_close(db)
+        return build_fail("cannot populate zsh.config")
+    end
+    if sql_exec(db, "COMMIT") != 0 then
+        sql_close(db)
+        return build_fail("cannot commit zsh.config")
+    end
+    sql_close(db)
+    return UPDATE_BUILD_OK
+end
+
+int run_recipe(executor: string, config: string, shell: string, recipe_path: string, zsh_source: string, ncurses_source: string, work: string):
+    args = str_array_new(8)
+    args = str_array_push(args, executor)
+    args = str_array_push(args, "run")
+    args = str_array_push(args, config)
+    args = str_array_push(args, shell)
+    args = str_array_push(args, recipe_path)
+    args = str_array_push(args, zsh_source)
+    args = str_array_push(args, ncurses_source)
+    args = str_array_push(args, work)
+    rc = process_run_argv(args)
+    dealloc_str_array(args)
+    return rc
+end
+
+int mark_build_passed(db: int, bundle_path: string):
+    detail = "verified sources built offline into " + bundle_path
+    stmt = sql_prepare(db, "UPDATE observation SET status='build-passed',detail=? WHERE component_id='zsh' AND status='verified-source'")
+    if stmt == 0 then
+        dealloc(detail)
+        return UPDATE_BUILD_ERROR
+    end
+    sql_bind_text(stmt, 1, detail)
+    rc = sql_step(stmt)
+    sql_finalize(stmt)
+    dealloc(detail)
+    if rc != MI_BUILD_SQLITE_DONE then
+        return UPDATE_BUILD_ERROR
+    end
+    return UPDATE_BUILD_OK
+end
+
+int build_zsh(config: string, recipe_path: string, zsh_source: string, ncurses_source: string, work: string):
+    db = sql_open(config)
+    if db == 0 then
+        return build_fail("cannot open Updates.config")
+    end
+    sql_exec(db, "PRAGMA foreign_keys=ON")
+
+    zsh_state = query_text(db, "SELECT status FROM observation WHERE component_id='zsh'")
+    ncurses_state = query_text(db, "SELECT status FROM observation WHERE component_id='ncurses'")
+    recorded_zsh = query_text(db, "SELECT source_path FROM observation WHERE component_id='zsh'")
+    recorded_ncurses = query_text(db, "SELECT source_path FROM observation WHERE component_id='ncurses'")
+    zsh_version = query_text(db, "SELECT available_version FROM observation WHERE component_id='zsh'")
+    target = query_text(db, "SELECT install_target FROM component WHERE id='zsh' AND enabled=1")
+    recipe = query_text(db, "SELECT recipe FROM component WHERE id='zsh' AND enabled=1")
+    executor = query_text(db, "SELECT value FROM setting WHERE key='tool.build_executor'")
+    shell = query_text(db, "SELECT value FROM setting WHERE key='build.sandbox.compat_shell'")
+    expected_recipe_path = query_text(db, "SELECT value FROM setting WHERE key='component.zsh.build_recipe'")
+    dependency = query_count(db, "SELECT COUNT(*) FROM component_dependency WHERE component_id='zsh' AND dependency_id='ncurses'")
+
+    if zsh_state != "verified-source" then
+        dealloc(zsh_state, ncurses_state, recorded_zsh, recorded_ncurses, zsh_version, target, recipe, executor, shell, expected_recipe_path)
+        sql_close(db)
+        return build_fail("ZSH source is not in verified-source state")
+    end
+    if ncurses_state != "verified-source" then
+        dealloc(zsh_state, ncurses_state, recorded_zsh, recorded_ncurses, zsh_version, target, recipe, executor, shell, expected_recipe_path)
+        sql_close(db)
+        return build_fail("ncurses source is not in verified-source state")
+    end
+    if recorded_zsh != zsh_source or recorded_ncurses != ncurses_source then
+        dealloc(zsh_state, ncurses_state, recorded_zsh, recorded_ncurses, zsh_version, target, recipe, executor, shell, expected_recipe_path)
+        sql_close(db)
+        return build_fail("build inputs do not match verified observation paths")
+    end
+    if target != "/System/Shells/zsh.apx" then
+        dealloc(zsh_state, ncurses_state, recorded_zsh, recorded_ncurses, zsh_version, target, recipe, executor, shell, expected_recipe_path)
+        sql_close(db)
+        return build_fail("unexpected ZSH target path")
+    end
+    if recipe != "zsh-native-musl" or dependency != 1 then
+        dealloc(zsh_state, ncurses_state, recorded_zsh, recorded_ncurses, zsh_version, target, recipe, executor, shell, expected_recipe_path)
+        sql_close(db)
+        return build_fail("ZSH recipe or ncurses dependency is not declared")
+    end
+    if recipe_path != expected_recipe_path or strlen(executor) == 0 or strlen(shell) == 0 then
+        dealloc(zsh_state, ncurses_state, recorded_zsh, recorded_ncurses, zsh_version, target, recipe, executor, shell, expected_recipe_path)
+        sql_close(db)
+        return build_fail("ZSH build executor policy is incomplete")
+    end
+
+    rc = run_recipe(executor, config, shell, recipe_path, zsh_source, ncurses_source, work)
+    if rc != 0 then
+        dealloc(zsh_state, ncurses_state, recorded_zsh, recorded_ncurses, zsh_version, target, recipe, executor, shell, expected_recipe_path)
+        sql_close(db)
+        return build_fail("isolated ZSH recipe failed")
+    end
+
+    stage = work + "/stage"
+    bundle_path = stage + target
+    config_path = bundle_path + "/zsh.config"
+    if write_bundle_config(config_path, zsh_version) != 0 then
+        dealloc(zsh_state, ncurses_state, recorded_zsh, recorded_ncurses, zsh_version, target, recipe, executor, shell, expected_recipe_path, stage, bundle_path, config_path)
+        sql_close(db)
+        return UPDATE_BUILD_ERROR
+    end
+    rc = mark_build_passed(db, bundle_path)
+    if rc != 0 then
+        dealloc(zsh_state, ncurses_state, recorded_zsh, recorded_ncurses, zsh_version, target, recipe, executor, shell, expected_recipe_path, stage, bundle_path, config_path)
+        sql_close(db)
+        return build_fail("cannot record ZSH build result")
+    end
+
+    print "ZSH source-native build: PASS"
+    build_line("bundle: ", bundle_path)
+    build_line("config: ", config_path)
+    dealloc(zsh_state, ncurses_state, recorded_zsh, recorded_ncurses, zsh_version, target, recipe, executor, shell, expected_recipe_path, stage, bundle_path, config_path)
+    sql_close(db)
+    return UPDATE_BUILD_OK
+end
+
+void usage():
+    print "usage: updates-zsh-build build Updates.config RECIPE ZSH.tar.xz NCURSES.tar.gz WORK"
+end
+
+def main(): int
+    if argc() != 7 then
+        usage()
+        return UPDATE_BUILD_USAGE
+    end
+    command = argv(1)
+    if command != "build" then
+        usage()
+        return UPDATE_BUILD_USAGE
+    end
+    config = "" + argv(2)
+    recipe_path = "" + argv(3)
+    zsh_source = "" + argv(4)
+    ncurses_source = "" + argv(5)
+    work = "" + argv(6)
+    rc = build_zsh(config, recipe_path, zsh_source, ncurses_source, work)
+    dealloc(config, recipe_path, zsh_source, ncurses_source, work)
+    return rc
+end

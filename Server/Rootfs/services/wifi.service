@@ -1,7 +1,0 @@
-name=wifi
-title=Wi-Fi backend
-role=wifi
-backend=openrc
-backend_name=iwd
-runlevel=default
-enabled=true

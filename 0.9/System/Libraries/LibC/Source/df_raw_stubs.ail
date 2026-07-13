@@ -1,0 +1,15 @@
+// df_raw_stubs.ail
+// Hosted Linux replacement for OpenBSD df raw filesystem probes.
+//
+// OpenBSD df can inspect raw FFS/ext2 devices. That is an OpenBSD
+// kernel/filesystem surface, not a hosted Linux bridge promise.
+
+@export("e2fs_df")
+def libc_e2fs_df(fd: i32, file_path: ptr, statfs_out: ptr): i32
+    return -1
+end
+
+@export("ffs_df")
+def libc_ffs_df(fd: i32, file_path: ptr, statfs_out: ptr): i32
+    return -1
+end

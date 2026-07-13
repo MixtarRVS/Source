@@ -1,2 +1,0 @@
-command return
-printf after

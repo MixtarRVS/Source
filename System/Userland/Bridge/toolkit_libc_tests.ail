@@ -1,0 +1,123 @@
+// toolkit_libc_tests.ail
+// WSL gate for AILang-owned Runtime/LibC slices consumed by Toolkit code.
+
+import toolkit_core
+
+string toolkit_libc_test_path():
+    return "" + "System/Userland/Generated/tests/toolkit-libc-wsl.sh"
+end
+
+string toolkit_libc_report_path():
+    return "" + "System/Userland/Generated/reports/toolkit-libc-wsl.md"
+end
+
+int toolkit_libc_run_ailang(source: string, mode: string, output: string):
+    prefix = "" + "python C:/Users/V/source/repos/AILang-Pure/ailang.py "
+    with_source = prefix + source
+    dealloc(prefix)
+    with_mode = with_source + mode
+    dealloc(with_source)
+    cmd = with_mode + output
+    dealloc(with_mode)
+    rc = system(cmd)
+    dealloc(cmd)
+    return rc
+end
+
+int toolkit_libc_check_emit_one(source: string, generated_base: string):
+    check_rc = toolkit_libc_run_ailang(source, " --check", "")
+    if check_rc != 0 then
+        return check_rc
+    end
+
+    c_out = generated_base + ".c"
+    c_rc = toolkit_libc_run_ailang(source, " --emit-c -o ", c_out)
+    dealloc(c_out)
+    if c_rc != 0 then
+        return c_rc
+    end
+
+    h_out = generated_base + ".h"
+    h_rc = toolkit_libc_run_ailang(source, " --emit-header -o ", h_out)
+    dealloc(h_out)
+    return h_rc
+end
+
+int toolkit_libc_prepare_sources():
+    if file_exists("System/Libraries/LibC/Generated") == 0 then
+        mkdir("System/Libraries/LibC/Generated")
+    end
+
+    rc = toolkit_libc_check_emit_one("System/Libraries/LibC/Source/unistd.ail", "System/Libraries/LibC/Generated/unistd")
+    if rc != 0 then
+        return rc
+    end
+    rc = toolkit_libc_check_emit_one("System/Libraries/LibC/Source/df_raw_stubs.ail", "System/Libraries/LibC/Generated/df_raw_stubs")
+    if rc != 0 then
+        return rc
+    end
+    rc = toolkit_libc_check_emit_one("System/Libraries/LibC/Source/md5_end.ail", "System/Libraries/LibC/Generated/md5_end")
+    if rc != 0 then
+        return rc
+    end
+    rc = toolkit_libc_check_emit_one("System/Libraries/LibC/Source/string.ail", "System/Libraries/LibC/Generated/string")
+    if rc != 0 then
+        return rc
+    end
+    rc = toolkit_libc_check_emit_one("System/Libraries/LibC/Source/stdio.ail", "System/Libraries/LibC/Generated/libc_stdio")
+    if rc != 0 then
+        return rc
+    end
+    return toolkit_libc_check_emit_one("System/Libraries/LibC/Source/bsd_compat.ail", "System/Libraries/LibC/Generated/bsd_compat")
+end
+
+string toolkit_libc_test_script():
+    return "" + "#!/usr/bin/env bash\nset -euo pipefail\ncd /mnt/c/Users/V/source/repos/MixtarRVS\nmkdir -p System/Libraries/LibC/Generated System/Userland/Generated/reports\nreport=\"$PWD/System/Userland/Generated/reports/toolkit-libc-wsl.md\"\nprintf '# Toolkit LibC WSL Gate\\n\\n' > \"$report\"\nrun() {\n    label=\"$1\"\n    shift\n    printf -- '- %s... ' \"$label\" >> \"$report\"\n    \"$@\" >> \"$report\" 2>&1\n    printf 'ok\\n' >> \"$report\"\n}\nCOMMON='-std=c23 -Wall -Wextra -Werror -pedantic -include /usr/include/string.h'\nrun 'compile unistd smoke' cc $COMMON -I System/Libraries/LibC/Generated System/Libraries/LibC/Generated/unistd.c System/Libraries/LibC/Tests/unistd_smoke.c -o System/Libraries/LibC/Generated/unistd_smoke\nrun 'run unistd smoke' System/Libraries/LibC/Generated/unistd_smoke\nrun 'compile df raw stubs smoke' cc $COMMON -I System/Libraries/LibC/Generated System/Libraries/LibC/Generated/df_raw_stubs.c System/Libraries/LibC/Tests/df_raw_stubs_smoke.c -o System/Libraries/LibC/Generated/df_raw_stubs_smoke\nrun 'run df raw stubs smoke' System/Libraries/LibC/Generated/df_raw_stubs_smoke\nrun 'compile MD5End smoke' cc $COMMON -D_GNU_SOURCE -D_DEFAULT_SOURCE -DMIXTAR_BRIDGE=1 -I System/Userland/Bridge/include -include System/Userland/Bridge/include/mixtar_bridge_compat.h System/Libraries/LibC/Generated/md5_end.c System/Userland/OpenBSD/Source/lib/libc/hash/md5.c System/Libraries/LibC/Tests/md5_end_smoke.c -o System/Libraries/LibC/Generated/md5_end_smoke\nrun 'run MD5End smoke' System/Libraries/LibC/Generated/md5_end_smoke\nrun 'compile string smoke' cc $COMMON -D_GNU_SOURCE -D_DEFAULT_SOURCE -DMIXTAR_BRIDGE=1 -I System/Userland/Bridge/include -include System/Userland/Bridge/include/mixtar_bridge_compat.h System/Libraries/LibC/Generated/string.c System/Libraries/LibC/Tests/string_smoke.c -o System/Libraries/LibC/Generated/string_smoke\nrun 'run string smoke' System/Libraries/LibC/Generated/string_smoke\nrun 'compile stdio smoke' cc $COMMON -D_GNU_SOURCE -D_DEFAULT_SOURCE System/Libraries/LibC/Generated/libc_stdio.c System/Libraries/LibC/Tests/stdio_smoke.c -o System/Libraries/LibC/Generated/stdio_smoke\nrun 'run stdio smoke' System/Libraries/LibC/Generated/stdio_smoke\nrun 'compile BSD compat smoke' cc $COMMON -D_GNU_SOURCE -D_DEFAULT_SOURCE -DMIXTAR_BRIDGE=1 -I System/Userland/Bridge/include -include System/Userland/Bridge/include/mixtar_bridge_compat.h System/Libraries/LibC/Generated/bsd_compat.c System/Libraries/LibC/Tests/bsd_compat_smoke.c -o System/Libraries/LibC/Generated/bsd_compat_smoke\nrun 'run BSD compat smoke' System/Libraries/LibC/Generated/bsd_compat_smoke\nprintf '\\nResult: PASS\\n' >> \"$report\"\ncat \"$report\"\n"
+end
+
+int toolkit_write_libc_test_script():
+    toolkit_ensure_dirs_for("libc-wsl")
+    script = toolkit_libc_test_script()
+    path = toolkit_libc_test_path()
+    rc = write_file(path, script)
+    dealloc(script, path)
+    if rc == 0 then
+        return 1
+    end
+    return 0
+end
+
+string toolkit_libc_wsl_command():
+    path = toolkit_libc_test_path()
+    prefix = "" + "wsl.exe -d Debian -- bash "
+    cmd = prefix + path
+    dealloc(prefix, path)
+    return cmd
+end
+
+int toolkit_libc_test_wsl():
+    prep_rc = toolkit_libc_prepare_sources()
+    if prep_rc != 0 then
+        print "toolkit-build: failed to prepare AILang LibC sources"
+        return prep_rc
+    end
+
+    script_rc = toolkit_write_libc_test_script()
+    if script_rc != 0 then
+        print "toolkit-build: failed to write LibC WSL test script"
+        return script_rc
+    end
+
+    print "toolkit-build: running AILang LibC WSL gate"
+    cmd = toolkit_libc_wsl_command()
+    rc = system(cmd)
+    dealloc(cmd)
+    if rc != 0 then
+        print "toolkit-build: AILang LibC WSL gate failed"
+        return rc
+    end
+
+    print "toolkit-build: AILang LibC WSL gate ok"
+    return 0
+end
+

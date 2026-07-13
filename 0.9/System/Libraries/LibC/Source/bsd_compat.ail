@@ -1,0 +1,1103 @@
+// bsd_compat.ail
+// AILang-owned BSD/POSIX compatibility shims used by the Toolkit bridge.
+//
+// Scope: simple callable adapters that previously lived as static inline C in
+// mixtar_bridge_compat.h. Compile-time macros/types remain in the C header.
+
+#cinclude <sys/types.h>
+#cinclude <pwd.h>
+#cinclude <grp.h>
+
+extern fn setpwent(): void
+extern fn setgrent(): void
+
+const int EINVAL_VALUE = 22
+const int ENOMEM_VALUE = 12
+const int ENOTSUP_VALUE = 95
+const int EOPNOTSUPP_VALUE = 95
+const int ENOSYS_VALUE = 38
+const int SIZE_MAX_SAFE = 9223372036854775807
+
+const int S_IFMT_VALUE = 61440
+const int S_IFDIR_VALUE = 16384
+const int S_IFCHR_VALUE = 8192
+const int S_IFBLK_VALUE = 24576
+const int S_IFIFO_VALUE = 4096
+const int S_IFLNK_VALUE = 40960
+const int S_IFSOCK_VALUE = 49152
+
+const int S_IRUSR_VALUE = 256
+const int S_IWUSR_VALUE = 128
+const int S_IXUSR_VALUE = 64
+const int S_IRGRP_VALUE = 32
+const int S_IWGRP_VALUE = 16
+const int S_IXGRP_VALUE = 8
+const int S_IROTH_VALUE = 4
+const int S_IWOTH_VALUE = 2
+const int S_IXOTH_VALUE = 1
+const int S_IRWXU_VALUE = 448
+const int S_IRWXG_VALUE = 56
+const int S_IRWXO_VALUE = 7
+const int S_ISUID_VALUE = 2048
+const int S_ISGID_VALUE = 1024
+const int S_ISVTX_VALUE = 512
+const int MODE_LOW_MASK_VALUE = 4095
+const int MODE_BLOB_SIZE = 160
+const int MODE_BLOB_MODE_SLOT = 0
+const int MODE_BLOB_SYMBOLIC_SLOT = 1
+const int MODE_BLOB_TEXT_OFFSET = 16
+const int MODE_TEXT_MAX = 127
+
+static int LIBC_GETBSIZE_HEADER = 0
+static int LIBC_STRTONUM_INVALID = 0
+static int LIBC_STRTONUM_TOO_SMALL = 0
+static int LIBC_STRTONUM_TOO_LARGE = 0
+static int LIBC_CAP_CHANNEL = 0
+static int LIBC_FILEARGS = 0
+static int LIBC_CAP_NET_LIMIT = 0
+
+def libc_singleton(slot: i64, size: i64): pointer
+    if slot != 0 then
+        return reinterpret(pointer, slot)
+    end
+    raw = alloc(size)
+    if raw == 0 then
+        return reinterpret(pointer, 0)
+    end
+    memset(raw, 0, size)
+    return reinterpret(pointer, raw)
+end
+
+def libc_dash_string(): pointer
+    raw = alloc(2)
+    if raw == 0 then
+        return reinterpret(pointer, 0)
+    end
+    poke8(raw, 0, 45)
+    poke8(raw, 1, 0)
+    return reinterpret(pointer, raw)
+end
+
+internal int setlogin(name: internal cstring):
+    return 0
+end
+
+internal int revoke(path: internal cstring):
+    errno_set(ENOTSUP_VALUE)
+    return -1
+end
+
+internal int issetugid():
+    return 0
+end
+
+internal void logwtmp(
+    line: internal cstring,
+    name: internal cstring,
+    host: internal cstring
+):
+    return
+end
+
+internal int isduid(value: internal cstring, flags: internal int):
+    return 0
+end
+
+internal int getrtable():
+    return 0
+end
+
+internal int caph_limit_stdio():
+    return 0
+end
+
+internal int caph_enter():
+    return 0
+end
+
+internal void caph_cache_catpages():
+    return
+end
+
+internal int caph_enter_casper():
+    return 0
+end
+
+internal int caph_rights_limit(fd: internal int, rights: internal const_pointer):
+    return 0
+end
+
+internal pointer cap_init():
+    if LIBC_CAP_CHANNEL == 0 then
+        channel = libc_singleton(0, 8)
+        LIBC_CAP_CHANNEL = reinterpret(i64, channel)
+    end
+    return reinterpret(pointer, LIBC_CAP_CHANNEL)
+end
+
+internal int cap_close(channel: internal pointer):
+    return 0
+end
+
+internal pointer cap_service_open(channel: internal pointer, name: internal cstring):
+    return channel
+end
+
+internal pointer fileargs_cinit(
+    casper: internal pointer,
+    argc_value: internal int,
+    argv_value: internal charpp,
+    oflags: internal int,
+    mode: internal mode_t,
+    rights: internal pointer,
+    flags: internal int
+):
+    if LIBC_FILEARGS == 0 then
+        fileargs = libc_singleton(0, 8)
+        LIBC_FILEARGS = reinterpret(i64, fileargs)
+    end
+    if LIBC_FILEARGS != 0 then
+        poke32(LIBC_FILEARGS, 0, flags)
+    end
+    return reinterpret(pointer, LIBC_FILEARGS)
+end
+
+internal pointer cap_net_limit_init(channel: internal pointer, flags: internal int):
+    if LIBC_CAP_NET_LIMIT == 0 then
+        limit = libc_singleton(0, 8)
+        LIBC_CAP_NET_LIMIT = reinterpret(i64, limit)
+    end
+    return reinterpret(pointer, LIBC_CAP_NET_LIMIT)
+end
+
+internal int cap_net_limit_name2addr_family(
+    limit: internal pointer,
+    families: internal intp,
+    count: internal int
+):
+    return 0
+end
+
+internal int cap_net_limit(limit: internal pointer):
+    return 0
+end
+
+internal pointer login_getclass(class_name: internal charptr):
+    return reinterpret(pointer, 0)
+end
+
+internal void login_close(lc: internal pointer):
+    return
+end
+
+internal int login_getcapbool(
+    lc: internal pointer,
+    cap: internal charptr,
+    default_value: internal uint
+):
+    return default_value
+end
+
+internal long login_getcapnum(
+    lc: internal pointer,
+    cap: internal charptr,
+    default_value: internal long,
+    error_value: internal long
+):
+    return default_value
+end
+
+internal long login_getcapsize(
+    lc: internal pointer,
+    cap: internal charptr,
+    default_value: internal long,
+    error_value: internal long
+):
+    return default_value
+end
+
+internal charptr login_getcapstr(
+    lc: internal pointer,
+    cap: internal charptr,
+    default_value: internal charptr,
+    error_value: internal charptr
+):
+    return default_value
+end
+
+internal long login_getcaptime(
+    lc: internal pointer,
+    cap: internal charptr,
+    default_value: internal long,
+    error_value: internal long
+):
+    return default_value
+end
+
+internal charptr login_getstyle(
+    lc: internal pointer,
+    style: internal charptr,
+    kind: internal charptr
+):
+    return style
+end
+
+internal int setclasscontext(class_name: internal charptr, flags: internal uint):
+    return 0
+end
+
+internal int setusercontext(
+    lc: internal pointer,
+    pwd: internal pointer,
+    uid: internal uid_t,
+    flags: internal uint
+):
+    return 0
+end
+
+internal pointer acl_get_fd_np(fd: internal int, kind: internal int):
+    errno_set(ENOTSUP_VALUE)
+    return reinterpret(pointer, 0)
+end
+
+internal pointer acl_get_link_np(path: internal cstring, kind: internal int):
+    errno_set(ENOTSUP_VALUE)
+    return reinterpret(pointer, 0)
+end
+
+internal int acl_set_fd_np(fd: internal int, acl: internal pointer, kind: internal int):
+    errno_set(ENOTSUP_VALUE)
+    return -1
+end
+
+internal int acl_is_trivial_np(acl: internal pointer, trivial: internal intp):
+    trivial_addr = reinterpret(i64, trivial)
+    if trivial_addr != 0 then
+        poke32(trivial_addr, 0, 1)
+    end
+    return 0
+end
+
+internal int acl_is_trivial(acl: internal pointer, trivial: internal intp):
+    return acl_is_trivial_np(acl, trivial)
+end
+
+internal int acl_free(obj: internal pointer):
+    obj_addr = reinterpret(i64, obj)
+    if obj_addr != 0 then
+        dealloc(obj_addr)
+    end
+    return 0
+end
+
+internal int acl_supported(path: internal cstring, kind: internal int):
+    return 0
+end
+
+internal int mac_prepare_file_label(label: internal charpp):
+    label_addr = reinterpret(i64, label)
+    if label_addr == 0 then
+        errno_set(EINVAL_VALUE)
+        return -1
+    end
+    text = libc_dash_string()
+    text_addr = reinterpret(i64, text)
+    if text_addr == 0 then
+        errno_set(ENOMEM_VALUE)
+        return -1
+    end
+    poke64(label_addr, 0, text_addr)
+    return 0
+end
+
+internal int mac_get_file(path: internal cstring, label: internal charptr):
+    return 0
+end
+
+internal int mac_get_link(path: internal cstring, label: internal charptr):
+    return 0
+end
+
+internal int mac_to_text(label: internal charptr, text_out: internal charpp):
+    out_addr = reinterpret(i64, text_out)
+    if out_addr == 0 then
+        errno_set(EINVAL_VALUE)
+        return -1
+    end
+    text = libc_dash_string()
+    text_addr = reinterpret(i64, text)
+    if text_addr == 0 then
+        errno_set(ENOMEM_VALUE)
+        return -1
+    end
+    poke64(out_addr, 0, text_addr)
+    return 0
+end
+
+internal int mac_free(label: internal pointer):
+    label_addr = reinterpret(i64, label)
+    if label_addr != 0 then
+        dealloc(label_addr)
+    end
+    return 0
+end
+
+internal int kqueue():
+    errno_set(ENOSYS_VALUE)
+    return -1
+end
+
+internal int kevent(
+    kq: internal int,
+    changelist: internal const_pointer,
+    nchanges: internal int,
+    eventlist: internal pointer,
+    nevents: internal int,
+    timeout: internal const_pointer
+):
+    errno_set(ENOSYS_VALUE)
+    return -1
+end
+
+def libc_c_strlen(source_addr: i64): i64
+    if source_addr == 0 then
+        return 0
+    end
+    n = 0
+    while peek8(source_addr, n) != 0 then
+        n = n + 1
+    end
+    return n
+end
+
+def libc_vis_copy(dst_addr: i64, dstlen: i64, src_addr: i64, srclen: i64): i64
+    if dst_addr == 0 or src_addr == 0 then
+        errno_set(EINVAL_VALUE)
+        return -1
+    end
+
+    if dstlen != 0 then
+        n = srclen
+        if n > dstlen - 1 then
+            n = dstlen - 1
+        end
+        if n > 0 then
+            memcpy(dst_addr, src_addr, n)
+        end
+        poke8(dst_addr, n, 0)
+    end
+
+    return srclen
+end
+
+internal charptr vis(
+    dst: internal charptr,
+    c: internal int,
+    flag: internal int,
+    nextc: internal int
+):
+    dst_addr = reinterpret(i64, dst)
+    if dst_addr == 0 then
+        return reinterpret(pointer, 0)
+    end
+    poke8(dst_addr, 0, c)
+    poke8(dst_addr, 1, 0)
+    return reinterpret(pointer, ptr_add(dst_addr, 1))
+end
+
+internal int strvis(dst: internal charptr, src: internal cstring, flag: internal int):
+    src_addr = reinterpret(i64, src)
+    return libc_vis_copy(reinterpret(i64, dst), libc_c_strlen(src_addr) + 1, src_addr, libc_c_strlen(src_addr))
+end
+
+internal int strnvis(
+    dst: internal charptr,
+    src: internal cstring,
+    dstlen: internal size_t,
+    flag: internal int
+):
+    src_addr = reinterpret(i64, src)
+    return libc_vis_copy(reinterpret(i64, dst), dstlen, src_addr, libc_c_strlen(src_addr))
+end
+
+internal int strvisx(
+    dst: internal charptr,
+    src: internal cstring,
+    srclen: internal size_t,
+    flag: internal int
+):
+    return libc_vis_copy(reinterpret(i64, dst), srclen + 1, reinterpret(i64, src), srclen)
+end
+
+internal int strnvisx(
+    dst: internal charptr,
+    src: internal cstring,
+    srclen: internal size_t,
+    dstlen: internal size_t,
+    flag: internal int
+):
+    return libc_vis_copy(reinterpret(i64, dst), dstlen, reinterpret(i64, src), srclen)
+end
+
+internal int stravis(out: internal charpp, src: internal cstring, flag: internal int):
+    out_addr = reinterpret(i64, out)
+    src_addr = reinterpret(i64, src)
+    if out_addr == 0 or src_addr == 0 then
+        errno_set(EINVAL_VALUE)
+        return -1
+    end
+
+    src_len = libc_c_strlen(src_addr)
+    copy_addr = alloc(src_len + 1)
+    if copy_addr == 0 then
+        errno_set(ENOMEM_VALUE)
+        return -1
+    end
+    memcpy(copy_addr, src_addr, src_len + 1)
+    poke64(out_addr, 0, copy_addr)
+    return src_len
+end
+
+internal int stravisx(
+    out: internal charpp,
+    src: internal cstring,
+    srclen: internal size_t,
+    flag: internal int
+):
+    out_addr = reinterpret(i64, out)
+    src_addr = reinterpret(i64, src)
+    if out_addr == 0 or src_addr == 0 then
+        errno_set(EINVAL_VALUE)
+        return -1
+    end
+
+    copy_addr = alloc(srclen + 1)
+    if copy_addr == 0 then
+        errno_set(ENOMEM_VALUE)
+        return -1
+    end
+    if srclen > 0 then
+        memcpy(copy_addr, src_addr, srclen)
+    end
+    poke8(copy_addr, srclen, 0)
+    poke64(out_addr, 0, copy_addr)
+    return srclen
+end
+
+internal int strunvis(dst: internal charptr, src: internal cstring):
+    src_addr = reinterpret(i64, src)
+    return libc_vis_copy(reinterpret(i64, dst), libc_c_strlen(src_addr) + 1, src_addr, libc_c_strlen(src_addr))
+end
+
+internal int strnunvis(
+    dst: internal charptr,
+    src: internal cstring,
+    dstlen: internal size_t
+):
+    src_addr = reinterpret(i64, src)
+    return libc_vis_copy(reinterpret(i64, dst), dstlen, src_addr, libc_c_strlen(src_addr))
+end
+
+internal int unvis(
+    cp: internal charptr,
+    c: internal int,
+    astate: internal intp,
+    flag: internal int
+):
+    cp_addr = reinterpret(i64, cp)
+    if cp_addr != 0 then
+        poke8(cp_addr, 0, c)
+    end
+    return 1
+end
+
+internal int setpassent(stayopen: internal int):
+    setpwent()
+    return 1
+end
+
+internal int setgroupent(stayopen: internal int):
+    setgrent()
+    return 1
+end
+
+internal int chflags(path: internal cstring, flags: internal ulong):
+    return 0
+end
+
+internal int lchflags(path: internal cstring, flags: internal ulong):
+    return 0
+end
+
+internal int fchflags(fd: internal int, flags: internal ulong):
+    return 0
+end
+
+internal int chflagsat(
+    fd: internal int,
+    path: internal cstring,
+    flags: internal ulong,
+    atflags: internal int
+):
+    return 0
+end
+
+internal long lpathconf(path: internal cstring, name: internal int):
+    errno_set(EINVAL_VALUE)
+    return -1
+end
+
+internal int undelete(path: internal cstring):
+    errno_set(ENOTSUP_VALUE)
+    return -1
+end
+
+def libc_write_perm_char(out_addr: i64, offset: i64, enabled: i64, yes: i64): void
+    if enabled != 0 then
+        poke8(out_addr, offset, yes)
+    else
+        poke8(out_addr, offset, 45)
+    end
+    return
+end
+
+internal void strmode(mode: internal mode_t, out: internal charptr):
+    out_addr = reinterpret(i64, out)
+    kind = mode & S_IFMT_VALUE
+    type_ch = 45
+
+    if kind == S_IFDIR_VALUE then
+        type_ch = 100
+    end
+    if kind == S_IFLNK_VALUE then
+        type_ch = 108
+    end
+    if kind == S_IFCHR_VALUE then
+        type_ch = 99
+    end
+    if kind == S_IFBLK_VALUE then
+        type_ch = 98
+    end
+    if kind == S_IFIFO_VALUE then
+        type_ch = 112
+    end
+    if kind == S_IFSOCK_VALUE then
+        type_ch = 115
+    end
+
+    poke8(out_addr, 0, type_ch)
+    libc_write_perm_char(out_addr, 1, mode & S_IRUSR_VALUE, 114)
+    libc_write_perm_char(out_addr, 2, mode & S_IWUSR_VALUE, 119)
+    libc_write_perm_char(out_addr, 3, mode & S_IXUSR_VALUE, 120)
+    libc_write_perm_char(out_addr, 4, mode & S_IRGRP_VALUE, 114)
+    libc_write_perm_char(out_addr, 5, mode & S_IWGRP_VALUE, 119)
+    libc_write_perm_char(out_addr, 6, mode & S_IXGRP_VALUE, 120)
+    libc_write_perm_char(out_addr, 7, mode & S_IROTH_VALUE, 114)
+    libc_write_perm_char(out_addr, 8, mode & S_IWOTH_VALUE, 119)
+    libc_write_perm_char(out_addr, 9, mode & S_IXOTH_VALUE, 120)
+    poke8(out_addr, 10, 32)
+    poke8(out_addr, 11, 0)
+    return
+end
+
+def libc_getbsize_header(): pointer
+    if LIBC_GETBSIZE_HEADER == 0 then
+        raw = alloc(11)
+        if raw == 0 then
+            return reinterpret(pointer, 0)
+        end
+        poke8(raw, 0, 53)
+        poke8(raw, 1, 49)
+        poke8(raw, 2, 50)
+        poke8(raw, 3, 45)
+        poke8(raw, 4, 98)
+        poke8(raw, 5, 108)
+        poke8(raw, 6, 111)
+        poke8(raw, 7, 99)
+        poke8(raw, 8, 107)
+        poke8(raw, 9, 115)
+        poke8(raw, 10, 0)
+        LIBC_GETBSIZE_HEADER = raw
+    end
+    return reinterpret(pointer, LIBC_GETBSIZE_HEADER)
+end
+
+internal charptr getbsize(headerlen: internal intp, blocksize: internal longp):
+    header_addr = libc_getbsize_header()
+    headerlen_addr = reinterpret(i64, headerlen)
+    blocksize_addr = reinterpret(i64, blocksize)
+
+    if headerlen_addr != 0 then
+        poke32(headerlen_addr, 0, 10)
+    end
+    if blocksize_addr != 0 then
+        poke64(blocksize_addr, 0, 512)
+    end
+
+    return header_addr
+end
+
+def libc_parse_octal_mode_value(text: pointer): i64
+    addr = reinterpret(i64, text)
+    if addr == 0 then
+        return -1
+    end
+    if peek8(addr, 0) == 0 then
+        return -1
+    end
+
+    idx = 0
+    value = 0
+    while true then
+        ch = peek8(addr, idx)
+        if ch == 0 then
+            break
+        end
+        if ch < 48 or ch > 55 then
+            return -1
+        end
+        value = value * 8 + (ch - 48)
+        if value > MODE_LOW_MASK_VALUE then
+            return -1
+        end
+        idx++
+    end
+    return value
+end
+
+def libc_symbolic_who_bit(ch: i64): i64
+    if ch == 117 then
+        return S_IRWXU_VALUE | S_ISUID_VALUE
+    end
+    if ch == 103 then
+        return S_IRWXG_VALUE | S_ISGID_VALUE
+    end
+    if ch == 111 then
+        return S_IRWXO_VALUE
+    end
+    if ch == 97 then
+        return S_IRWXU_VALUE | S_IRWXG_VALUE | S_IRWXO_VALUE | S_ISUID_VALUE | S_ISGID_VALUE | S_ISVTX_VALUE
+    end
+    return 0
+end
+
+def libc_mode_perm_for_who(perm: i64, who: i64, base: i64): i64
+    bits = 0
+
+    if perm == 114 then
+        if (who & S_IRWXU_VALUE) != 0 then
+            bits = bits | S_IRUSR_VALUE
+        end
+        if (who & S_IRWXG_VALUE) != 0 then
+            bits = bits | S_IRGRP_VALUE
+        end
+        if (who & S_IRWXO_VALUE) != 0 then
+            bits = bits | S_IROTH_VALUE
+        end
+        return bits
+    end
+
+    if perm == 119 then
+        if (who & S_IRWXU_VALUE) != 0 then
+            bits = bits | S_IWUSR_VALUE
+        end
+        if (who & S_IRWXG_VALUE) != 0 then
+            bits = bits | S_IWGRP_VALUE
+        end
+        if (who & S_IRWXO_VALUE) != 0 then
+            bits = bits | S_IWOTH_VALUE
+        end
+        return bits
+    end
+
+    if perm == 120 or perm == 88 then
+        if perm == 88 and (base & (S_IXUSR_VALUE | S_IXGRP_VALUE | S_IXOTH_VALUE)) == 0 then
+            return 0
+        end
+        if (who & S_IRWXU_VALUE) != 0 then
+            bits = bits | S_IXUSR_VALUE
+        end
+        if (who & S_IRWXG_VALUE) != 0 then
+            bits = bits | S_IXGRP_VALUE
+        end
+        if (who & S_IRWXO_VALUE) != 0 then
+            bits = bits | S_IXOTH_VALUE
+        end
+        return bits
+    end
+
+    return -1
+end
+
+def libc_parse_symbolic_mode_value(text: pointer, base: i64): i64
+    addr = reinterpret(i64, text)
+    if addr == 0 then
+        return -1
+    end
+    if peek8(addr, 0) == 0 then
+        return -1
+    end
+
+    idx = 0
+    mode = base
+    while true then
+        ch = peek8(addr, idx)
+        if ch == 0 then
+            break
+        end
+
+        who = 0
+        while true then
+            bit = libc_symbolic_who_bit(ch)
+            if bit == 0 then
+                break
+            end
+            who = who | bit
+            idx++
+            ch = peek8(addr, idx)
+        end
+        if who == 0 then
+            who = S_IRWXU_VALUE | S_IRWXG_VALUE | S_IRWXO_VALUE
+        end
+
+        op = peek8(addr, idx)
+        if op != 43 and op != 45 and op != 61 then
+            return -1
+        end
+        idx++
+
+        bits = 0
+        while true then
+            ch = peek8(addr, idx)
+            if ch == 0 or ch == 44 then
+                break
+            end
+            piece = libc_mode_perm_for_who(ch, who, mode)
+            if piece < 0 then
+                return -1
+            end
+            bits = bits | piece
+            idx++
+        end
+
+        if op == 43 then
+            mode = mode | bits
+        else
+            if op == 45 then
+                mode = mode & (MODE_LOW_MASK_VALUE - bits)
+            else
+                mode = mode & (MODE_LOW_MASK_VALUE - who)
+                mode = mode | bits
+            end
+        end
+
+        if ch == 44 then
+            idx++
+        end
+    end
+    return mode
+end
+
+def libc_copy_mode_text(src: pointer, dst_addr: i64): void
+    src_addr = reinterpret(i64, src)
+    i = 0
+    while i < MODE_TEXT_MAX then
+        ch = peek8(src_addr, i)
+        poke8(dst_addr, MODE_BLOB_TEXT_OFFSET + i, ch)
+        if ch == 0 then
+            return
+        end
+        i++
+    end
+    poke8(dst_addr, MODE_BLOB_TEXT_OFFSET + MODE_TEXT_MAX, 0)
+    return
+end
+
+internal pointer setmode(mode_text: internal cstring):
+    text = reinterpret(pointer, mode_text)
+    parsed = libc_parse_octal_mode_value(text)
+    symbolic = 0
+
+    if parsed < 0 then
+        parsed = libc_parse_symbolic_mode_value(text, 0)
+        if parsed < 0 then
+            return reinterpret(pointer, 0)
+        end
+        symbolic = 1
+    end
+
+    blob = alloc(MODE_BLOB_SIZE)
+    if blob == 0 then
+        return reinterpret(pointer, 0)
+    end
+    memset(blob, 0, MODE_BLOB_SIZE)
+    poke64(blob, MODE_BLOB_MODE_SLOT, parsed)
+    poke64(blob, MODE_BLOB_SYMBOLIC_SLOT, symbolic)
+    if symbolic != 0 then
+        libc_copy_mode_text(text, blob)
+    end
+    return reinterpret(pointer, blob)
+end
+
+internal mode_t getmode(set: internal const_pointer, base: internal mode_t):
+    blob = reinterpret(i64, set)
+    if blob == 0 then
+        return base
+    end
+
+    symbolic = peek64(blob, MODE_BLOB_SYMBOLIC_SLOT)
+    if symbolic != 0 then
+        text_addr = ptr_add(blob, MODE_BLOB_TEXT_OFFSET)
+        parsed = libc_parse_symbolic_mode_value(reinterpret(pointer, text_addr), base)
+        if parsed >= 0 then
+            return parsed
+        end
+    end
+
+    return peek64(blob, MODE_BLOB_MODE_SLOT)
+end
+
+def libc_strtonum_error_text(kind: i64): pointer
+    if kind == 1 then
+        if LIBC_STRTONUM_INVALID == 0 then
+            raw = alloc(8)
+            if raw == 0 then
+                return reinterpret(pointer, 0)
+            end
+            poke8(raw, 0, 105)
+            poke8(raw, 1, 110)
+            poke8(raw, 2, 118)
+            poke8(raw, 3, 97)
+            poke8(raw, 4, 108)
+            poke8(raw, 5, 105)
+            poke8(raw, 6, 100)
+            poke8(raw, 7, 0)
+            LIBC_STRTONUM_INVALID = raw
+        end
+        return reinterpret(pointer, LIBC_STRTONUM_INVALID)
+    end
+    if kind == 2 then
+        if LIBC_STRTONUM_TOO_SMALL == 0 then
+            raw = alloc(10)
+            if raw == 0 then
+                return reinterpret(pointer, 0)
+            end
+            poke8(raw, 0, 116)
+            poke8(raw, 1, 111)
+            poke8(raw, 2, 111)
+            poke8(raw, 3, 32)
+            poke8(raw, 4, 115)
+            poke8(raw, 5, 109)
+            poke8(raw, 6, 97)
+            poke8(raw, 7, 108)
+            poke8(raw, 8, 108)
+            poke8(raw, 9, 0)
+            LIBC_STRTONUM_TOO_SMALL = raw
+        end
+        return reinterpret(pointer, LIBC_STRTONUM_TOO_SMALL)
+    end
+    if LIBC_STRTONUM_TOO_LARGE == 0 then
+        raw = alloc(10)
+        if raw == 0 then
+            return reinterpret(pointer, 0)
+        end
+        poke8(raw, 0, 116)
+        poke8(raw, 1, 111)
+        poke8(raw, 2, 111)
+        poke8(raw, 3, 32)
+        poke8(raw, 4, 108)
+        poke8(raw, 5, 97)
+        poke8(raw, 6, 114)
+        poke8(raw, 7, 103)
+        poke8(raw, 8, 101)
+        poke8(raw, 9, 0)
+        LIBC_STRTONUM_TOO_LARGE = raw
+    end
+    return reinterpret(pointer, LIBC_STRTONUM_TOO_LARGE)
+end
+
+def libc_store_errstr(errstr: pointer, kind: i64): void
+    slot = reinterpret(i64, errstr)
+    if slot == 0 then
+        return
+    end
+    if kind == 0 then
+        poke64(slot, 0, 0)
+    else
+        text = libc_strtonum_error_text(kind)
+        poke64(slot, 0, reinterpret(i64, text))
+    end
+    return
+end
+
+internal longlong strtonum(
+    nptr: internal cstring,
+    minval: internal longlong,
+    maxval: internal longlong,
+    errstr: internal cstringp
+):
+    addr = reinterpret(i64, nptr)
+    errslot = reinterpret(pointer, errstr)
+    if addr == 0 then
+        libc_store_errstr(errslot, 1)
+        return 0
+    end
+
+    idx = 0
+    sign = 1
+    ch = peek8(addr, idx)
+    if ch == 45 then
+        sign = -1
+        idx++
+    else
+        if ch == 43 then
+            idx++
+        end
+    end
+
+    ch = peek8(addr, idx)
+    if ch < 48 or ch > 57 then
+        libc_store_errstr(errslot, 1)
+        return 0
+    end
+
+    value = 0
+    while true then
+        ch = peek8(addr, idx)
+        if ch == 0 then
+            break
+        end
+        if ch < 48 or ch > 57 then
+            libc_store_errstr(errslot, 1)
+            return 0
+        end
+        digit = ch - 48
+        if value > SIZE_MAX_SAFE / 10 then
+            if sign < 0 then
+                libc_store_errstr(errslot, 2)
+            else
+                libc_store_errstr(errslot, 3)
+            end
+            return 0
+        end
+        value = value * 10 + digit
+        idx++
+    end
+
+    if sign < 0 then
+        value = 0 - value
+    end
+
+    if value < minval then
+        libc_store_errstr(errslot, 2)
+        return 0
+    end
+    if value > maxval then
+        libc_store_errstr(errslot, 3)
+        return 0
+    end
+
+    libc_store_errstr(errslot, 0)
+    return value
+end
+
+internal charptr fflagstostr(flags: internal ulong):
+    out = alloc(1)
+    if out == 0 then
+        return reinterpret(pointer, 0)
+    end
+    poke8(out, 0, 0)
+    return reinterpret(pointer, out)
+end
+
+internal int strtofflags(
+    stringp: internal charpp,
+    setp: internal uintp,
+    clrp: internal uintp
+):
+    set_addr = reinterpret(i64, setp)
+    if set_addr != 0 then
+        poke32(set_addr, 0, 0)
+    end
+
+    clr_addr = reinterpret(i64, clrp)
+    if clr_addr != 0 then
+        poke32(clr_addr, 0, 0)
+    end
+
+    stringp_addr = reinterpret(i64, stringp)
+    if stringp_addr == 0 then
+        return 0
+    end
+
+    string_addr = peek64(stringp_addr, 0)
+    if string_addr == 0 then
+        return 0
+    end
+
+    first = peek8(string_addr, 0)
+    if first == 0 then
+        return 0
+    end
+
+    errno_set(EOPNOTSUPP_VALUE)
+    return -1
+end
+
+internal pointer recallocarray(
+    memory: internal pointer,
+    oldnmemb: internal size_t,
+    nmemb: internal size_t,
+    size: internal size_t
+):
+    old_count = oldnmemb + 0
+    new_count = nmemb + 0
+    elem_size = size + 0
+
+    if old_count != 0 and elem_size > SIZE_MAX_SAFE / old_count then
+        errno_set(ENOMEM_VALUE)
+        return reinterpret(pointer, 0)
+    end
+    if new_count != 0 and elem_size > SIZE_MAX_SAFE / new_count then
+        errno_set(ENOMEM_VALUE)
+        return reinterpret(pointer, 0)
+    end
+
+    old_size = old_count * elem_size
+    new_size = new_count * elem_size
+    ptr_addr = reinterpret(i64, memory)
+
+    if new_size == 0 then
+        if ptr_addr != 0 and old_size != 0 then
+            memset(ptr_addr, 0, old_size)
+        end
+        if ptr_addr != 0 then
+            dealloc(ptr_addr)
+        end
+        return reinterpret(pointer, 0)
+    end
+
+    next_addr = realloc(ptr_addr, new_size)
+    if next_addr == 0 then
+        return reinterpret(pointer, 0)
+    end
+
+    if new_size > old_size then
+        fill_addr = ptr_add(next_addr, old_size)
+        memset(fill_addr, 0, new_size - old_size)
+    end
+
+    return reinterpret(pointer, next_addr)
+end
+
+internal void freezero(memory: internal pointer, size: internal size_t):
+    ptr_addr = reinterpret(i64, memory)
+    byte_count = size + 0
+    if ptr_addr != 0 and byte_count != 0 then
+        memset(ptr_addr, 0, byte_count)
+    end
+    if ptr_addr != 0 then
+        dealloc(ptr_addr)
+    end
+    return
+end

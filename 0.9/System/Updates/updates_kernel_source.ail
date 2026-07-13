@@ -1,0 +1,446 @@
+const string KERNEL_SOURCE_DEFAULT_CONFIG = "/System/Configuration/Updates.config"
+const string KERNEL_SOURCE_DEFAULT_WORK = "/Temporary/Updates/kernel"
+const int KERNEL_SOURCE_OK = 0
+const int KERNEL_SOURCE_USAGE = 64
+const int KERNEL_SOURCE_BLOCKED = 65
+const int MI_SQLITE_ROW = 100
+const int MI_SQLITE_DONE = 101
+
+void source_line(prefix: string, value: string):
+    line = prefix + value
+    print line
+    dealloc(line)
+end
+
+int source_fail(message: string):
+    source_line("kernel-source: ", message)
+    return KERNEL_SOURCE_BLOCKED
+end
+
+string source_config_path():
+    if argc() >= 3 then
+        return "" + argv(2)
+    end
+    return "" + KERNEL_SOURCE_DEFAULT_CONFIG
+end
+
+string source_work_path():
+    if argc() >= 4 then
+        return "" + argv(3)
+    end
+    return "" + KERNEL_SOURCE_DEFAULT_WORK
+end
+
+@effect(sqlite)
+string query_text(db: int, sql: string):
+    stmt = sql_prepare(db, sql)
+    if stmt == 0 then
+        return "" + ""
+    end
+    rc = sql_step(stmt)
+    if rc != MI_SQLITE_ROW then
+        sql_finalize(stmt)
+        return "" + ""
+    end
+    value = "" + sql_column_text(stmt, 0)
+    sql_finalize(stmt)
+    return value
+end
+
+@effect(process)
+int run_mkdir(executable: string, path: string):
+    args = str_array_new(3)
+    args = str_array_push(args, executable)
+    args = str_array_push(args, "-p")
+    args = str_array_push(args, path)
+    rc = process_run_argv(args)
+    dealloc_str_array(args)
+    return rc
+end
+
+@effect(sqlite, process)
+int spawn_download(db: int, fetcher: string, url: string, path: string, connect_timeout: string, max_time: string):
+    dns_servers = query_text(db, "SELECT value FROM setting WHERE key='networking.dns.servers'")
+    if strlen(dns_servers) == 0 then
+        dealloc(dns_servers)
+        return -1
+    end
+    args = str_array_new(17)
+    args = str_array_push(args, fetcher)
+    args = str_array_push(args, "--dns-servers")
+    args = str_array_push(args, dns_servers)
+    args = str_array_push(args, "--fail")
+    args = str_array_push(args, "--silent")
+    args = str_array_push(args, "--show-error")
+    args = str_array_push(args, "--location")
+    args = str_array_push(args, "--http1.1")
+    args = str_array_push(args, "--connect-timeout")
+    args = str_array_push(args, connect_timeout)
+    args = str_array_push(args, "--max-time")
+    args = str_array_push(args, max_time)
+    args = str_array_push(args, "--continue-at")
+    args = str_array_push(args, "-")
+    args = str_array_push(args, "--output")
+    args = str_array_push(args, path)
+    args = str_array_push(args, url)
+    env = str_array_new(0)
+    ops = str_array_new(0)
+    targets = str_array_new(0)
+    pid = process_spawn_argv_env_redirs(args, env, ops, targets)
+    dealloc(dns_servers)
+    dealloc_str_array(args)
+    dealloc_str_array(env)
+    dealloc_str_array(ops)
+    dealloc_str_array(targets)
+    return pid
+end
+
+@effect(process)
+void stop_started(pid: int):
+    if pid > 0 then
+        process_kill_pid(pid, 15)
+        process_wait_pid(pid)
+    end
+end
+
+string rt_base(version: string):
+    marker = index_of(version, "-rt")
+    if marker < 0 then
+        return "" + ""
+    end
+    return substr(version, 0, marker)
+end
+
+int state_fetchable(state: string):
+    if state == "available-unverified" or state == "current-unverified" or state == "downloaded-unverified" then
+        return 1
+    end
+    return 0
+end
+
+@effect(sqlite)
+int save_download_paths(db: int, source_path: string, source_signature_path: string, patch_path: string, patch_signature_path: string):
+    if sql_exec(db, "BEGIN IMMEDIATE") != 0 then
+        return KERNEL_SOURCE_BLOCKED
+    end
+    stmt = sql_prepare(db, "UPDATE kernel_observation SET stable_source_path=?,stable_signature_path=?,rt_patch_path=?,rt_signature_path=?,trust_path='',status='downloaded-unverified',detail='kernel source, RT patch and detached signatures downloaded in parallel',verified_at_ms=0 WHERE component_id='linux-rt'")
+    if stmt == 0 then
+        sql_exec(db, "ROLLBACK")
+        return KERNEL_SOURCE_BLOCKED
+    end
+    sql_bind_text(stmt, 1, source_path)
+    sql_bind_text(stmt, 2, source_signature_path)
+    sql_bind_text(stmt, 3, patch_path)
+    sql_bind_text(stmt, 4, patch_signature_path)
+    rc = sql_step(stmt)
+    sql_finalize(stmt)
+    if rc != MI_SQLITE_DONE then
+        sql_exec(db, "ROLLBACK")
+        return KERNEL_SOURCE_BLOCKED
+    end
+    stmt = sql_prepare(db, "UPDATE observation SET status='downloaded-unverified',source_path=?,signature_path=?,trust_path='',detail='kernel source, RT patch and detached signatures downloaded in parallel' WHERE component_id='linux-rt'")
+    if stmt == 0 then
+        sql_exec(db, "ROLLBACK")
+        return KERNEL_SOURCE_BLOCKED
+    end
+    sql_bind_text(stmt, 1, source_path)
+    sql_bind_text(stmt, 2, source_signature_path)
+    rc = sql_step(stmt)
+    sql_finalize(stmt)
+    if rc != MI_SQLITE_DONE or sql_exec(db, "COMMIT") != 0 then
+        sql_exec(db, "ROLLBACK")
+        return KERNEL_SOURCE_BLOCKED
+    end
+    return KERNEL_SOURCE_OK
+end
+
+@effect(sqlite, process)
+int updates_fetch_kernel(db: int, work: string):
+    state = query_text(db, "SELECT status FROM kernel_observation WHERE component_id='linux-rt'")
+    stable = query_text(db, "SELECT stable_version FROM kernel_observation WHERE component_id='linux-rt'")
+    rt = query_text(db, "SELECT rt_version FROM kernel_observation WHERE component_id='linux-rt'")
+    source_uri = query_text(db, "SELECT stable_source_uri FROM kernel_observation WHERE component_id='linux-rt'")
+    source_signature_uri = query_text(db, "SELECT stable_signature_uri FROM kernel_observation WHERE component_id='linux-rt'")
+    patch_uri = query_text(db, "SELECT rt_patch_uri FROM kernel_observation WHERE component_id='linux-rt'")
+    patch_signature_uri = query_text(db, "SELECT rt_signature_uri FROM kernel_observation WHERE component_id='linux-rt'")
+    fetcher = query_text(db, "SELECT value FROM setting WHERE key='tool.fetch'")
+    mkdir_exe = query_text(db, "SELECT value FROM setting WHERE key='tool.mkdir'")
+    connect_timeout = query_text(db, "SELECT value FROM setting WHERE key='kernel.download.connect_timeout_seconds'")
+    max_time = query_text(db, "SELECT value FROM setting WHERE key='kernel.download.max_time_seconds'")
+    in_tree = 0
+    if rt == "in-tree" then
+        in_tree = 1
+    end
+    if state_fetchable(state) == 0 then
+        source_line("Kernel source gate: BLOCKED, state=", state)
+        dealloc(state, stable, rt, source_uri, source_signature_uri, patch_uri, patch_signature_uri, fetcher, mkdir_exe, connect_timeout, max_time)
+        return KERNEL_SOURCE_BLOCKED
+    end
+    base = rt_base(rt)
+    if in_tree == 0 and stable != base then
+        dealloc(state, stable, rt, source_uri, source_signature_uri, patch_uri, patch_signature_uri, fetcher, mkdir_exe, connect_timeout, max_time, base)
+        return source_fail("stable kernel and PREEMPT_RT patch are not an exact version pair")
+    end
+    if strlen(source_uri) == 0 or strlen(source_signature_uri) == 0 or (in_tree == 0 and (strlen(patch_uri) == 0 or strlen(patch_signature_uri) == 0)) or strlen(fetcher) == 0 or strlen(mkdir_exe) == 0 or strlen(connect_timeout) == 0 or strlen(max_time) == 0 then
+        dealloc(state, stable, rt, source_uri, source_signature_uri, patch_uri, patch_signature_uri, fetcher, mkdir_exe, connect_timeout, max_time, base)
+        return source_fail("kernel acquisition policy is incomplete")
+    end
+    if run_mkdir(mkdir_exe, work) != 0 then
+        dealloc(state, stable, rt, source_uri, source_signature_uri, patch_uri, patch_signature_uri, fetcher, mkdir_exe, connect_timeout, max_time, base)
+        return source_fail("cannot create isolated kernel work directory")
+    end
+    source_name_left = "linux-" + stable
+    source_name = source_name_left + ".tar.xz"
+    dealloc(source_name_left)
+    source_signature_name = "linux-" + stable
+    source_signature_file = source_signature_name + ".tar.sign"
+    dealloc(source_signature_name)
+    patch_name = "" + ""
+    patch_signature_name = "" + ""
+    if in_tree == 0 then
+        patch_name_left = "patch-" + rt
+        dealloc(patch_name)
+        patch_name = patch_name_left + ".patch.xz"
+        dealloc(patch_name_left)
+        patch_signature_name_left = "patch-" + rt
+        dealloc(patch_signature_name)
+        patch_signature_name = patch_signature_name_left + ".patch.sign"
+        dealloc(patch_signature_name_left)
+    end
+    source_path = work + "/" + source_name
+    source_signature_path = work + "/" + source_signature_file
+    patch_path = work + "/" + patch_name
+    patch_signature_path = work + "/" + patch_signature_name
+    pid_source = spawn_download(db, fetcher, source_uri, source_path, connect_timeout, max_time)
+    pid_source_signature = spawn_download(db, fetcher, source_signature_uri, source_signature_path, connect_timeout, max_time)
+    pid_patch = 0
+    pid_patch_signature = 0
+    if in_tree == 0 then
+        pid_patch = spawn_download(db, fetcher, patch_uri, patch_path, connect_timeout, max_time)
+        pid_patch_signature = spawn_download(db, fetcher, patch_signature_uri, patch_signature_path, connect_timeout, max_time)
+    end
+    if pid_source <= 0 or pid_source_signature <= 0 or (in_tree == 0 and (pid_patch <= 0 or pid_patch_signature <= 0)) then
+        stop_started(pid_source)
+        stop_started(pid_source_signature)
+        stop_started(pid_patch)
+        stop_started(pid_patch_signature)
+        dealloc(state, stable, rt, source_uri, source_signature_uri, patch_uri, patch_signature_uri, fetcher, mkdir_exe, connect_timeout, max_time, base, source_name, source_signature_file, patch_name, patch_signature_name, source_path, source_signature_path, patch_path, patch_signature_path)
+        return source_fail("could not start all four parallel kernel downloads")
+    end
+    rc_source = process_wait_pid(pid_source)
+    rc_source_signature = process_wait_pid(pid_source_signature)
+    rc_patch = 0
+    rc_patch_signature = 0
+    if in_tree == 0 then
+        rc_patch = process_wait_pid(pid_patch)
+        rc_patch_signature = process_wait_pid(pid_patch_signature)
+    end
+    if rc_source != 0 or rc_source_signature != 0 or rc_patch != 0 or rc_patch_signature != 0 then
+        dealloc(state, stable, rt, source_uri, source_signature_uri, patch_uri, patch_signature_uri, fetcher, mkdir_exe, connect_timeout, max_time, base, source_name, source_signature_file, patch_name, patch_signature_name, source_path, source_signature_path, patch_path, patch_signature_path)
+        return source_fail("one or more kernel downloads failed")
+    end
+    rc = save_download_paths(db, source_path, source_signature_path, patch_path, patch_signature_path)
+    if rc == KERNEL_SOURCE_OK then
+        if in_tree == 1 then
+            print "Kernel acquisition: PASS (source and signature downloaded in parallel)"
+        else
+            print "Kernel acquisition: PASS (four parallel downloads)"
+        end
+    end
+    dealloc(state, stable, rt, source_uri, source_signature_uri, patch_uri, patch_signature_uri, fetcher, mkdir_exe, connect_timeout, max_time, base, source_name, source_signature_file, patch_name, patch_signature_name, source_path, source_signature_path, patch_path, patch_signature_path)
+    return rc
+end
+
+string without_xz(path: string):
+    if strlen(path) <= 3 then
+        return "" + ""
+    end
+    suffix = substr(path, strlen(path) - 3, 3)
+    if suffix != ".xz" then
+        dealloc(suffix)
+        return "" + ""
+    end
+    dealloc(suffix)
+    return substr(path, 0, strlen(path) - 3)
+end
+
+@effect(process)
+int decompress_xz(xz: string, source: string, output: string):
+    args = str_array_new(6)
+    args = str_array_push(args, xz)
+    args = str_array_push(args, "--decompress")
+    args = str_array_push(args, "--keep")
+    args = str_array_push(args, "--force")
+    args = str_array_push(args, "--stdout")
+    args = str_array_push(args, source)
+    env = str_array_new(0)
+    ops = str_array_new(1)
+    ops = str_array_push(ops, ">")
+    targets = str_array_new(1)
+    targets = str_array_push(targets, output)
+    rc = process_run_argv_env_redirs(args, env, ops, targets)
+    dealloc_str_array(args)
+    dealloc_str_array(env)
+    dealloc_str_array(ops)
+    dealloc_str_array(targets)
+    return rc
+end
+
+@effect(process)
+int run_signature_verify(executable: string, config: string, source: string, signature: string):
+    args = str_array_new(5)
+    args = str_array_push(args, executable)
+    args = str_array_push(args, config)
+    args = str_array_push(args, "linux-rt")
+    args = str_array_push(args, source)
+    args = str_array_push(args, signature)
+    rc = process_run_argv(args)
+    dealloc_str_array(args)
+    return rc
+end
+
+@effect(sqlite)
+int mark_verified(db: int, trust_path: string):
+    if sql_exec(db, "BEGIN IMMEDIATE") != 0 then
+        return KERNEL_SOURCE_BLOCKED
+    end
+    stmt = sql_prepare(db, "UPDATE kernel_observation SET trust_path=?,status='verified-source',detail='kernel source inputs verified with the pinned kernel.org signing fingerprint',verified_at_ms=? WHERE component_id='linux-rt'")
+    if stmt == 0 then
+        sql_exec(db, "ROLLBACK")
+        return KERNEL_SOURCE_BLOCKED
+    end
+    sql_bind_text(stmt, 1, trust_path)
+    sql_bind_int(stmt, 2, time_ms())
+    rc = sql_step(stmt)
+    sql_finalize(stmt)
+    if rc != MI_SQLITE_DONE then
+        sql_exec(db, "ROLLBACK")
+        return KERNEL_SOURCE_BLOCKED
+    end
+    stmt = sql_prepare(db, "UPDATE observation SET status='verified-source',trust_path=?,detail='kernel source inputs verified with the pinned kernel.org signing fingerprint' WHERE component_id='linux-rt'")
+    if stmt == 0 then
+        sql_exec(db, "ROLLBACK")
+        return KERNEL_SOURCE_BLOCKED
+    end
+    sql_bind_text(stmt, 1, trust_path)
+    rc = sql_step(stmt)
+    sql_finalize(stmt)
+    if rc != MI_SQLITE_DONE or sql_exec(db, "COMMIT") != 0 then
+        sql_exec(db, "ROLLBACK")
+        return KERNEL_SOURCE_BLOCKED
+    end
+    return KERNEL_SOURCE_OK
+end
+
+@effect(sqlite, process)
+int updates_verify_kernel(db: int, config: string, work: string):
+    state = query_text(db, "SELECT status FROM kernel_observation WHERE component_id='linux-rt'")
+    source_path = query_text(db, "SELECT stable_source_path FROM kernel_observation WHERE component_id='linux-rt'")
+    source_signature_path = query_text(db, "SELECT stable_signature_path FROM kernel_observation WHERE component_id='linux-rt'")
+    patch_path = query_text(db, "SELECT rt_patch_path FROM kernel_observation WHERE component_id='linux-rt'")
+    patch_signature_path = query_text(db, "SELECT rt_signature_path FROM kernel_observation WHERE component_id='linux-rt'")
+    verifier = query_text(db, "SELECT value FROM setting WHERE key='tool.signature_verifier'")
+    trust_path = query_text(db, "SELECT local_path FROM trust_anchor WHERE id='kernel-release' AND enabled=1")
+    xz = query_text(db, "SELECT value FROM setting WHERE key='tool.xz'")
+    rt = query_text(db, "SELECT rt_version FROM kernel_observation WHERE component_id='linux-rt'")
+    in_tree = 0
+    if rt == "in-tree" then
+        in_tree = 1
+    end
+    if state != "downloaded-unverified" then
+        source_line("Kernel verification gate: BLOCKED, state=", state)
+        dealloc(state, source_path, source_signature_path, patch_path, patch_signature_path, verifier, trust_path, xz, rt)
+        return KERNEL_SOURCE_BLOCKED
+    end
+    if strlen(source_path) == 0 or strlen(source_signature_path) == 0 or (in_tree == 0 and (strlen(patch_path) == 0 or strlen(patch_signature_path) == 0)) or strlen(verifier) == 0 or strlen(trust_path) == 0 or strlen(xz) == 0 then
+        dealloc(state, source_path, source_signature_path, patch_path, patch_signature_path, verifier, trust_path, xz, rt)
+        return source_fail("kernel verification policy or downloaded paths are incomplete")
+    end
+    source_uncompressed = without_xz(source_path)
+    patch_uncompressed = "" + ""
+    if in_tree == 0 then
+        dealloc(patch_uncompressed)
+        patch_uncompressed = without_xz(patch_path)
+    end
+    if strlen(source_uncompressed) == 0 or (in_tree == 0 and strlen(patch_uncompressed) == 0) then
+        dealloc(state, source_path, source_signature_path, patch_path, patch_signature_path, verifier, trust_path, xz, rt, source_uncompressed, patch_uncompressed)
+        return source_fail("downloaded kernel artifact names are invalid")
+    end
+    if decompress_xz(xz, source_path, source_uncompressed) != 0 or (in_tree == 0 and decompress_xz(xz, patch_path, patch_uncompressed) != 0) then
+        dealloc(state, source_path, source_signature_path, patch_path, patch_signature_path, verifier, trust_path, xz, rt, source_uncompressed, patch_uncompressed)
+        return source_fail("kernel source or PREEMPT_RT patch decompression failed")
+    end
+    if run_signature_verify(verifier, config, source_uncompressed, source_signature_path) != 0 or (in_tree == 0 and run_signature_verify(verifier, config, patch_uncompressed, patch_signature_path) != 0) then
+        dealloc(state, source_path, source_signature_path, patch_path, patch_signature_path, verifier, trust_path, xz, rt, source_uncompressed, patch_uncompressed)
+        return source_fail("kernel source or PREEMPT_RT signature failed local trust policy")
+    end
+    rc = mark_verified(db, trust_path)
+    if rc == KERNEL_SOURCE_OK then
+        if in_tree == 1 then
+            print "Kernel source verification: PASS (kernel with in-tree PREEMPT_RT)"
+        else
+            print "Kernel source verification: PASS (kernel + PREEMPT_RT patch)"
+        end
+    end
+    dealloc(state, source_path, source_signature_path, patch_path, patch_signature_path, verifier, trust_path, xz, rt, source_uncompressed, patch_uncompressed)
+    return rc
+end
+
+@effect(sqlite)
+int updates_kernel_source_status(db: int):
+    stable = query_text(db, "SELECT stable_version FROM kernel_observation WHERE component_id='linux-rt'")
+    rt = query_text(db, "SELECT rt_version FROM kernel_observation WHERE component_id='linux-rt'")
+    state = query_text(db, "SELECT status FROM kernel_observation WHERE component_id='linux-rt'")
+    source_line("Kernel stable: ", stable)
+    source_line("PREEMPT_RT patch: ", rt)
+    source_line("Kernel source state: ", state)
+    dealloc(stable, rt, state)
+    return KERNEL_SOURCE_OK
+end
+
+void kernel_source_usage():
+    print "usage: updates-kernel-source COMMAND [Updates.config] [work-directory]"
+    print "commands: fetch-kernel verify-kernel status-kernel-source help"
+end
+
+@effect(sqlite, process)
+def main(): int
+    if argc() < 2 then
+        kernel_source_usage()
+        return KERNEL_SOURCE_USAGE
+    end
+    command = argv(1)
+    config = source_config_path()
+    if command == "status-kernel-source" or command == "help" then
+        db = sql_open_readonly(config)
+    else
+        db = sql_open(config)
+    end
+    if db == 0 then
+        dealloc(config)
+        return source_fail("cannot open Updates.config")
+    end
+    sql_exec(db, "PRAGMA foreign_keys=ON")
+    rc = KERNEL_SOURCE_USAGE
+    match command then
+        case "fetch-kernel":
+            work = source_work_path()
+            rc = updates_fetch_kernel(db, work)
+            dealloc(work)
+        case "verify-kernel":
+            work = source_work_path()
+            rc = updates_verify_kernel(db, config, work)
+            dealloc(work)
+        case "status-kernel-source":
+            rc = updates_kernel_source_status(db)
+        case "help":
+            kernel_source_usage()
+            rc = KERNEL_SOURCE_OK
+        default:
+            kernel_source_usage()
+            rc = KERNEL_SOURCE_USAGE
+    end
+    sql_close(db)
+    dealloc(config)
+    return rc
+end

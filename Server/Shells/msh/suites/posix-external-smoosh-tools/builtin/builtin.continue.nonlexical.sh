@@ -1,6 +1,0 @@
-# msh-source: smoosh/tests/shell/builtin.continue.nonlexical.test
-# msh-profile: posix
-# msh-run: eval
-set -o nonlexicalctrl 2>/dev/null
-cnt() { continue 2>/dev/null; echo post; }
-i=0; while [ $i -lt 5 ]; do echo $i; : $((i+=1)); cnt; echo after; done

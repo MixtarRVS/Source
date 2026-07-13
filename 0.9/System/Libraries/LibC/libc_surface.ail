@@ -1,0 +1,74 @@
+// libc_surface.ail
+// Small status tool for the AILang-first Mixtar LibC direction.
+
+void libc_surface_usage():
+    print "Usage: libc_surface [status|layers|policy|help]"
+    print "  status  Print current LibC role"
+    print "  layers  Print the intended bridge layering"
+    print "  policy  Print implementation priority rules"
+    print "  help    Show this help"
+end
+
+int libc_surface_status():
+    print "Mixtar LibC"
+    print "role: AILang-first libc-shaped runtime bridge"
+    print "base kernel: Linux"
+    print "upstream userland: OpenBSD-first, FreeBSD fallback"
+    print "rule: upstream source mirrors stay unmodified"
+    return 0
+end
+
+int libc_surface_layers():
+    print "OpenBSD/FreeBSD Toolkit source"
+    print "Toolkit/Bridge compatibility headers"
+    print "Runtime/LibC AILang behavior"
+    print "temporary C shims only when AILang cannot express the boundary yet"
+    print "kernel ABI through selected host libc or AILang syscall path"
+    return 0
+end
+
+int libc_surface_policy():
+    print "implementation priority:"
+    print "1. AILang implementation"
+    print "2. AILang-generated C with strict ABI checks"
+    print "3. small C shim for missing AILang boundary"
+    print "4. host libc call"
+    print "5. direct named AILang builtins before raw ABI calls"
+    print "6. syscall() only when explicit and tested"
+    return 0
+end
+
+int libc_surface_main():
+    op = "status"
+    if argc() >= 2 then
+        op = argv(1)
+    end
+
+    match op then
+        case "status":
+            return libc_surface_status()
+        case "layers":
+            return libc_surface_layers()
+        case "policy":
+            return libc_surface_policy()
+        case "help":
+            libc_surface_usage()
+            return 0
+        case "--help":
+            libc_surface_usage()
+            return 0
+        case "-h":
+            libc_surface_usage()
+            return 0
+        default:
+            msg = "libc_surface: unknown operation: " + op
+            print msg
+            dealloc(msg)
+            libc_surface_usage()
+            return 1
+    end
+end
+
+int main():
+    return libc_surface_main()
+end

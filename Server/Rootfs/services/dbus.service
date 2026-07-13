@@ -1,7 +1,0 @@
-name=dbus
-title=D-Bus system bus
-role=system_bus
-backend=openrc
-backend_name=dbus
-runlevel=default
-enabled=true

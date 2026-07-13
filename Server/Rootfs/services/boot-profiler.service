@@ -1,7 +1,0 @@
-name=boot-profiler
-title=Mixtar boot profiler
-role=boot_observation
-backend=openrc
-backend_name=mixtar-boot-profiler
-runlevel=default
-enabled=true

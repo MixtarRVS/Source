@@ -1,0 +1,646 @@
+// toolkit_reports.ail
+// Report and certification text generation for Toolkit builds.
+
+import toolkit_core
+import toolkit_upstream_tests
+
+string toolkit_report_notes(tool: string):
+    if toolkit_hosted_tool(tool) == 1 then
+        return "" + "Current known bridge decisions:\n\n- This target is a hosted Linux adapter generated from `Bridge/scripts/hosted_common`.\n- It exists to complete the command surface and exercise real invocation paths while the upstream OpenBSD/FreeBSD source port remains open work.\n- Read-only commands delegate to the host where possible; privileged, destructive, or interactive commands refuse hosted action instead of pretending to be complete.\n\n"
+    end
+    match tool then
+        case "echo":
+            return "" + "Current known bridge decisions:\n\n- `capsicum_helpers.h`: Linux has no Capsicum; helper calls are compatibility no-ops for this first proof.\n- `_GNU_SOURCE` / `_DEFAULT_SOURCE`: required so strict Linux libc headers expose `IOV_MAX`.\n\n"
+        case "cat":
+            return "" + "Current known bridge decisions:\n\n- `BOOTSTRAP_CAT` is enabled for the first conversion. This preserves raw file/stdin concatenation and `-l`/`-u`, but does not certify cooked output flags yet.\n- `NO_UDOM_SUPPORT` is enabled because Unix-domain socket Casper path handling is not part of the current Linux Bridge surface.\n- Capsicum/Casper headers are Bridge shims; upstream FreeBSD source remains untouched.\n\n"
+        case "pwd":
+            return "" + "Current known bridge decisions:\n\n- No new compatibility header was required for the first `pwd` proof.\n- `_GNU_SOURCE` / `_DEFAULT_SOURCE` keep the strict Linux libc surface explicit.\n\n"
+        case "true":
+            return "" + "Current known bridge decisions:\n\n- No compatibility shim required. The tool is a minimal exit-code proof.\n\n"
+        case "false":
+            return "" + "Current known bridge decisions:\n\n- No compatibility shim required. The tool is a minimal exit-code proof.\n\n"
+        case "mkdir":
+            return "" + "Current known bridge decisions:\n\n- `mixtar_bridge_compat.h` provides FreeBSD `setmode/getmode` compatibility for octal modes.\n- Certified symbolic subset: explicit `u/g/o/a`, operators `+ - =`, permissions `r w x X`.\n- Not certified yet: symbolic copy permissions `u/g/o`, setuid/setgid/sticky symbolic forms, and umask-sensitive omitted-who edge cases.\n\n"
+        case "rmdir":
+            return "" + "Current known bridge decisions:\n\n- `mixtar_bridge_compat.h` defines FreeBSD `__dead2` as a noreturn attribute.\n\n"
+        case "cp":
+            return "" + "Current known bridge decisions:\n\n- FreeBSD source remains untouched; Linux-specific gaps are handled in Bridge headers.\n- ACL, MAC, file flags, whiteout, and Capsicum surfaces are compatibility shims on Linux for this first proof.\n- `cp` is compiled from `cp.c` plus upstream `utils.c`.\n\n"
+        case "ls":
+            return "" + "Current known bridge decisions:\n\n- FreeBSD source remains untouched; Linux-specific gaps are handled in Bridge headers.\n- ACL, MAC, birthtime, file flags, `statfs`, and BSD display helper APIs are compatibility shims on Linux for this first proof.\n- `ls` is compiled from `ls.c`, `cmp.c`, `print.c`, and `util.c`.\n- `-Wno-format` and `-Wno-implicit-fallthrough` are explicit recipe exceptions for FreeBSD/GNU format and fallthrough differences under strict Linux GCC.\n\n"
+        case "mv":
+            return "" + "Current known bridge decisions:\n\n- FreeBSD source remains untouched; Linux-specific gaps are handled in Bridge headers.\n- File flags and BSD-specific removal/rename helpers are compatibility shims on Linux for this first proof.\n- Cross-device fallback behavior needs broader fixtures before full certification.\n\n"
+        case "rm":
+            return "" + "Current known bridge decisions:\n\n- FreeBSD source remains untouched; Linux-specific gaps are handled in Bridge headers.\n- Whiteout, undelete, file flags, and Capsicum surfaces are compatibility shims on Linux for this first proof.\n- Recursive and interactive deletion require broader fixtures before full certification.\n\n"
+        case "domainname":
+            return "" + "Current known bridge decisions:\n\n- No new compatibility shim required for query mode.\n- Privileged domain-name mutation is not certified in this hosted Linux proof.\n\n"
+        case "hostname":
+            return "" + "Current known bridge decisions:\n\n- No new compatibility shim required for query mode.\n- Privileged hostname mutation is not certified in this hosted Linux proof.\n\n"
+        case "realpath":
+            return "" + "Current known bridge decisions:\n\n- No new compatibility shim required for the first realpath proof.\n- Smoke certification covers canonicalizing an existing symlinked path.\n\n"
+        case "sleep":
+            return "" + "Current known bridge decisions:\n\n- No new compatibility shim required for the first sleep proof.\n- Timing behavior is kept to zero-duration and invalid-operand smoke tests to avoid slow certification runs.\n\n"
+        case "sync":
+            return "" + "Current known bridge decisions:\n\n- No new compatibility shim required for the no-argument sync proof.\n- Filesystem flush side effects are not measured by the smoke harness.\n\n"
+        case "chmod":
+            return "" + "Current known bridge decisions:\n\n- `mixtar_bridge_compat.h` provides FreeBSD mode parsing and ACL pathconf constants needed by chmod.\n- NFSv4 ACL-sensitive behavior is treated as unsupported/trivial on Linux for this first proof.\n- Recursive chmod is not certified yet.\n\n"
+        case "test":
+            return "" + "Current known bridge decisions:\n\n- `mixtar_bridge_compat.h` provides FreeBSD annotation macros used by the standalone test source.\n- Smoke certification covers selected string, file, and integer expressions.\n\n"
+        case "env":
+            return "" + "Current known bridge decisions:\n\n- OpenBSD source is compiled unchanged against the Linux Bridge.\n- Certification covers clean environment execution through `/usr/bin/env`.\n\n"
+        case "dirname":
+            return "" + "Current known bridge decisions:\n\n- OpenBSD source is compiled unchanged against the Linux Bridge.\n- Certification covers one normal pathname split.\n\n"
+        case "basename":
+            return "" + "Current known bridge decisions:\n\n- OpenBSD source is compiled unchanged against the Linux Bridge.\n- Certification covers suffix removal.\n\n"
+        case "head":
+            return "" + "Current known bridge decisions:\n\n- OpenBSD source is compiled unchanged against the Linux Bridge.\n- Certification covers `-n` with a regular file.\n\n"
+        case "tee":
+            return "" + "Current known bridge decisions:\n\n- OpenBSD source is compiled unchanged against the Linux Bridge.\n- Certification covers writing stdin to stdout and one file.\n\n"
+        case "touch":
+            return "" + "Current known bridge decisions:\n\n- OpenBSD source is compiled unchanged against the Linux Bridge.\n- Certification covers creating one file.\n\n"
+        case "readlink":
+            return "" + "Current known bridge decisions:\n\n- OpenBSD source is compiled unchanged against the Linux Bridge.\n- Certification covers reading a simple symlink target.\n\n"
+        case "uname":
+            return "" + "Current known bridge decisions:\n\n- OpenBSD source is compiled unchanged against the Linux Bridge.\n- Because this target runs on Linux, certified output follows Linux `uname(2)` results.\n\n"
+        case "id":
+            return "" + "Current known bridge decisions:\n\n- OpenBSD source is compiled unchanged against the Linux Bridge.\n- Certification covers numeric effective user id output.\n\n"
+        case "date":
+            return "" + "Current known bridge decisions:\n\n- OpenBSD source is compiled unchanged against the Linux Bridge.\n- Certification uses stable format output instead of wall-clock full-date comparison.\n\n"
+        case "uniq":
+            return "" + "Current known bridge decisions:\n\n- OpenBSD source is compiled unchanged against the Linux Bridge.\n- Certification covers adjacent duplicate collapse.\n\n"
+        case "wc":
+            return "" + "Current known bridge decisions:\n\n- OpenBSD source is compiled unchanged against the Linux Bridge.\n- `-Wno-format` is a Linux GCC/OpenBSD ABI recipe exception: OpenBSD prints `int64_t` with `%lld`, while Linux x86_64 typedefs `int64_t` as `long`.\n- Certification covers selected line, word, and byte counts.\n\n"
+        case "ln":
+            return "" + "Current known bridge decisions:\n\n- OpenBSD source is compiled unchanged against the Linux Bridge.\n- `-Wno-sign-compare` is a Linux GCC recipe exception for the upstream `snprintf` bound check.\n- Certification covers hard link, symlink, and missing-source error behavior.\n\n"
+        case "cut":
+            return "" + "Current known bridge decisions:\n\n- OpenBSD source is compiled unchanged against the Linux Bridge.\n- `-Wno-sign-compare` and `-Wno-unused-parameter` are Linux GCC recipe exceptions for upstream parser/handler shape.\n- Certification covers field, character, and byte selection.\n\n"
+        case "sed":
+            return "" + "Current known bridge decisions:\n\n- OpenBSD source is compiled unchanged against the Linux Bridge.\n- `sed` is compiled from `main.c`, `compile.c`, `misc.c`, and `process.c`.\n- `-Wno-implicit-fallthrough` is a Linux GCC recipe exception for upstream fallthrough control flow.\n- Certification covers substitution, deletion, and quiet print mode.\n\n"
+        case "hexdump":
+            return "" + "Current known bridge decisions:\n\n- OpenBSD source is compiled unchanged against the Linux Bridge.\n- `hexdump` is compiled from the upstream multi-file source set.\n- Certification covers canonical hex/ascii byte display.\n\n"
+        case "seq":
+            return "" + "Current known bridge decisions:\n\n- OpenBSD source is compiled unchanged against the Linux Bridge.\n- `seq` links `-lm` for the upstream floating-point formatting path.\n- Certification covers a simple integer range.\n\n"
+        case "arch":
+            return "" + "Current known bridge decisions:\n\n- OpenBSD source is compiled unchanged against the Linux Bridge.\n- Output follows the Linux host machine string in this hosted proof.\n\n"
+        case "printenv":
+            return "" + "Current known bridge decisions:\n\n- OpenBSD source is compiled unchanged against the Linux Bridge.\n- Certification covers selected-variable output.\n\n"
+        case "yes":
+            return "" + "Current known bridge decisions:\n\n- OpenBSD source is compiled unchanged against the Linux Bridge.\n- Certification caps output through `head` to avoid an infinite test.\n\n"
+        case "tty":
+            return "" + "Current known bridge decisions:\n\n- OpenBSD source is compiled unchanged against the Linux Bridge.\n- Certification covers non-interactive status parity.\n\n"
+        case "rev":
+            return "" + "Current known bridge decisions:\n\n- OpenBSD source is compiled unchanged against the Linux Bridge.\n- Certification covers reversing regular-file lines.\n\n"
+        case "mktemp":
+            return "" + "Current known bridge decisions:\n\n- OpenBSD source is compiled unchanged against the Linux Bridge.\n- Certification covers creating one temporary file from an explicit template.\n\n"
+        case "paste":
+            return "" + "Current known bridge decisions:\n\n- OpenBSD source is compiled unchanged against the Linux Bridge.\n- Certification covers merging two regular files.\n\n"
+        case "comm":
+            return "" + "Current known bridge decisions:\n\n- OpenBSD source is compiled unchanged against the Linux Bridge.\n- Certification covers comparison of sorted regular files.\n\n"
+        case "fold":
+            return "" + "Current known bridge decisions:\n\n- OpenBSD source is compiled unchanged against the Linux Bridge.\n- Certification covers fixed-width folding.\n\n"
+        case "nice":
+            return "" + "Current known bridge decisions:\n\n- OpenBSD source is compiled unchanged against the Linux Bridge.\n- Certification covers executing `/usr/bin/true` through `nice`.\n\n"
+        case "what":
+            return "" + "Current known bridge decisions:\n\n- OpenBSD source is compiled unchanged against the Linux Bridge.\n- Certification covers extracting a simple SCCS `@(#)` marker.\n\n"
+        case "cal":
+            return "" + "Current known bridge decisions:\n\n- OpenBSD source is compiled unchanged against the Linux Bridge.\n- Certification covers a stable historical month without depending on host `cal` availability.\n\n"
+        case "kill":
+            return "" + "Current known bridge decisions:\n\n- OpenBSD source is compiled unchanged against the Linux Bridge.\n- Certification covers signal-name lookup only; no signals are sent.\n\n"
+        case "getopt":
+            return "" + "Current known bridge decisions:\n\n- OpenBSD source is compiled unchanged against the Linux Bridge.\n- Certification covers one classic option parsing case.\n\n"
+        case "fmt":
+            return "" + "Current known bridge decisions:\n\n- OpenBSD source is compiled unchanged against the Linux Bridge.\n- Certification covers stable pass-through formatting for a short line.\n\n"
+        case "split":
+            return "" + "Current known bridge decisions:\n\n- OpenBSD source is compiled unchanged against the Linux Bridge.\n- Certification covers line-count splitting into deterministic output files.\n\n"
+        case "logname":
+            return "" + "Current known bridge decisions:\n\n- OpenBSD source is compiled unchanged against the Linux Bridge.\n- Certification covers non-interactive failure behavior only.\n\n"
+        case "nohup":
+            return "" + "Current known bridge decisions:\n\n- OpenBSD source is compiled unchanged against the Linux Bridge.\n- Certification covers executing a redirected successful command.\n\n"
+        case "timeout":
+            return "" + "Current known bridge decisions:\n\n- OpenBSD source is compiled unchanged against the Linux Bridge.\n- Certification covers successful command completion and timeout exit status 124.\n\n"
+        case "unexpand":
+            return "" + "Current known bridge decisions:\n\n- OpenBSD source is compiled unchanged against the Linux Bridge.\n- Certification covers converting leading spaces to a tab.\n\n"
+        case "column":
+            return "" + "Current known bridge decisions:\n\n- OpenBSD source is compiled unchanged against the Linux Bridge.\n- Certification covers simple table alignment with `-t`.\n\n"
+        case "col":
+            return "" + "Current known bridge decisions:\n\n- OpenBSD source is compiled unchanged against the Linux Bridge. Certification covers plain line passthrough and a basic overstrike input path.\n\n"
+        case "rs":
+            return "" + "Current known bridge decisions:\n\n- OpenBSD source is compiled unchanged against the Linux Bridge. `rs` is compiled from `rs.c` plus upstream `utf8.c`. Certification covers a small 2x2 reshape.\n\n"
+        case "from":
+            return "" + "Current known bridge decisions:\n\n- OpenBSD source is compiled unchanged against the Linux Bridge. Certification uses an explicit mailbox fixture through `-f`, avoiding host mail spool dependencies.\n\n"
+        case "banner":
+            return "" + "Current known bridge decisions:\n\n- OpenBSD source is compiled unchanged against the Linux Bridge. `banner` is compiled from `banner.c` plus upstream `chset.c`. `-Wno-unused-parameter` is a Linux GCC recipe exception for the upstream unused `argc` signature.\n\n"
+        case "cmp":
+            return "" + "Current known bridge decisions:\n\n- OpenBSD source is compiled unchanged against the Linux Bridge. `cmp` is compiled from its upstream multi-file source set. `-Wno-sign-compare` is a Linux GCC recipe exception for upstream size/off_t comparisons.\n\n"
+        case "colrm":
+            return "" + "Current known bridge decisions:\n\n- OpenBSD source is compiled unchanged against the Linux Bridge. `-Wno-pointer-sign` is a Linux GCC recipe exception around getline buffer signedness.\n\n"
+        case "expand":
+            return "" + "Current known bridge decisions:\n\n- OpenBSD source is compiled unchanged against the Linux Bridge. `-Wno-sign-compare` is a Linux GCC recipe exception for upstream tab-stop comparisons.\n\n"
+        case "join":
+            return "" + "Current known bridge decisions:\n\n- OpenBSD source is compiled unchanged against the Linux Bridge. `-Wno-sign-compare` is a Linux GCC recipe exception for upstream field-count comparisons.\n\n"
+        case "tr":
+            return "" + "Current known bridge decisions:\n\n- OpenBSD source is compiled unchanged against the Linux Bridge. `tr` is compiled from `tr.c` plus upstream `str.c`. `-Wno-missing-field-initializers` is a Linux GCC recipe exception for upstream character-class tables.\n\n"
+        case "apply":
+            return "" + "Current known bridge decisions:\n\n- OpenBSD source is compiled unchanged against the Linux Bridge. `-Wno-format-truncation` is a Linux GCC recipe exception for bounded placeholder formatting.\n\n"
+        case "expr":
+            return "" + "Current known bridge decisions:\n\n- OpenBSD source is compiled unchanged against the Linux Bridge. `-Wno-format` is a Linux x86_64 ABI recipe exception for OpenBSD `int64_t` printf formats.\n\n"
+        case "jot":
+            return "" + "Current known bridge decisions:\n\n- OpenBSD source is compiled unchanged against the Linux Bridge. `-Wno-implicit-fallthrough` is a Linux GCC recipe exception for upstream switch fallthrough control flow. `jot` links `-lm`.\n\n"
+        case "csplit":
+            return "" + "Current known bridge decisions:\n\n- OpenBSD source is compiled unchanged against the Linux Bridge. `-Wno-unused-parameter` is a Linux GCC recipe exception for the upstream signal handler signature.\n\n"
+        case "nl":
+            return "" + "Current known bridge decisions:\n\n- OpenBSD source is compiled unchanged against the Linux Bridge. `-Wno-missing-field-initializers` is a Linux GCC recipe exception for upstream static regex state. The Bridge caps glibc `NL_TEXTMAX` because OpenBSD uses it as a stack diagnostic buffer bound.\n\n"
+        case "rmt":
+            return "" + "Current known bridge decisions:\n\n- OpenBSD source is compiled unchanged against the Linux Bridge. Certification covers process/protocol startup only; real tape-device operations are not exercised in the hosted WSL harness.\n\n"
+        case "shutdown":
+            return "" + "Current known bridge decisions:\n\n- OpenBSD source is compiled unchanged against the Linux Bridge. `-Wno-format`, `-Wno-deprecated-declarations`, and `-Wno-unused-parameter` are Linux GCC recipe exceptions. The Bridge provides a Linux `revoke` stub so builds do not depend on glibc's warning-emitting unimplemented stub. Certification intentionally proves the non-root guard only, not destructive shutdown behavior.\n\n"
+        case "users":
+            return "" + "Current known bridge decisions:\n\n- OpenBSD source is compiled unchanged against the Linux Bridge. The Bridge provides `MIXTAR_UTMP_PATH` because WSL may not expose `/var/run/utmp` even when native Linux `users(1)` can see login state through another API/path.\n\n"
+        case "wall":
+            return "" + "Current known bridge decisions:\n\n- OpenBSD source is compiled unchanged against the Linux Bridge. `wall` is compiled from `wall.c` plus upstream `ttymsg.c`; `-Wno-sign-compare` is a Linux GCC recipe exception. Live terminal broadcast is not exercised by the smoke harness.\n\n"
+        case "df":
+            return "" + "Current known bridge decisions:\n\n- OpenBSD source is compiled unchanged against the Linux Bridge. `df` is compiled from `df.c` plus AILang-generated Runtime/LibC raw-filesystem stubs for OpenBSD FFS/ext2 device inspection. Hosted Linux certification covers mounted filesystem `statfs`/`statvfs` paths only.\n\n"
+        case "mknod":
+            return "" + "Current known bridge decisions:\n\n- OpenBSD source is compiled unchanged against the Linux Bridge. `-Wno-calloc-transposed-args` is a Linux GCC recipe exception for the upstream `reallocarray` argument order. Certification covers FIFO creation only; privileged device node creation is not exercised.\n\n"
+        case "tsort":
+            return "" + "Current known bridge decisions:\n\n- OpenBSD source is compiled unchanged against the Linux Bridge. `tsort` is compiled from `tsort.c` plus upstream OpenBSD `libutil/ohash.c`, with the OpenBSD `libutil` include directory added to the recipe.\n\n"
+        case "who":
+            return "" + "Current known bridge decisions:\n\n- OpenBSD source is compiled unchanged against the Linux Bridge. The Bridge provides `MIXTAR_UTMP_PATH`; `-Wno-incompatible-pointer-types`, `-Wno-stringop-overread`, and `-Wno-discarded-qualifiers` are Linux/glibc utmp recipe exceptions.\n\n"
+        case "diff":
+            return "" + "Current known bridge decisions:\n\n- OpenBSD diff source is compiled unchanged against the Linux Bridge.\n- Linux exposes `splice(2)` from `<fcntl.h>` while OpenBSD diff has an internal `splice` helper. The Bridge pre-includes `mixtar_diff_compat.h` to include Linux `<fcntl.h>` first, then rename only the OpenBSD helper.\n- `-Wno-sign-compare` and `-Wno-pointer-sign` are Linux GCC recipe exceptions for upstream OpenBSD buffer and size types.\n\n"
+        case "patch":
+            return "" + "Current known bridge decisions:\n\n- OpenBSD patch source is compiled unchanged against the Linux Bridge.\n- Linux `struct dirent` lacks OpenBSD `d_namlen`; the recipe maps it to `d_reclen` for backup-file version scanning, with exact matching still performed against `d_name`.\n- `-Wno-sequence-point`, `-Wno-sign-compare`, and `-Wno-unused-parameter` are Linux GCC recipe exceptions.\n\n"
+        case "getconf":
+            return "" + "Current known bridge decisions:\n\n- OpenBSD getconf source is compiled unchanged against the Linux Bridge.\n- `mixtar_bridge_compat.h` supplies OpenBSD/POSIX/XSI constants omitted by glibc; runtime query IDs use unsupported negative values so Linux reports unsupported values without colliding with real Linux constants.\n\n"
+        case "zic":
+            return "" + "Current known bridge decisions:\n\n- OpenBSD zic source is compiled unchanged against the Linux Bridge.\n- The recipe adds the OpenBSD libc time include path and Linux GCC warning exceptions for upstream signedness and bounded-copy differences.\n\n"
+        case "zdump":
+            return "" + "Current known bridge decisions:\n\n- OpenBSD zdump source is compiled unchanged against the Linux Bridge.\n- The Bridge defines OpenBSD `__pure`; output follows the hosted Linux timezone database.\n\n"
+        case "file":
+            return "" + "Current known bridge decisions:\n\n- OpenBSD file source is compiled unchanged against the Linux Bridge.\n- The recipe links OpenBSD `imsg`/`ibuf` support from libutil. Full magic database certification is not part of this smoke tier.\n\n"
+        case "sort":
+            return "" + "Current known bridge decisions:\n\n- OpenBSD sort source is compiled unchanged against the Linux Bridge.\n- The recipe links upstream OpenBSD MD5 plus an AILang-generated Runtime/LibC `MD5End` helper. Bridge compatibility provides `fgetwln`, `sysctl(HW_USERMEM64)`, and qsort-backed `mergesort`/`heapsort` fallbacks.\n\n"
+        case "m4":
+            return "" + "Current known bridge decisions:\n\n- OpenBSD m4 source is compiled unchanged against the Linux Bridge.\n- Flex/bison outputs are generated under `System/Userland/Generated/build/m4`; the recipe links OpenBSD libutil `ohash`.\n\n"
+        case "awk":
+            return "" + "Current known bridge decisions:\n\n- OpenBSD awk source is compiled unchanged against the Linux Bridge.\n- Bison output and `proctab.c` are generated under `System/Userland/Generated/build/awk`; the recipe suppresses known upstream grammar conflict warnings without changing the grammar.\n\n"
+        case "diff3":
+            return "" + "Current known bridge decisions:\n\n- OpenBSD `diff3prog.c` is compiled unchanged against the Linux Bridge.\n- OpenBSD's user-facing `diff3` is a shell wrapper around `diff(1)` and `diff3prog`; the Bridge emits an equivalent hosted wrapper and places `diff3prog` under generated `libexec`.\n\n"
+        case "gencat":
+            return "" + "Current known bridge decisions:\n\n- OpenBSD gencat source is compiled unchanged against the Linux Bridge.\n- The Bridge provides OpenBSD private `nl_types` catalog layout structs that glibc does not expose.\n- GNU/Linux message-catalog binary compatibility is not claimed by this smoke tier.\n\n"
+        case "gprof":
+            return "" + "Current known bridge decisions:\n\n- OpenBSD gprof source set is compiled unchanged against the Linux Bridge.\n- The recipe uses the OpenBSD amd64 machine slice through `MD_INCLUDE=\\\"amd64.h\\\"`.\n- Certification covers safe diagnostics only; real profile analysis fixtures are deferred.\n\n"
+        case "ipcrm":
+            return "" + "Current known bridge decisions:\n\n- OpenBSD ipcrm source is compiled unchanged against the Linux Bridge.\n- The Bridge provides Linux `union semun` compatibility for SysV semaphore removal calls.\n- Certification avoids destructive IPC removal and covers no-op/usage behavior only.\n\n"
+        case "ipcs":
+            return "" + "Current known bridge decisions:\n\n- OpenBSD ipcs source is compiled unchanged against the Linux Bridge.\n- The Bridge provides Linux-safe SysV IPC compatibility headers and a minimal sysctl view for totals reporting.\n- Certification covers totals output and usage diagnostics; live IPC object enumeration and kvm core inspection are not certified yet.\n\n"
+        case "mt":
+            return "" + "Current known bridge decisions:\n\n- OpenBSD mt.c is compiled unchanged against the Linux Bridge.\n- The Bridge provides `opendev()` and `OPENDEV_PART` compatibility for Linux/musl.\n- Remote RMT support is disabled in this first smoke tier; local command parsing and safe non-tape failure paths are certified.\n\n"
+        case "w":
+            return "" + "Current known bridge decisions:\n\n- OpenBSD w source set is compiled unchanged against the Linux Bridge.\n- The command uses the existing Linux `/proc` kvm Bridge plus the platform utmp path.\n- Certification covers usage diagnostics and a no-header run; exact OpenBSD login database parity is not certified yet.\n\n"
+        case "vmstat":
+            return "" + "Current known bridge decisions:\n\n- OpenBSD vmstat source set is compiled unchanged against the Linux Bridge.\n- The first certification tier is usage-only while Linux kernel statistics mapping is expanded.\n- Live disk, interrupt, pool, malloc, and VM statistic parity is not certified yet.\n\n"
+        case "init":
+            return "" + "Current known bridge decisions:\n\n- OpenBSD init source is compiled unchanged against the Linux Bridge.\n- The Bridge provides an empty ttyent view so the source can link without importing host `/etc/ttys` policy.\n- Certification is safety-guard only: the binary must refuse normal-process execution and is not installed as PID1.\n\n"
+        case "sysctl":
+            return "" + "Current known bridge decisions:\n\n- OpenBSD sysctl source is compiled unchanged against the Linux Bridge.\n- The Bridge maps a small read-only OpenBSD MIB surface onto Linux/runtime values.\n- Certification avoids kernel mutation and does not claim full OpenBSD MIB parity yet.\n\n"
+        case "swapon":
+            return "" + "Current known bridge decisions:\n\n- OpenBSD swapctl source is compiled unchanged and built as the `swapon` compatibility mode.\n- The Bridge provides a safe `swapctl(2)` shim: no configured swap devices and EPERM for mutation.\n- Certification never activates or deactivates real swap.\n\n"
+        case "ping":
+            return "" + "Current known bridge decisions:\n\n- OpenBSD ping source is compiled unchanged against the Linux Bridge.\n- Certification proves compile/link plus safe raw-socket refusal without capabilities.\n- Real ICMP requires a deliberate setuid/capability policy; `ping6` hardlink behavior is deferred.\n\n"
+        case "top":
+            return "" + "Current known bridge decisions:\n\n- OpenBSD top source set is compiled unchanged against the Linux Bridge.\n- Certification is usage/parser-only while the Linux `/proc` kvm/process runtime view is expanded.\n- Curses display execution is deferred.\n\n"
+        case "fdisk":
+            return "" + "Current known bridge decisions:\n\n- OpenBSD fdisk source set is compiled unchanged against the Linux Bridge.\n- The Bridge supplies the minimal OpenBSD disklabel, dkio, UUID, and endian surface needed to compile the source.\n- Certification never opens or mutates a real disk; full device passthrough policy is deferred.\n\n"
+        case "cron":
+            return "" + "Current known bridge decisions:\n\n- OpenBSD cron source set is compiled unchanged against the Linux Bridge.\n- Certification is parser/usage-only; daemon lifecycle, cron socket, spool policy, and job execution are not activated by smoke tests.\n- Runtime service integration belongs to the future Mixtar service/device policy layer.\n\n"
+        case "su":
+            return "" + "Current known bridge decisions:\n\n- OpenBSD su source is compiled unchanged against the Linux Bridge.\n- The Bridge supplies inert BSD auth symbols for compile/link compatibility.\n- Certification is usage-only and never authenticates, switches users, or executes a shell.\n\n"
+        case "passwd":
+            return "" + "Current known bridge decisions:\n\n- OpenBSD passwd source files are compiled unchanged against the Linux Bridge.\n- The Bridge supplies inert passwd-database operation stubs for non-certified mutation paths instead of importing Berkeley DB helpers.\n- Certification is usage-only and never reads or writes password databases.\n\n"
+        case "login":
+            return "" + "Current known bridge decisions:\n\n- OpenBSD login source set is compiled unchanged against the Linux Bridge.\n- The Bridge supplies inert BSD auth/session symbols for compile/link compatibility.\n- Certification is usage-only and never authenticates, writes login records, changes session state, or executes a shell.\n\n"
+        case "reboot":
+            return "" + "Current known bridge decisions:\n\n- OpenBSD reboot source is compiled unchanged against the Linux Bridge.\n- The Bridge provides OpenBSD reboot flag names and an inert Linux `reboot()` shim for smoke certification safety.\n- Certification is usage-only and never exercises halt/reboot/poweroff behavior.\n\n"
+        case "stty":
+            return "" + "Current known bridge decisions:\n\n- OpenBSD stty source is compiled unchanged against the Linux Bridge.\n- Unsupported OpenBSD terminal flags and line disciplines are mapped to inert Linux compatibility constants.\n- Hosted certification avoids changing the controlling terminal.\n\n"
+        case "pkill":
+            return "" + "Current known bridge decisions:\n\n- OpenBSD pkill source is compiled unchanged against the Linux Bridge.\n- The Bridge provides OpenBSD-style `kvm_getprocs` and `kvm_getargv` over Linux `/proc` through `kvm.h` and `sys/proc.h`.\n- Certification uses signal 0 so process discovery is exercised without terminating unrelated processes.\n\n"
+        case "ps":
+            return "" + "Current known bridge decisions:\n\n- OpenBSD ps source is compiled unchanged against the Linux Bridge.\n- The Bridge provides OpenBSD-style `sysctl`, `kvm_getprocs`, `kvm_getargv`, `kvm_getenvv`, process flags, pledge names, and current-working-directory lookup over Linux `/proc`.\n- Bridge-internal `/proc` reads bypass user-space unveil restrictions, matching the idea that ps reads through a privileged kernel/process interface rather than ordinary app file access.\n\n"
+        case "getent":
+            return "" + "Current known bridge decisions:\n\n- OpenBSD getent source is compiled unchanged against the Linux Bridge.\n- The Bridge maps OpenBSD RPC and ethernet declarations onto glibc/netdb surfaces without editing upstream source.\n\n"
+        case "dmesg":
+            return "" + "Current known bridge decisions:\n\n- OpenBSD dmesg source is compiled unchanged against the Linux Bridge.\n- Linux kernel logs are not exposed to this hosted tool; the Bridge provides a safe empty message-buffer sysctl surface for smoke certification.\n\n"
+        case "nm":
+            return "" + "Current known bridge decisions:\n\n- OpenBSD nm source is compiled unchanged against the Linux Bridge.\n- The Bridge compiles `elf.c` twice, once for 32-bit ELF and once for 64-bit ELF, then links both objects into the final tool.\n- Bridge headers provide BSD `ranlib.h`, generic `Elf_*` typedefs, and endian/symbol constants missing from glibc's default surface.\n\n"
+        case "rpcgen":
+            return "" + "Current known bridge decisions:\n\n- OpenBSD rpcgen source is compiled unchanged against the Linux Bridge.\n- The recipe adds the upstream rpcgen include directory and suppresses inherited K&R-style definition warnings without patching upstream source.\n\n"
+        case "ed":
+            return "" + "Current known bridge decisions:\n\n- OpenBSD ed source is compiled unchanged against the Linux Bridge.\n- The recipe links the complete upstream ed source set and only suppresses hosted compiler warnings caused by glibc/GCC differences.\n- No FreeBSD fallback is used for this tool.\n\n"
+        case "nproc":
+            return "" + "Current known bridge decisions:\n\n- FreeBSD nproc source is compiled unchanged against the Linux Bridge.\n- The Bridge generates `sys/cpuset.h` and maps FreeBSD `cpuset_getaffinity` to Linux `sched_getaffinity`.\n- `nproc` intentionally follows the GNU-compatible option surface documented by the FreeBSD source.\n\n"
+        case "csh":
+            return "" + "Current known bridge decisions:\n\n- OpenBSD csh source set is compiled unchanged against the Linux Bridge.\n- The recipe generates upstream-style `error.h` and `const.h` under `System/Userland/Generated/build/csh` instead of editing mirrored source.\n- csh-local `vis.h` and `glob.h` overlays isolate Linux/glibc/musl header differences from the shared Bridge headers.\n- `mixtar_bridge_compat.h` provides BSD `funopen`, `TIOCSTAT`, `CCEQ`, `_PATH_CSHELL`, and musl `closefrom` compatibility.\n- Certification covers non-interactive command execution, variable assignment/expansion, and exit-status propagation; full interactive job control is not certified yet.\n\n"
+        case "sh":
+            return "" + "Current known bridge decisions:\n\n- FreeBSD sh source set is compiled unchanged against the Linux Bridge.\n- The recipe generates upstream-style `builtins.c/h`, `token.h`, `nodes.c/h`, and `syntax.c/h` under `System/Userland/Generated/build/sh` instead of editing mirrored source.\n- Build-local CRLF-normalized generator inputs are used because the current mirror stores several shell generator files with Windows line endings.\n- `NO_HISTORY` disables editline/history for the first non-interactive shell certification.\n- `mixtar_bridge_compat.h` provides BSD `fwopen`, `tcsetsid`, `CLOCK_UPTIME`, `O_VERIFY`, `MAXLOGNAME`, `ALIGN`, `__DECONST`, and signal-name compatibility.\n- Builtin `printf` is not certified in this first port because FreeBSD `usr.bin/printf` is absent from the current mirror; the temporary OpenBSD wrapper is compile-only.\n- Certification covers non-interactive command execution, variable assignment/expansion, and exit-status propagation.\n\n"
+        case "pkgconf":
+            return "" + "Current known bridge decisions:\n\n- OpenBSD pkgconf source set is compiled unchanged against the Linux Bridge.\n- The recipe builds the upstream `libpkgconf` and `cli` source files into the Mixtar `pkgconf` command name.\n- `PKGCONF_LITE`, `SYSTEM_LIBDIR`, `SYSTEM_INCLUDEDIR`, and `PKG_DEFAULT_PATH` are explicit compile-time policy values from the OpenBSD Makefile shape.\n- Certification covers version reporting and parsing a local `.pc` fixture for `--exists`, `--modversion`, and `--libs`.\n\n"
+        case "less":
+            return "" + "Current known bridge decisions:\n\n- OpenBSD less source set is compiled unchanged against the Linux Bridge.\n- The recipe links ncurses and generates `System/Userland/Generated/build/less/mixtar_less_config.h` with Linux `TCSASOFT=0`, `SYSDIR=/etc`, and `HELPDIR=/usr/share/misc`.\n- Certification is intentionally non-interactive: version reporting and short-file output through `-F -X`.\n- `lesskey`, help-file installation, and full terminal navigation are deferred.\n\n"
+        case "vi":
+            return "" + "Current known bridge decisions:\n\n- OpenBSD nvi source set is compiled unchanged against the Linux Bridge.\n- The recipe generates upstream-style `options_def.h` and `ex_def.h` under `System/Userland/Generated/build/vi` instead of editing mirrored source.\n- Certification is intentionally non-interactive: scripted ex-mode editing plus invalid-option failure.\n- Full-screen terminal behavior, recovery daemon behavior, and `ex`/`view` hardlink modes are deferred.\n\n"
+        case "vipw":
+            return "" + "Current known bridge decisions:\n\n- OpenBSD vipw source is compiled unchanged against the Linux Bridge.\n- `MIXTAR_VIPW_COMPAT` provides OpenBSD libutil passwd-edit helpers as a safe `/tmp` sandbox.\n- Smoke certification never edits `/etc/master.passwd`, `/etc/passwd`, shadow files, or real account databases.\n- Real passwd database locking, editor invocation, and `pwd_mkdb` integration remain deferred.\n\n"
+        case "umount":
+            return "" + "Current known bridge decisions:\n\n- OpenBSD umount source is compiled unchanged against the Linux Bridge.\n- The recipe defines `NO_NFS=1`; NFS RPC notification is deferred.\n- Bridge `sys/mount.h` exposes `getmntinfo`, `MNT_FORCE`, `MOUNT_NFS`, `f_mntfromspec`, and a safe `unmount()` shim returning `EPERM`.\n- Certification does not unmount real filesystems.\n\n"
+        case "mount":
+            return "" + "Current known bridge decisions:\n\n- OpenBSD mount source is compiled unchanged against the Linux Bridge.\n- The recipe links `mount.c` and `getmntopts.c` and uses the Bridge `sys/mount.h` read-only mount table view.\n- Bridge `fstab.h` returns no fstab entries, and `readlabelfs` returns no disklabel filesystem type on Linux.\n- Certification lists the Bridge root mount and does not execute real mount helper programs.\n\n"
+        case "fsck":
+            return "" + "Current known bridge decisions:\n\n- OpenBSD fsck source set is compiled unchanged against the Linux Bridge.\n- The recipe links `fsck.c`, `fsutil.c`, and `preen.c`.\n- Bridge `fstab.h` exposes an empty fstab view; `readlabelfs` returns no disklabel filesystem type on Linux.\n- Certification does not check or repair real filesystems and does not treat helper execution as certified disk behavior.\n\n"
+        default:
+            return "" + "Current known bridge decisions:\n\n- Unknown tool; no notes recorded.\n\n"
+    end
+end
+
+string toolkit_cert_scope(tool: string):
+    if toolkit_hosted_tool(tool) == 1 then
+        return "" + "Certified WSL smoke surface:\n\n- hosted adapter executable exists and passes its self-check surface through `--mixtar-certify`.\n\nKnown non-certification:\n\n- this is not an OpenBSD/FreeBSD source port yet\n- full command semantics, privilege behavior, daemon lifecycle, editor/session behavior, and destructive system operations are intentionally not certified.\n"
+    end
+    match tool then
+        case "echo":
+            return "" + "Certified WSL smoke surface:\n\n- basic argument output\n- `--` treated as normal text\n\nCertified FreeBSD upstream-derived surface:\n\n- `-n` suppresses trailing newline\n- trailing `\\\\c` suppresses trailing newline\n\nKnown intentional non-certification:\n\n- GNU bare `\\\\c` behavior; Mixtar follows FreeBSD semantics instead.\n"
+        case "cat":
+            return "" + "Certified WSL smoke surface:\n\n- concatenating one file to stdout\n- concatenating stdin to stdout\n- missing file exits nonzero and reports an error\n\nKnown non-certification:\n\n- cooked output flags `-b`, `-e`, `-n`, `-s`, `-t`, `-v` are intentionally disabled by `BOOTSTRAP_CAT` in this first conversion.\n- raw upstream cat ATF fixtures are not mirrored in this source snapshot.\n"
+        case "pwd":
+            return "" + "Certified WSL smoke surface:\n\n- default current directory output\n- `-P` physical path output\n\nCertified FreeBSD upstream-derived surface:\n\n- logical symlinked `$PWD`\n- physical path fallback\n- last-option-wins for `-L` / `-P`\n- invalid `$PWD` fallback cases\n- stdout pipe error handling\n\nKnown non-certification:\n\n- raw ATF harness execution; current automation is an equivalent shell harness derived from the upstream test script.\n"
+        case "true":
+            return "" + "Certified WSL smoke surface:\n\n- exit code 0.\n\nKnown non-certification:\n\n- no mirrored upstream FreeBSD ATF script exists for this minimal exit-code tool.\n"
+        case "false":
+            return "" + "Certified WSL smoke surface:\n\n- exit code 1.\n\nKnown non-certification:\n\n- no mirrored upstream FreeBSD ATF script exists for this minimal exit-code tool.\n"
+        case "mkdir":
+            return "" + "Certified WSL smoke surface:\n\n- basic directory creation\n- `-p` nested directory creation\n- octal mode: `700`\n- symbolic modes: `u=rwx,go=`, `a=rx,u+w`, `a=rX`\n\nCertified FreeBSD upstream-derived surface:\n\n- invalid `-m` usage\n- missing operands for `-p`, `-v`, and no-argument calls\n- usage diagnostics are emitted for invalid calls\n\nKnown non-certification:\n\n- symbolic copy permissions `u/g/o`\n- setuid/setgid/sticky symbolic forms `s/t`\n- umask-sensitive omitted-who edge cases.\n"
+        case "rmdir":
+            return "" + "Certified WSL smoke surface:\n\n- removing an empty directory.\n\nCertified FreeBSD upstream-derived surface:\n\n- invalid `-p` usage\n- invalid `-v` usage\n- no-argument usage\n- invalid calls exit with FreeBSD's documented usage status.\n\nKnown non-certification:\n\n- full `-p` parent-chain behavior and verbose successful-removal output matrix.\n"
+        case "cp":
+            return "" + "Certified WSL smoke surface:\n\n- copying one regular file\n- missing source exits nonzero and reports an error\n\nMirrored but not translated yet:\n\n- `bin/cp/tests/cp_test.sh` exists in the FreeBSD source mirror, but is not yet converted into the shell harness.\n\nKnown non-certification:\n\n- recursive copy matrices\n- preserve-mode/metadata matrices\n- ACL, MAC, flags, whiteout, and filesystem-specific metadata behavior on Linux.\n"
+        case "ls":
+            return "" + "Certified WSL smoke surface:\n\n- simple directory listing\n- `-1` one-entry-per-line listing\n\nMirrored but not translated yet:\n\n- `bin/ls/tests/ls_tests.sh` exists in the FreeBSD source mirror, but is not yet converted into the shell harness.\n\nKnown non-certification:\n\n- long-format display matrices\n- color/classification modes\n- ACL, MAC, birthtime, file flags, and filesystem-specific metadata display on Linux.\n"
+        case "mv":
+            return "" + "Certified WSL smoke surface:\n\n- renaming one regular file\n- missing source exits nonzero and reports an error\n\nMirrored but not translated yet:\n\n- `bin/mv/tests/mv_test.sh` exists in the FreeBSD source mirror, but is not yet converted into the shell harness.\n\nKnown non-certification:\n\n- cross-device fallback matrix\n- overwrite and interactive cases\n- metadata preservation across filesystems.\n"
+        case "rm":
+            return "" + "Certified WSL smoke surface:\n\n- removing one regular file\n- `-f` missing file exits successfully\n\nMirrored but not translated yet:\n\n- `bin/rm/tests/rm_test.sh` exists in the FreeBSD source mirror, but is not yet converted into the shell harness.\n\nKnown non-certification:\n\n- recursive removal matrix\n- interactive prompts\n- whiteout/undelete behavior\n- immutable flag handling on Linux.\n"
+        case "domainname":
+            return "" + "Certified WSL smoke surface:\n\n- no-argument domain name query matches the host Linux tool.\n\nKnown non-certification:\n\n- setting the domain name\n- privilege/error matrix for mutation.\n"
+        case "hostname":
+            return "" + "Certified WSL smoke surface:\n\n- no-argument hostname query matches the host Linux tool.\n\nKnown non-certification:\n\n- setting the hostname\n- privilege/error matrix for mutation.\n"
+        case "realpath":
+            return "" + "Certified WSL smoke surface:\n\n- canonicalizing an existing symlinked path.\n\nKnown non-certification:\n\n- missing path modes\n- flag matrix and strict FreeBSD/GNU option divergence.\n"
+        case "sleep":
+            return "" + "Certified WSL smoke surface:\n\n- `sleep 0` exits successfully\n- invalid operand exits nonzero.\n\nKnown non-certification:\n\n- timing precision\n- signal interruption behavior\n- large/fractional duration matrix.\n"
+        case "sync":
+            return "" + "Certified WSL smoke surface:\n\n- no-argument sync exits with the same status and output as the host Linux tool.\n\nKnown non-certification:\n\n- filesystem flush side effects\n- platform-specific option behavior.\n"
+        case "chmod":
+            return "" + "Certified WSL smoke surface:\n\n- octal mode change: `600`\n- symbolic mode change: `u+x`\n\nMirrored but not translated yet:\n\n- `bin/chmod/tests/chmod_test.sh` exists in the FreeBSD source mirror, but is not yet converted into the shell harness.\n\nKnown non-certification:\n\n- recursive chmod matrix\n- ACL/NFSv4-sensitive behavior\n- verbose/signal output matrix.\n"
+        case "test":
+            return "" + "Certified WSL smoke surface:\n\n- string equality true/false\n- regular-file existence true/false\n- integer comparison.\n\nMirrored but not translated yet:\n\n- `bin/test/tests/legacy_test.sh` exists in the FreeBSD source mirror, but is not yet converted into the shell harness.\n\nKnown non-certification:\n\n- full expression precedence matrix\n- bracket alias behavior\n- all unary/binary operator edge cases.\n"
+        case "env":
+            return "" + "Certified WSL smoke surface:\n\n- `env -i NAME=value command` with deterministic sorted output.\n\nKnown non-certification:\n\n- full option matrix and signal/error edge cases.\n"
+        case "dirname":
+            return "" + "Certified WSL smoke surface:\n\n- normal path dirname extraction.\n\nKnown non-certification:\n\n- all slash, empty, and multi-operand edge cases.\n"
+        case "basename":
+            return "" + "Certified WSL smoke surface:\n\n- normal path basename extraction with suffix removal.\n\nKnown non-certification:\n\n- all slash, empty, and multi-operand edge cases.\n"
+        case "head":
+            return "" + "Certified WSL smoke surface:\n\n- `head -n 2` over a regular file.\n\nKnown non-certification:\n\n- byte mode, multiple files, stdin, and invalid count matrix.\n"
+        case "tee":
+            return "" + "Certified WSL smoke surface:\n\n- stdin copied to stdout and one output file.\n\nKnown non-certification:\n\n- append mode, interrupt behavior, and multi-file error matrix.\n"
+        case "touch":
+            return "" + "Certified WSL smoke surface:\n\n- creating one missing file.\n\nKnown non-certification:\n\n- timestamp parsing, symlink/no-create flags, and reference-file matrix.\n"
+        case "readlink":
+            return "" + "Certified WSL smoke surface:\n\n- printing one symlink target.\n\nKnown non-certification:\n\n- canonicalization flags and missing-path matrix.\n"
+        case "uname":
+            return "" + "Certified WSL smoke surface:\n\n- `uname -s` parity with Linux host output.\n\nKnown non-certification:\n\n- full flag matrix and Mixtar identity override policy.\n"
+        case "id":
+            return "" + "Certified WSL smoke surface:\n\n- `id -u` parity with Linux host output.\n\nKnown non-certification:\n\n- group/name formatting and login database edge cases.\n"
+        case "date":
+            return "" + "Certified WSL smoke surface:\n\n- stable `+%Y` formatted output.\n\nKnown non-certification:\n\n- date mutation, timezone matrix, and parser compatibility.\n"
+        case "uniq":
+            return "" + "Certified WSL smoke surface:\n\n- adjacent duplicate collapse for a regular file.\n\nKnown non-certification:\n\n- count/repeated/unique flags and field/character skip matrix.\n"
+        case "wc":
+            return "" + "Certified WSL smoke surface:\n\n- `wc -l` over a regular file\n- `wc -w` over a regular file\n- `wc -c` over stdin\n\nKnown non-certification:\n\n- multibyte character matrix, total formatting across multiple files, and invalid-option/error matrix.\n"
+        case "ln":
+            return "" + "Certified WSL smoke surface:\n\n- hard-link creation creates the same inode\n- `ln -s` creates the expected symlink target\n- missing source exits nonzero\n\nKnown non-certification:\n\n- `-f`, `-h`, `-L`, `-P`, directory-target, and overwrite edge cases.\n"
+        case "cut":
+            return "" + "Certified WSL smoke surface:\n\n- delimiter field selection\n- character range selection\n- byte range selection\n\nKnown non-certification:\n\n- complement behavior, suppress-no-delimiter mode, multibyte delimiter edge cases, and invalid list diagnostics.\n"
+        case "sed":
+            return "" + "Certified WSL smoke surface:\n\n- simple substitution\n- pattern deletion\n- `-n` explicit print\n\nKnown non-certification:\n\n- full sed script language matrix, in-place editing, branching, hold-space behavior, and regex dialect edge cases.\n"
+        case "arch":
+            return "" + "Certified WSL smoke surface:\n\n- machine architecture output parity with host `arch`.\n\nKnown non-certification:\n\n- Mixtar identity override policy and non-Linux host mapping.\n"
+        case "printenv":
+            return "" + "Certified WSL smoke surface:\n\n- selected environment variable output.\n\nKnown non-certification:\n\n- full environment dump ordering and unset/error matrix.\n"
+        case "yes":
+            return "" + "Certified WSL smoke surface:\n\n- repeated argument output, capped by `head`.\n\nKnown non-certification:\n\n- signal/broken-pipe diagnostics and unbounded throughput measurement.\n"
+        case "tty":
+            return "" + "Certified WSL smoke surface:\n\n- non-interactive tty status and output parity.\n\nKnown non-certification:\n\n- real terminal device output in an interactive PTY.\n"
+        case "rev":
+            return "" + "Certified WSL smoke surface:\n\n- reversing regular-file lines.\n\nKnown non-certification:\n\n- multibyte locale edge cases and stdin error matrix.\n"
+        case "seq":
+            return "" + "Certified WSL smoke surface:\n\n- simple integer range `1 3`.\n\nKnown non-certification:\n\n- floating-point precision, custom format strings, negative steps, and invalid input matrix.\n"
+        case "mktemp":
+            return "" + "Certified WSL smoke surface:\n\n- explicit-template temporary file creation.\n\nKnown non-certification:\n\n- directory mode, dry-run mode, suffix behavior, and collision matrix.\n"
+        case "paste":
+            return "" + "Certified WSL smoke surface:\n\n- pasting two regular files side-by-side.\n\nKnown non-certification:\n\n- serial mode, delimiter matrix, stdin mixing, and uneven file-length cases.\n"
+        case "comm":
+            return "" + "Certified WSL smoke surface:\n\n- comparing two sorted regular files.\n\nKnown non-certification:\n\n- suppress-column flags, locale collation matrix, and unsorted input diagnostics.\n"
+        case "fold":
+            return "" + "Certified WSL smoke surface:\n\n- fixed-width folding with `-w 3`.\n\nKnown non-certification:\n\n- byte mode, space-aware mode, tabs, and multibyte width matrix.\n"
+        case "nice":
+            return "" + "Certified WSL smoke surface:\n\n- executing `/usr/bin/true` through `nice` with matching exit status.\n\nKnown non-certification:\n\n- priority mutation permissions, negative priority behavior, and scheduler side effects.\n"
+        case "what":
+            return "" + "Certified WSL smoke surface:\n\n- extracting one SCCS `@(#)` marker from a regular file.\n\nKnown non-certification:\n\n- binary scanning edge cases and multi-marker formatting matrix.\n"
+        case "cal":
+            return "" + "Certified WSL smoke surface:\n\n- stable January 2024 calendar output sanity.\n\nKnown non-certification:\n\n- locale, reform, Julian, current-date highlighting, and historical calendar edge cases.\n"
+        case "hexdump":
+            return "" + "Certified WSL smoke surface:\n\n- canonical `-C` display for a three-byte file.\n\nKnown non-certification:\n\n- full format language, skip/length options, and `od` compatibility mode.\n"
+        case "kill":
+            return "" + "Certified WSL smoke surface:\n\n- `kill -l` signal-name lookup for SIGHUP and SIGKILL.\n\nKnown non-certification:\n\n- sending signals, process-group behavior, and invalid pid diagnostics.\n"
+        case "getopt":
+            return "" + "Certified WSL smoke surface:\n\n- classic option parsing with one value-bearing option and one remaining operand.\n\nKnown non-certification:\n\n- full error matrix, ambiguous options, and GNU long-option behavior.\n"
+        case "fmt":
+            return "" + "Certified WSL smoke surface:\n\n- stable formatting of a short line already under wrap width.\n\nKnown non-certification:\n\n- paragraph joining, crown/tagged mode, locale width, and long-line wrap matrix.\n"
+        case "split":
+            return "" + "Certified WSL smoke surface:\n\n- `split -l 2` creates deterministic chunk files.\n\nKnown non-certification:\n\n- byte-size splitting, suffix matrix, filters, stdin behavior, and large-file cases.\n"
+        case "logname":
+            return "" + "Certified WSL smoke surface:\n\n- non-interactive invocation exits nonzero.\n\nKnown non-certification:\n\n- real login-session output through a controlling terminal.\n"
+        case "nohup":
+            return "" + "Certified WSL smoke surface:\n\n- redirected `nohup /usr/bin/true` exits zero without stderr noise.\n\nKnown non-certification:\n\n- terminal-attached stdout/stderr redirection to `nohup.out`, signal handling, and permission failures.\n"
+        case "timeout":
+            return "" + "Certified WSL smoke surface:\n\n- command completing before deadline exits zero.\n- command exceeding deadline exits 124.\n\nKnown non-certification:\n\n- signal selection, preserve-status mode, kill-after mode, and signal race behavior.\n"
+        case "unexpand":
+            return "" + "Certified WSL smoke surface:\n\n- `unexpand -a` converts eight leading spaces to a tab.\n\nKnown non-certification:\n\n- custom tab stops, non-leading blanks without `-a`, and multibyte spacing.\n"
+        case "column":
+            return "" + "Certified WSL smoke surface:\n\n- `column -t` aligns two simple rows.\n\nKnown non-certification:\n\n- custom separators, terminal-width layout, multibyte width, and multi-file errors.\n"
+        case "col":
+            return "" + "Certified WSL smoke surface:\n\n- plain line passthrough; basic overstrike input produces output.\n\nKnown non-certification:\n\n- full upstream option/error matrix and host-specific edge cases beyond the documented smoke surface.\n"
+        case "rs":
+            return "" + "Certified WSL smoke surface:\n\n- small 2x2 reshape from stdin.\n\nKnown non-certification:\n\n- full upstream option/error matrix and host-specific edge cases beyond the documented smoke surface.\n"
+        case "from":
+            return "" + "Certified WSL smoke surface:\n\n- explicit mailbox `-f`; sender filter `-s`.\n\nKnown non-certification:\n\n- full upstream option/error matrix and host-specific edge cases beyond the documented smoke surface.\n"
+        case "banner":
+            return "" + "Certified WSL smoke surface:\n\n- visible glyph rendering for a short string.\n\nKnown non-certification:\n\n- full upstream option/error matrix and host-specific edge cases beyond the documented smoke surface.\n"
+        case "cmp":
+            return "" + "Certified WSL smoke surface:\n\n- `cmp -s` same-file and different-file statuses.\n\nKnown non-certification:\n\n- full upstream option/error matrix and host-specific edge cases beyond the documented smoke surface.\n"
+        case "colrm":
+            return "" + "Certified WSL smoke surface:\n\n- removing a fixed inclusive column range.\n\nKnown non-certification:\n\n- full upstream option/error matrix and host-specific edge cases beyond the documented smoke surface.\n"
+        case "expand":
+            return "" + "Certified WSL smoke surface:\n\n- single tab expansion with tab stop 4.\n\nKnown non-certification:\n\n- full upstream option/error matrix and host-specific edge cases beyond the documented smoke surface.\n"
+        case "join":
+            return "" + "Certified WSL smoke surface:\n\n- default join on one matching key.\n\nKnown non-certification:\n\n- full upstream option/error matrix and host-specific edge cases beyond the documented smoke surface.\n"
+        case "tr":
+            return "" + "Certified WSL smoke surface:\n\n- lower-to-upper translation; deleting one character.\n\nKnown non-certification:\n\n- full upstream option/error matrix and host-specific edge cases beyond the documented smoke surface.\n"
+        case "apply":
+            return "" + "Certified WSL smoke surface:\n\n- two-placeholder command substitution.\n\nKnown non-certification:\n\n- full upstream option/error matrix and host-specific edge cases beyond the documented smoke surface.\n"
+        case "expr":
+            return "" + "Certified WSL smoke surface:\n\n- integer addition; regex match length.\n\nKnown non-certification:\n\n- full upstream option/error matrix and host-specific edge cases beyond the documented smoke surface.\n"
+        case "jot":
+            return "" + "Certified WSL smoke surface:\n\n- simple integer range generation.\n\nKnown non-certification:\n\n- full upstream option/error matrix and host-specific edge cases beyond the documented smoke surface.\n"
+        case "csplit":
+            return "" + "Certified WSL smoke surface:\n\n- regex split into deterministic chunk files.\n\nKnown non-certification:\n\n- full upstream option/error matrix and host-specific edge cases beyond the documented smoke surface.\n"
+        case "nl":
+            return "" + "Certified WSL smoke surface:\n\n- `-ba` numbers all lines with Linux host parity\n- regex body numbering through `-bpPATTERN`\n\nKnown non-certification:\n\n- logical page delimiter matrix, multibyte delimiter matrix, and full upstream option/error cases.\n"
+        case "rmt":
+            return "" + "Certified WSL smoke surface:\n\n- EOF on stdin exits cleanly\n- invalid option emits usage and exits nonzero\n\nKnown non-certification:\n\n- remote tape protocol commands, real device access, and read/write/seek behavior.\n"
+        case "shutdown":
+            return "" + "Certified WSL smoke surface:\n\n- non-root invocation is refused before action.\n\nKnown non-certification:\n\n- actual halt, poweroff, reboot, wall notifications, nologin creation, and timed shutdown scheduling.\n"
+        case "users":
+            return "" + "Certified WSL smoke surface:\n\n- reads and prints one controlled Linux `struct utmp` fixture through `MIXTAR_UTMP_PATH`.\n\nKnown non-certification:\n\n- default host utmp discovery on WSL, cross-platform utmp format differences, and real multi-user login-session matrices.\n"
+        case "wall":
+            return "" + "Certified WSL smoke surface:\n\n- invalid option emits usage and exits nonzero.\n\nKnown non-certification:\n\n- live broadcast to logged-in terminals, group filtering, and terminal-write failure matrix.\n"
+        case "df":
+            return "" + "Certified WSL smoke surface:\n\n- `df -k /tmp` prints a filesystem table through the mounted filesystem stat path.\n\nKnown non-certification:\n\n- raw FFS/ext2 device inspection, mount table edge cases, block-size matrix, and BSD-specific filesystem flag behavior.\n"
+        case "mknod":
+            return "" + "Certified WSL smoke surface:\n\n- FIFO creation with `mknod path p`\n- invalid option usage diagnostics.\n\nKnown non-certification:\n\n- block/character device node creation, major/minor parser matrix, privilege failures, and filesystem-specific node behavior.\n"
+        case "tsort":
+            return "" + "Certified WSL smoke surface:\n\n- simple dependency-chain topological sorting.\n\nKnown non-certification:\n\n- cycle diagnostics, hints-file mode, duplicate edge handling, and very large graph behavior.\n"
+        case "who":
+            return "" + "Certified WSL smoke surface:\n\n- reads and prints one controlled Linux `struct utmp` fixture through `MIXTAR_UTMP_PATH`.\n\nKnown non-certification:\n\n- default host utmp discovery on WSL, terminal identity mode, all formatting flags, and cross-platform utmp time-field width differences.\n"
+        case "diff":
+            return "" + "Certified WSL smoke surface:\n\n- identical regular files exit 0 with no output\n- unified diff for changed regular files exits 1 and contains expected hunk lines\n- missing-file diagnostics are nonzero and report the missing path.\n\nKnown non-certification:\n\n- recursive directory diff matrix\n- binary file behavior\n- every output format and ignore option.\n"
+        case "patch":
+            return "" + "Certified WSL smoke surface:\n\n- applying a simple unified diff inside a temporary directory\n- invalid option usage exits nonzero.\n\nKnown non-certification:\n\n- reject/fuzz/reverse patch matrices\n- numbered backup behavior beyond compile-time bridge support\n- ed-script patch mode.\n"
+        case "getconf":
+            return "" + "Certified WSL smoke surface:\n\n- `ARG_MAX` sysconf parity with native Linux getconf\n- `PATH_MAX /tmp` pathconf parity with native Linux getconf\n- OpenBSD/XSI constant lookup through `_XOPEN_NAME_MAX`.\n\nKnown non-certification:\n\n- full POSIX variable matrix\n- every `-v` compilation environment profile\n- exact OpenBSD-vs-Linux unsupported-variable policy.\n"
+        case "zic":
+            return "" + "Certified WSL smoke surface:\n\n- `zic -v` exits successfully\n- invalid option usage exits nonzero.\n\nKnown non-certification:\n\n- full timezone source compilation matrix\n- leap-second database behavior\n- exact diagnostic text across libc/timezone database versions.\n"
+        case "zdump":
+            return "" + "Certified WSL smoke surface:\n\n- `zdump UTC` prints a UTC-prefixed line\n- invalid option usage exits nonzero.\n\nKnown non-certification:\n\n- full timezone transition matrix\n- verbose/range option behavior\n- exact wall-clock output across timezone database versions.\n"
+        case "file":
+            return "" + "Certified WSL smoke surface:\n\n- `file -b` classifies a plain text fixture\n- missing-path diagnostic surface is exercised.\n\nKnown non-certification:\n\n- full magic database parity\n- binary/container type recognition matrix\n- MIME and compressed-file behavior.\n"
+        case "sort":
+            return "" + "Certified WSL smoke surface:\n\n- sorting two input lines ascending\n- reverse sorting through `-r`.\n\nKnown non-certification:\n\n- stable-sort behavior through qsort-backed Bridge fallbacks\n- locale/collation matrices\n- merge/temp-file/resource-limit behavior.\n"
+        case "m4":
+            return "" + "Certified WSL smoke surface:\n\n- command-line macro expansion\n- `define` macro expansion from stdin.\n\nKnown non-certification:\n\n- full m4 language matrix\n- include path behavior\n- tracing, diversions, and GNU-extension edge cases.\n"
+        case "awk":
+            return "" + "Certified WSL smoke surface:\n\n- `BEGIN` arithmetic execution\n- field splitting and numeric accumulation over a fixture.\n\nKnown non-certification:\n\n- full awk language matrix\n- regex/locale behavior\n- file redirection, pipes, and long-running program behavior.\n"
+        case "diff3":
+            return "" + "Certified WSL smoke surface:\n\n- simple three-way diff output/exit status parity with host Linux `diff3`\n- missing-operand usage diagnostics.\n\nKnown non-certification:\n\n- full merge/edit-script option matrix\n- file names containing shell metacharacters in the hosted wrapper\n- exact OpenBSD-vs-GNU diagnostic wording.\n"
+        case "gencat":
+            return "" + "Certified WSL smoke surface:\n\n- creates a nonempty OpenBSD-format message catalog from a small source fixture\n- no-argument usage diagnostics.\n\nKnown non-certification:\n\n- GNU catalog binary compatibility\n- full message-source escape/parser matrix\n- runtime `catopen`/`catgets` use of generated catalogs.\n"
+        case "gprof":
+            return "" + "Certified WSL smoke surface:\n\n- missing executable/profile input diagnostic\n- unsupported `-c` call-graph diagnostic on amd64.\n\nKnown non-certification:\n\n- complete gmon.out parsing\n- flat/call graph output parity\n- architecture-specific call discovery beyond OpenBSD amd64 compile coverage.\n"
+        case "ipcrm":
+            return "" + "Certified WSL smoke surface:\n\n- no-argument no-op exits successfully\n- invalid option emits usage and exits nonzero.\n\nKnown non-certification:\n\n- destructive message-queue/shared-memory/semaphore removal\n- privilege/error matrix for real IPC objects\n- OpenBSD kernel-not-configured SIGSYS path.\n"
+        case "ipcs":
+            return "" + "Certified WSL smoke surface:\n\n- `ipcs -T` emits message, shared-memory, and semaphore totals sections through the Bridge sysctl view\n- invalid option emits usage and exits nonzero.\n\nKnown non-certification:\n\n- exact live Linux SysV IPC object enumeration parity\n- kvm core/namelist inspection beyond compile/link compatibility\n- OpenBSD kernel-not-configured warning paths.\n"
+        case "mt":
+            return "" + "Certified WSL smoke surface:\n\n- no-argument usage diagnostics\n- unknown command diagnostics before opening a tape device\n- `/dev/null` status fails safely as a non-tape device.\n\nKnown non-certification:\n\n- physical tape device ioctl behavior\n- remote RMT transport\n- `eject` hardlink invocation mode.\n"
+        case "w":
+            return "" + "Certified WSL smoke surface:\n\n- invalid option usage diagnostics\n- `w -h` executes through the Linux kvm/proc Bridge and current utmp path.\n\nKnown non-certification:\n\n- exact OpenBSD utmp accounting parity\n- reverse DNS display mode\n- `uptime` hardlink invocation mode.\n"
+        case "vmstat":
+            return "" + "Certified WSL smoke surface:\n\n- invalid option usage diagnostics only.\n\nKnown non-certification:\n\n- live Linux VM/disk/interrupt statistics\n- kvm core inspection paths\n- interval/repetition output parity.\n"
+        case "yacc":
+            return "" + "Certified WSL smoke surface:\n\n- generates `y.tab.c` from a minimal grammar\n- invalid option exits nonzero.\n\nKnown non-certification:\n\n- complete yacc grammar/error matrix\n- exact diagnostic parity for all malformed grammar cases\n- yyfix helper installation.\n"
+        case "lex":
+            return "" + "Certified WSL smoke surface:\n\n- generates scanner C from a minimal `.l` file\n- `--version` reports the upstream flex/lex identity.\n\nKnown non-certification:\n\n- complete flex option matrix\n- C++ scanner generation\n- compiled scanner runtime matrix\n- generated runtime libraries `libmain` and `libyywrap` installation.\n"
+        case "watch":
+            return "" + "Certified WSL smoke surface:\n\n- no-argument usage diagnostics\n- invalid interval rejection before curses initialization.\n\nKnown non-certification:\n\n- interactive terminal refresh loop\n- curses rendering matrix\n- child process output display under a real pty\n- real libevent dispatch semantics; Bridge event.h is a compile/smoke shim\n- rusage rendering and keyboard command matrix.\n"
+        case "less":
+            return "" + "Certified WSL smoke surface:\n\n- `less --version` reports the OpenBSD less identity\n- `TERM=xterm less -F -X <short-file>` prints a small file non-interactively.\n\nKnown non-certification:\n\n- interactive paging/navigation\n- terminal resize/input behavior\n- help-file lookup and `lesskey`\n- `more` hardlink invocation mode.\n"
+        case "vi":
+            return "" + "Certified WSL smoke surface:\n\n- scripted `vi -e <file>` append/write/quit path\n- invalid option exits nonzero.\n\nKnown non-certification:\n\n- full-screen curses editing behavior\n- terminal resize/input behavior\n- recovery daemon behavior\n- `ex` and `view` hardlink invocation modes.\n"
+        case "vipw":
+            return "" + "Certified WSL smoke surface:\n\n- invalid option usage diagnostics\n- no-op edit path over a sandbox passwd file exits cleanly with `no changes made`.\n\nKnown non-certification:\n\n- editing real system account databases\n- passwd lock contention behavior\n- editor invocation and recovery prompts\n- real OpenBSD `pwd_mkdb` database generation.\n"
+        case "umount":
+            return "" + "Certified WSL smoke surface:\n\n- no-argument usage diagnostics\n- non-mounted path diagnostic.\n\nKnown non-certification:\n\n- real unmount execution\n- NFS RPC mount-daemon notification\n- `-a` full mount table traversal beyond the Bridge root fixture\n- force-unmount privilege/error matrix.\n"
+        case "mount":
+            return "" + "Certified WSL smoke surface:\n\n- no-argument read-only mount table display through the Bridge root fixture\n- invalid option usage diagnostics.\n\nKnown non-certification:\n\n- real mount execution through mount helpers\n- `/etc/fstab` traversal\n- disklabel filesystem detection\n- network/NFS mount behavior and mountd signaling.\n"
+        case "fsck":
+            return "" + "Certified WSL smoke surface:\n\n- no-argument empty-fstab traversal exits cleanly\n- invalid option usage diagnostics\n- missing-device path exits nonzero without successful filesystem check.\n\nKnown non-certification:\n\n- real filesystem checking or repair\n- real `/etc/fstab` traversal\n- disklabel filesystem detection\n- fsck helper behavior against mounted or block devices.\n"
+        case "init":
+            return "" + "Certified WSL smoke surface:\n\n- normal-process execution exits nonzero through the upstream non-root or non-PID1 guard.\n\nKnown non-certification:\n\n- PID1 boot orchestration\n- getty/session lifecycle\n- rc startup/shutdown execution\n- securelevel and reboot transitions.\n"
+        case "sysctl":
+            return "" + "Certified WSL smoke surface:\n\n- `sysctl kern.ostype` read-only query through the Bridge\n- invalid option usage diagnostics.\n\nKnown non-certification:\n\n- setting kernel variables\n- full OpenBSD MIB namespace parity\n- network, sensor, VFS, debug, and architecture-specific sysctl matrices.\n"
+        case "swapon":
+            return "" + "Certified WSL smoke surface:\n\n- no-argument usage diagnostics in `swapon` mode\n- real swap activation path exits nonzero through the Bridge EPERM guard.\n\nKnown non-certification:\n\n- real swap activation/deactivation\n- full `/etc/fstab` swap traversal\n- priority mutation\n- swap listing through configured devices.\n"
+        case "ping":
+            return "" + "Certified WSL smoke surface:\n\n- no-capability raw socket guard exits nonzero with `socket: Operation not permitted`.\n\nKnown non-certification:\n\n- parser usage after successful socket open\n- setuid/capability policy\n- packet send/receive timing\n- IPv6 `ping6` hardlink mode.\n"
+        case "top":
+            return "" + "Certified WSL smoke surface:\n\n- invalid option usage diagnostics\n- invalid display-count diagnostics.\n\nKnown non-certification:\n\n- non-interactive process display\n- interactive curses input loop\n- exact OpenBSD process accounting on Linux\n- every sort/filter/display toggle\n- long-running refresh behavior.\n"
+        case "fdisk":
+            return "" + "Certified WSL smoke surface:\n\n- no-argument usage diagnostics\n- nonexistent disk path exits nonzero before any real disk access.\n\nKnown non-certification:\n\n- real disklabel ioctl mapping\n- GPT/MBR read/write parity on block devices\n- interactive editor behavior\n- Mixtar device passthrough and privilege policy.\n"
+        case "cron":
+            return "" + "Certified WSL smoke surface:\n\n- invalid option usage diagnostics only.\n\nKnown non-certification:\n\n- daemon lifecycle\n- cron socket creation\n- crontab spool loading\n- at-job scanning\n- user context switching\n- scheduled job execution.\n"
+        case "su":
+            return "" + "Certified WSL smoke surface:\n\n- invalid option usage diagnostics only.\n\nKnown non-certification:\n\n- BSD authentication behavior\n- wheel policy\n- login class and environment setup\n- setuid/setgid/user-context switching\n- shell execution.\n"
+        case "passwd":
+            return "" + "Certified WSL smoke surface:\n\n- invalid option usage diagnostics only.\n\nKnown non-certification:\n\n- current password authentication\n- password hashing policy\n- readpassphrase interaction\n- `/etc/master.passwd` locking/copying/mkdb update\n- passwd database parity on Linux.\n"
+        case "login":
+            return "" + "Certified WSL smoke surface:\n\n- invalid option usage diagnostics only.\n\nKnown non-certification:\n\n- BSD authentication behavior\n- utmp/wtmp/lastlog/failedlogin writes\n- tty ownership and permission changes\n- login class/session/environment setup\n- nologin/motd/hushlogin behavior\n- shell execution.\n"
+        case "reboot":
+            return "" + "Certified WSL smoke surface:\n\n- invalid option usage diagnostics only.\n\nKnown non-certification:\n\n- real reboot/halt/poweroff execution\n- init signaling and rc shutdown flow\n- wtmp logging behavior.\n"
+        case "stty":
+            return "" + "Certified WSL smoke surface:\n\n- `stty -a` reads terminal state under a pseudo-tty\n- non-tty input path exits nonzero.\n\nKnown non-certification:\n\n- terminal mutation behavior\n- full mode/character parser matrix\n- OpenBSD-only line discipline and terminal flag effects.\n"
+        case "pkill":
+            return "" + "Certified WSL smoke surface:\n\n- no-argument usage diagnostics\n- process discovery over Linux `/proc` with signal 0 against a controlled `sleep` process.\n\nKnown non-certification:\n\n- actually terminating processes\n- interactive confirmation\n- full uid/gid/tty/session/process-group filters\n- pgrep name-based dispatch and output formatting.\n"
+        case "ps":
+            return "" + "Certified WSL smoke surface:\n\n- `ps -ax` reads the process table and prints a headered process list\n- `ps -ax -o pid,comm` exercises selected OpenBSD format output.\n\nKnown non-certification:\n\n- exact OpenBSD kernel accounting fields on Linux\n- tty/session filtering matrix\n- full `%cpu`, `%mem`, pledge/unveil, and kernel-core inspection fidelity\n- every output column alias and width edge case.\n"
+        case "getent":
+            return "" + "Certified WSL smoke surface:\n\n- `getent passwd <current-user>` returns a passwd entry\n- `getent hosts localhost` returns a localhost mapping.\n\nKnown non-certification:\n\n- full ethers/RPC/services/shells matrix\n- exact OpenBSD-vs-glibc NSS ordering and formatting edge cases.\n"
+        case "dmesg":
+            return "" + "Certified WSL smoke surface:\n\n- no-argument execution exits successfully through the Bridge msgbuf surface\n- invalid option reports usage and exits nonzero.\n\nKnown non-certification:\n\n- reading real Linux host kernel logs\n- startup-message ring buffer fidelity\n- kernel-core `-M/-N` inspection.\n"
+        case "nm":
+            return "" + "Certified WSL smoke surface:\n\n- reads symbols from its own ELF binary\n- rejects a missing/non-object input path.\n\nKnown non-certification:\n\n- archive ranlib edge cases\n- every output format/radix/sort option\n- exact parity with OpenBSD on non-ELF object formats.\n"
+        case "rpcgen":
+            return "" + "Certified WSL smoke surface:\n\n- generates a C header from a simple RPC IDL file\n- invalid option exits nonzero.\n\nKnown non-certification:\n\n- full RPC language matrix\n- all client/server/table/sample generation modes\n- exact XDR output parity across libtirpc, glibc, and OpenBSD environments.\n"
+        case "ed":
+            return "" + "Certified WSL smoke surface:\n\n- scripted non-interactive append/write flow\n- reopening a written file and printing an explicit line range.\n\nKnown non-certification:\n\n- full ed command matrix\n- terminal/signal behavior\n- recovery behavior and all error diagnostics.\n"
+        case "nproc":
+            return "" + "Certified WSL smoke surface:\n\n- default affinity CPU count parity with native Linux `nproc`\n- `--all` configured CPU count parity\n- `--ignore` clamp-to-one behavior\n- `--version` output surface.\n\nKnown non-certification:\n\n- unusual CPU affinity masks outside the WSL host process\n- FreeBSD cpuset jail/domain behavior, which does not exist on hosted Linux.\n"
+        default:
+            return "" + "No certification scope recorded.\n"
+    end
+end
+
+string toolkit_cert_report(tool: string):
+    target = toolkit_target(tool)
+    compat = toolkit_test_report_path(tool)
+    upstream = toolkit_upstream_test_report_path(tool)
+    scope = toolkit_cert_scope(tool)
+    body = "" + "# "
+    body2 = body + tool
+    dealloc(body)
+    body3 = body2 + " Certification\n\nStatus: certified for documented WSL smoke surface.\n\nGenerated target:\n\n```text\n"
+    dealloc(body2)
+    body4 = body3 + target
+    dealloc(body3)
+    body5 = body4 + "\n```\n\nCompatibility report:\n\n```text\n"
+    dealloc(body4)
+    body6 = body5 + compat
+    dealloc(body5)
+    body7 = body6 + "\n```\n\nUpstream-derived report:\n\n```text\n"
+    dealloc(body6)
+    body8 = body7 + upstream
+    dealloc(body7)
+    body9 = body8 + "\n```\n\n"
+    dealloc(body8)
+    body10 = body9 + scope
+    dealloc(body9)
+    body11 = body10 + "\nCertification rule:\n\nThis is not full upstream equivalence. It is a rerunnable proof that the generated Linux target builds, passes the documented smoke surface, and passes the currently automated upstream-derived edge tests where upstream tests exist.\n"
+    dealloc(body10)
+    dealloc(target, compat, upstream, scope)
+    return body11
+end
+
+string toolkit_report(tool: string):
+    src = toolkit_source(tool)
+    target = toolkit_target(tool)
+    cmd = toolkit_compile_command(tool)
+    notes = toolkit_report_notes(tool)
+    body = "" + "# "
+    body2 = body + tool
+    dealloc(body)
+    body3 = body2 + " Bridge Gap Report\n\nSource: `"
+    dealloc(body2)
+    body4 = body3 + src
+    dealloc(body3)
+    body5 = body4 + "`\n\nPolicy:\n\n"
+    dealloc(body4)
+    body6 = body5 + "- Mirrored OpenBSD/FreeBSD source remains untouched.\n"
+    dealloc(body5)
+    body7 = body6 + "- Bridge headers provide compatibility only where Linux lacks the selected upstream surface.\n"
+    dealloc(body6)
+    body8 = body7 + "- Promotion to `Tools/` requires strict compile plus behavior comparison.\n\n"
+    dealloc(body7)
+    body9 = body8 + notes
+    dealloc(body8)
+    body10 = body9 + "Generated target:\n\n```text\n"
+    dealloc(body9)
+    body11 = body10 + target
+    dealloc(body10)
+    body12 = body11 + "\n```\n\nStrict translated build command:\n\n```sh\n"
+    dealloc(body11)
+    body13 = body12 + cmd
+    dealloc(body12)
+    body14 = body13 + "\n```\n\nOpen validation before promotion:\n\n"
+    dealloc(body13)
+    body15 = body14 + "- compare generated output against selected-upstream behavior tests\n"
+    dealloc(body14)
+    body16 = body15 + "- record semantic mismatches here before promotion\n"
+    dealloc(body15)
+    dealloc(src, target, cmd, notes)
+    return body16
+end
+
+string toolkit_plan(tool: string):
+    target = toolkit_target(tool)
+    cmd = toolkit_compile_command(tool)
+    wsl_cmd = toolkit_wsl_command(tool)
+    body = "" + "# "
+    body2 = body + tool
+    dealloc(body)
+    body3 = body2 + " Build Plan\n\nGenerated target:\n\n```text\n"
+    dealloc(body2)
+    body4 = body3 + target
+    dealloc(body3)
+    body5 = body4 + "\n```\n\nLinux command:\n\n```sh\n"
+    dealloc(body4)
+    body6 = body5 + cmd
+    dealloc(body5)
+    body7 = body6 + "\n```\n\nWSL executor command:\n\n```powershell\n"
+    dealloc(body6)
+    body8 = body7 + wsl_cmd
+    dealloc(body7)
+    body9 = body8 + "\n```\n\nDo not patch upstream FreeBSD source if this fails; update the Bridge gap report.\n"
+    dealloc(body8)
+    dealloc(target, cmd, wsl_cmd)
+    return body9
+end
+
+int toolkit_write_docs(tool: string):
+    toolkit_ensure_dirs_for(tool)
+    report = toolkit_report(tool)
+    plan = toolkit_plan(tool)
+    report_path = toolkit_report_path(tool)
+    plan_path = toolkit_plan_path(tool)
+    report_rc = write_file(report_path, report)
+    plan_rc = write_file(plan_path, plan)
+    dealloc(report, plan, report_path, plan_path)
+    if report_rc == 0 then
+        return 1
+    end
+    if plan_rc == 0 then
+        return 1
+    end
+    return 0
+end
+
+int toolkit_write_cert_one(tool: string):
+    toolkit_ensure_dirs_for(tool)
+    report = toolkit_cert_report(tool)
+    path = toolkit_cert_report_path(tool)
+    rc = write_file(path, report)
+    dealloc(report, path)
+    if rc == 0 then
+        return 1
+    end
+    return 0
+end

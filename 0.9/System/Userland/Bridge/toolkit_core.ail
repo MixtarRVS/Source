@@ -1,0 +1,1717 @@
+// toolkit_core.ail
+// Shared paths, catalog, and command construction for Toolkit builds.
+
+int toolkit_source_root_safe(value: string):
+    n = strlen(value)
+    if n == 0 then
+        return 0
+    end
+    raw = reinterpret(i64, value)
+    if index_of(value, "..") >= 0 then
+        return 0
+    end
+    i = 0
+    while i < n then
+        ch = peek8(raw, i)
+        letter_lower = ch >= 97 and ch <= 122
+        letter_upper = ch >= 65 and ch <= 90
+        digit = ch >= 48 and ch <= 57
+        separator = ch == 47
+        punctuation = ch == 45 or ch == 46 or ch == 58 or ch == 95
+        if letter_lower == 0 and letter_upper == 0 and digit == 0 and separator == 0 and punctuation == 0 then
+            return 0
+        end
+        i++
+    end
+    return 1
+end
+
+string toolkit_openbsd_path(relative: string):
+    configured_root = getenv("MIXTAR_OPENBSD_SOURCE_ROOT")
+    if strlen(configured_root) == 0 then
+        root = "" + "System/Userland/OpenBSD/Source"
+    else
+        root = "" + configured_root
+        if toolkit_source_root_safe(configured_root) == 0 then
+            dealloc(root)
+            root = "" + "/invalid-mixtar-openbsd-source-root"
+        end
+    end
+    prefix = root + "/"
+    path = prefix + relative
+    dealloc(root, prefix)
+    return path
+end
+
+string toolkit_normalize_openbsd_roots(command: string):
+    legacy = "" + "System/Userland/OpenBSD/Source/"
+    configured = toolkit_openbsd_path("")
+    normalized = "" + command
+    if configured != legacy then
+        while index_of(normalized, legacy) >= 0 then
+            next = str_replace(normalized, legacy, configured)
+            dealloc(normalized)
+            normalized = next
+        end
+    end
+    dealloc(legacy, configured)
+    return normalized
+end
+
+int toolkit_hosted_tool(tool: string):
+    match tool then
+        default:
+            return 0
+    end
+end
+
+int toolkit_known(tool: string):
+    match tool then
+        case "echo":
+            return 1
+        case "cat":
+            return 1
+        case "pwd":
+            return 1
+        case "true":
+            return 1
+        case "false":
+            return 1
+        case "mkdir":
+            return 1
+        case "rmdir":
+            return 1
+        case "cp":
+            return 1
+        case "ls":
+            return 1
+        case "mv":
+            return 1
+        case "rm":
+            return 1
+        case "domainname":
+            return 1
+        case "hostname":
+            return 1
+        case "realpath":
+            return 1
+        case "sleep":
+            return 1
+        case "sync":
+            return 1
+        case "chmod":
+            return 1
+        case "test":
+            return 1
+        case "env":
+            return 1
+        case "dirname":
+            return 1
+        case "basename":
+            return 1
+        case "head":
+            return 1
+        case "tee":
+            return 1
+        case "touch":
+            return 1
+        case "readlink":
+            return 1
+        case "uname":
+            return 1
+        case "id":
+            return 1
+        case "date":
+            return 1
+        case "uniq":
+            return 1
+        case "wc":
+            return 1
+        case "ln":
+            return 1
+        case "cut":
+            return 1
+        case "sed":
+            return 1
+        case "arch":
+            return 1
+        case "printenv":
+            return 1
+        case "yes":
+            return 1
+        case "tty":
+            return 1
+        case "rev":
+            return 1
+        case "seq":
+            return 1
+        case "mktemp":
+            return 1
+        case "paste":
+            return 1
+        case "comm":
+            return 1
+        case "fold":
+            return 1
+        case "nice":
+            return 1
+        case "what":
+            return 1
+        case "cal":
+            return 1
+        case "hexdump":
+            return 1
+        case "kill":
+            return 1
+        case "getopt":
+            return 1
+        case "fmt":
+            return 1
+        case "split":
+            return 1
+        case "logname":
+            return 1
+        case "nohup":
+            return 1
+        case "timeout":
+            return 1
+        case "unexpand":
+            return 1
+        case "column":
+            return 1
+        case "col":
+            return 1
+        case "rs":
+            return 1
+        case "from":
+            return 1
+        case "banner":
+            return 1
+        case "cmp":
+            return 1
+        case "colrm":
+            return 1
+        case "expand":
+            return 1
+        case "join":
+            return 1
+        case "tr":
+            return 1
+        case "apply":
+            return 1
+        case "expr":
+            return 1
+        case "jot":
+            return 1
+        case "csplit":
+            return 1
+        case "chroot":
+            return 1
+        case "dd":
+            return 1
+        case "du":
+            return 1
+        case "locale":
+            return 1
+        case "logger":
+            return 1
+        case "look":
+            return 1
+        case "nologin":
+            return 1
+        case "pr":
+            return 1
+        case "nl":
+            return 1
+        case "printf":
+            return 1
+        case "renice":
+            return 1
+        case "sdiff":
+            return 1
+        case "stat":
+            return 1
+        case "ul":
+            return 1
+        case "grep":
+            return 1
+        case "tail":
+            return 1
+        case "find":
+            return 1
+        case "xargs":
+            return 1
+        case "which":
+            return 1
+        case "script":
+            return 1
+        case "rmt":
+            return 1
+        case "mt":
+            return 1
+        case "shutdown":
+            return 1
+        case "reboot":
+            return 1
+        case "users":
+            return 1
+        case "wall":
+            return 1
+        case "df":
+            return 1
+        case "mknod":
+            return 1
+        case "tsort":
+            return 1
+        case "who":
+            return 1
+        case "w":
+            return 1
+        case "vmstat":
+            return 1
+        case "yacc":
+            return 1
+        case "lex":
+            return 1
+        case "watch":
+            return 1
+        case "less":
+            return 1
+        case "vi":
+            return 1
+        case "vipw":
+            return 1
+        case "umount":
+            return 1
+        case "mount":
+            return 1
+        case "fsck":
+            return 1
+        case "init":
+            return 1
+        case "sysctl":
+            return 1
+        case "swapon":
+            return 1
+        case "ping":
+            return 1
+        case "top":
+            return 1
+        case "diff":
+            return 1
+        case "patch":
+            return 1
+        case "getconf":
+            return 1
+        case "zic":
+            return 1
+        case "zdump":
+            return 1
+        case "file":
+            return 1
+        case "sort":
+            return 1
+        case "m4":
+            return 1
+        case "awk":
+            return 1
+        case "diff3":
+            return 1
+        case "gencat":
+            return 1
+        case "gprof":
+            return 1
+        case "ipcrm":
+            return 1
+        case "ipcs":
+            return 1
+        case "stty":
+            return 1
+        case "pkill":
+            return 1
+        case "ps":
+            return 1
+        case "dmesg":
+            return 1
+        case "getent":
+            return 1
+        case "nm":
+            return 1
+        case "rpcgen":
+            return 1
+        case "ed":
+            return 1
+        case "nproc":
+            return 1
+        case "uuidgen":
+            return 1
+        case "fdisk":
+            return 1
+        case "cron":
+            return 1
+        case "su":
+            return 1
+        case "passwd":
+            return 1
+        case "login":
+            return 1
+        case "chflags":
+            return 1
+        case "pwait":
+            return 1
+        case "cpuset":
+            return 1
+        case "kenv":
+            return 1
+        case "getfacl":
+            return 1
+        case "setfacl":
+            return 1
+        case "chio":
+            return 1
+        case "pax":
+            return 1
+        case "csh":
+            return 1
+        case "sh":
+            return 1
+        case "pkgconf":
+            return 1
+        default:
+            return toolkit_hosted_tool(tool)
+    end
+end
+
+string toolkit_openbsd_source(tool: string):
+    match tool then
+        case "env":
+            return toolkit_openbsd_path("usr.bin/env/env.c")
+        case "dirname":
+            return toolkit_openbsd_path("usr.bin/dirname/dirname.c")
+        case "basename":
+            return toolkit_openbsd_path("usr.bin/basename/basename.c")
+        case "head":
+            return toolkit_openbsd_path("usr.bin/head/head.c")
+        case "tee":
+            return toolkit_openbsd_path("usr.bin/tee/tee.c")
+        case "touch":
+            return toolkit_openbsd_path("usr.bin/touch/touch.c")
+        case "readlink":
+            return toolkit_openbsd_path("usr.bin/readlink/readlink.c")
+        case "uname":
+            return toolkit_openbsd_path("usr.bin/uname/uname.c")
+        case "id":
+            return toolkit_openbsd_path("usr.bin/id/id.c")
+        case "date":
+            return toolkit_openbsd_path("bin/date/date.c")
+        case "uniq":
+            return toolkit_openbsd_path("usr.bin/uniq/uniq.c")
+        case "wc":
+            return toolkit_openbsd_path("usr.bin/wc/wc.c")
+        case "ln":
+            return toolkit_openbsd_path("bin/ln/ln.c")
+        case "cut":
+            return toolkit_openbsd_path("usr.bin/cut/cut.c")
+        case "sed":
+            return toolkit_openbsd_path("usr.bin/sed/main.c")
+        case "arch":
+            return toolkit_openbsd_path("usr.bin/arch/arch.c")
+        case "printenv":
+            return toolkit_openbsd_path("usr.bin/printenv/printenv.c")
+        case "yes":
+            return toolkit_openbsd_path("usr.bin/yes/yes.c")
+        case "tty":
+            return toolkit_openbsd_path("usr.bin/tty/tty.c")
+        case "rev":
+            return toolkit_openbsd_path("usr.bin/rev/rev.c")
+        case "seq":
+            return toolkit_openbsd_path("usr.bin/seq/seq.c")
+        case "mktemp":
+            return toolkit_openbsd_path("usr.bin/mktemp/mktemp.c")
+        case "paste":
+            return toolkit_openbsd_path("usr.bin/paste/paste.c")
+        case "comm":
+            return toolkit_openbsd_path("usr.bin/comm/comm.c")
+        case "fold":
+            return toolkit_openbsd_path("usr.bin/fold/fold.c")
+        case "nice":
+            return toolkit_openbsd_path("usr.bin/nice/nice.c")
+        case "what":
+            return toolkit_openbsd_path("usr.bin/what/what.c")
+        case "cal":
+            return toolkit_openbsd_path("usr.bin/cal/cal.c")
+        case "hexdump":
+            return toolkit_openbsd_path("usr.bin/hexdump/hexdump.c")
+        case "kill":
+            return toolkit_openbsd_path("bin/kill/kill.c")
+        case "getopt":
+            return toolkit_openbsd_path("usr.bin/getopt/getopt.c")
+        case "fmt":
+            return toolkit_openbsd_path("usr.bin/fmt/fmt.c")
+        case "split":
+            return toolkit_openbsd_path("usr.bin/split/split.c")
+        case "logname":
+            return toolkit_openbsd_path("usr.bin/logname/logname.c")
+        case "nohup":
+            return toolkit_openbsd_path("usr.bin/nohup/nohup.c")
+        case "timeout":
+            return toolkit_openbsd_path("usr.bin/timeout/timeout.c")
+        case "unexpand":
+            return toolkit_openbsd_path("usr.bin/unexpand/unexpand.c")
+        case "column":
+            return toolkit_openbsd_path("usr.bin/column/column.c")
+        case "col":
+            return toolkit_openbsd_path("usr.bin/col/col.c")
+        case "rs":
+            return toolkit_openbsd_path("usr.bin/rs/rs.c")
+        case "from":
+            return toolkit_openbsd_path("usr.bin/from/from.c")
+        case "banner":
+            return toolkit_openbsd_path("usr.bin/banner/banner.c")
+        case "cmp":
+            return toolkit_openbsd_path("usr.bin/cmp/cmp.c")
+        case "colrm":
+            return toolkit_openbsd_path("usr.bin/colrm/colrm.c")
+        case "expand":
+            return toolkit_openbsd_path("usr.bin/expand/expand.c")
+        case "join":
+            return toolkit_openbsd_path("usr.bin/join/join.c")
+        case "tr":
+            return toolkit_openbsd_path("usr.bin/tr/tr.c")
+        case "apply":
+            return toolkit_openbsd_path("usr.bin/apply/apply.c")
+        case "expr":
+            return toolkit_openbsd_path("bin/expr/expr.c")
+        case "jot":
+            return toolkit_openbsd_path("usr.bin/jot/jot.c")
+        case "csplit":
+            return toolkit_openbsd_path("usr.bin/csplit/csplit.c")
+        case "chroot":
+            return toolkit_openbsd_path("usr.sbin/chroot/chroot.c")
+        case "dd":
+            return toolkit_openbsd_path("bin/dd/dd.c")
+        case "du":
+            return toolkit_openbsd_path("usr.bin/du/du.c")
+        case "locale":
+            return toolkit_openbsd_path("usr.bin/locale/locale.c")
+        case "logger":
+            return toolkit_openbsd_path("usr.bin/logger/logger.c")
+        case "look":
+            return toolkit_openbsd_path("usr.bin/look/look.c")
+        case "nologin":
+            return toolkit_openbsd_path("sbin/nologin/nologin.c")
+        case "pr":
+            return toolkit_openbsd_path("usr.bin/pr/pr.c")
+        case "nl":
+            return toolkit_openbsd_path("usr.bin/nl/nl.c")
+        case "printf":
+            return toolkit_openbsd_path("usr.bin/printf/printf.c")
+        case "renice":
+            return toolkit_openbsd_path("usr.bin/renice/renice.c")
+        case "sdiff":
+            return toolkit_openbsd_path("usr.bin/sdiff/sdiff.c")
+        case "stat":
+            return toolkit_openbsd_path("usr.bin/stat/stat.c")
+        case "ul":
+            return toolkit_openbsd_path("usr.bin/ul/ul.c")
+        case "grep":
+            return toolkit_openbsd_path("usr.bin/grep/grep.c")
+        case "tail":
+            return toolkit_openbsd_path("usr.bin/tail/tail.c")
+        case "find":
+            return toolkit_openbsd_path("usr.bin/find/main.c")
+        case "xargs":
+            return toolkit_openbsd_path("usr.bin/xargs/xargs.c")
+        case "which":
+            return toolkit_openbsd_path("usr.bin/which/which.c")
+        case "script":
+            return toolkit_openbsd_path("usr.bin/script/script.c")
+        case "rmt":
+            return toolkit_openbsd_path("usr.sbin/rmt/rmt.c")
+        case "mt":
+            return toolkit_openbsd_path("bin/mt/mt.c")
+        case "shutdown":
+            return toolkit_openbsd_path("sbin/shutdown/shutdown.c")
+        case "reboot":
+            return toolkit_openbsd_path("sbin/reboot/reboot.c")
+        case "users":
+            return toolkit_openbsd_path("usr.bin/users/users.c")
+        case "wall":
+            return toolkit_openbsd_path("usr.bin/wall/wall.c")
+        case "df":
+            return toolkit_openbsd_path("bin/df/df.c")
+        case "mknod":
+            return toolkit_openbsd_path("sbin/mknod/mknod.c")
+        case "tsort":
+            return toolkit_openbsd_path("usr.bin/tsort/tsort.c")
+        case "who":
+            return toolkit_openbsd_path("usr.bin/who/who.c")
+        case "w":
+            return toolkit_openbsd_path("usr.bin/w/w.c")
+        case "vmstat":
+            return toolkit_openbsd_path("usr.bin/vmstat/vmstat.c")
+        case "yacc":
+            return toolkit_openbsd_path("usr.bin/yacc/main.c")
+        case "lex":
+            return toolkit_openbsd_path("usr.bin/lex/main.c")
+        case "watch":
+            return toolkit_openbsd_path("usr.bin/watch/watch.c")
+        case "less":
+            return toolkit_openbsd_path("usr.bin/less/main.c")
+        case "vi":
+            return toolkit_openbsd_path("usr.bin/vi/common/main.c")
+        case "vipw":
+            return toolkit_openbsd_path("usr.sbin/vipw/vipw.c")
+        case "umount":
+            return toolkit_openbsd_path("sbin/umount/umount.c")
+        case "mount":
+            return toolkit_openbsd_path("sbin/mount/mount.c")
+        case "fsck":
+            return toolkit_openbsd_path("sbin/fsck/fsck.c")
+        case "init":
+            return toolkit_openbsd_path("sbin/init/init.c")
+        case "sysctl":
+            return toolkit_openbsd_path("sbin/sysctl/sysctl.c")
+        case "swapon":
+            return toolkit_openbsd_path("sbin/swapctl/swapctl.c")
+        case "ping":
+            return toolkit_openbsd_path("sbin/ping/ping.c")
+        case "top":
+            return toolkit_openbsd_path("usr.bin/top/top.c")
+        case "diff":
+            return toolkit_openbsd_path("usr.bin/diff/diff.c")
+        case "patch":
+            return toolkit_openbsd_path("usr.bin/patch/patch.c")
+        case "getconf":
+            return toolkit_openbsd_path("usr.bin/getconf/getconf.c")
+        case "zic":
+            return toolkit_openbsd_path("usr.sbin/zic/zic.c")
+        case "zdump":
+            return toolkit_openbsd_path("usr.sbin/zdump/zdump.c")
+        case "file":
+            return toolkit_openbsd_path("usr.bin/file/file.c")
+        case "sort":
+            return toolkit_openbsd_path("usr.bin/sort/sort.c")
+        case "m4":
+            return toolkit_openbsd_path("usr.bin/m4/main.c")
+        case "awk":
+            return toolkit_openbsd_path("usr.bin/awk/main.c")
+        case "diff3":
+            return toolkit_openbsd_path("usr.bin/diff3/diff3prog.c")
+        case "gencat":
+            return toolkit_openbsd_path("usr.bin/gencat/gencat.c")
+        case "gprof":
+            return toolkit_openbsd_path("usr.bin/gprof/gprof.c")
+        case "ipcrm":
+            return toolkit_openbsd_path("usr.bin/ipcrm/ipcrm.c")
+        case "ipcs":
+            return toolkit_openbsd_path("usr.bin/ipcs/ipcs.c")
+        case "stty":
+            return toolkit_openbsd_path("bin/stty/stty.c")
+        case "pkill":
+            return toolkit_openbsd_path("usr.bin/pkill/pkill.c")
+        case "ps":
+            return toolkit_openbsd_path("bin/ps/ps.c")
+        case "dmesg":
+            return toolkit_openbsd_path("sbin/dmesg/dmesg.c")
+        case "fdisk":
+            return toolkit_openbsd_path("sbin/fdisk/fdisk.c")
+        case "cron":
+            return toolkit_openbsd_path("usr.sbin/cron/cron.c")
+        case "su":
+            return toolkit_openbsd_path("usr.bin/su/su.c")
+        case "passwd":
+            return toolkit_openbsd_path("usr.bin/passwd/passwd.c")
+        case "login":
+            return toolkit_openbsd_path("usr.bin/login/login.c")
+        case "getent":
+            return toolkit_openbsd_path("usr.bin/getent/getent.c")
+        case "nm":
+            return toolkit_openbsd_path("usr.bin/nm/nm.c")
+        case "rpcgen":
+            return toolkit_openbsd_path("usr.bin/rpcgen/rpc_main.c")
+        case "ed":
+            return toolkit_openbsd_path("bin/ed/main.c")
+        case "domainname":
+            return toolkit_openbsd_path("bin/domainname/domainname.c")
+        case "hostname":
+            return toolkit_openbsd_path("bin/hostname/hostname.c")
+        case "pwd":
+            return toolkit_openbsd_path("bin/pwd/pwd.c")
+        case "rmdir":
+            return toolkit_openbsd_path("bin/rmdir/rmdir.c")
+        case "sync":
+            return toolkit_openbsd_path("bin/sync/sync.c")
+        case "csh":
+            return toolkit_openbsd_path("bin/csh/csh.c")
+        case "pkgconf":
+            return toolkit_openbsd_path("usr.bin/pkgconf/cli/main.c")
+        default:
+            return "" + ""
+    end
+end
+
+string toolkit_freebsd_source(tool: string):
+    match tool then
+        case "echo":
+            return "" + "System/Userland/FreeBSD/Source/bin/echo/echo.c"
+        case "cat":
+            return "" + "System/Userland/FreeBSD/Source/bin/cat/cat.c"
+        case "pwd":
+            return "" + "System/Userland/FreeBSD/Source/bin/pwd/pwd.c"
+        case "true":
+            return "" + "System/Userland/FreeBSD/Source/usr.bin/true/true.c"
+        case "false":
+            return "" + "System/Userland/FreeBSD/Source/usr.bin/false/false.c"
+        case "mkdir":
+            return "" + "System/Userland/FreeBSD/Source/bin/mkdir/mkdir.c"
+        case "rmdir":
+            return "" + "System/Userland/FreeBSD/Source/bin/rmdir/rmdir.c"
+        case "cp":
+            return "" + "System/Userland/FreeBSD/Source/bin/cp/cp.c"
+        case "ls":
+            return "" + "System/Userland/FreeBSD/Source/bin/ls/ls.c"
+        case "mv":
+            return "" + "System/Userland/FreeBSD/Source/bin/mv/mv.c"
+        case "rm":
+            return "" + "System/Userland/FreeBSD/Source/bin/rm/rm.c"
+        case "domainname":
+            return "" + "System/Userland/FreeBSD/Source/bin/domainname/domainname.c"
+        case "hostname":
+            return "" + "System/Userland/FreeBSD/Source/bin/hostname/hostname.c"
+        case "realpath":
+            return "" + "System/Userland/FreeBSD/Source/bin/realpath/realpath.c"
+        case "sleep":
+            return "" + "System/Userland/FreeBSD/Source/bin/sleep/sleep.c"
+        case "sync":
+            return "" + "System/Userland/FreeBSD/Source/bin/sync/sync.c"
+        case "chmod":
+            return "" + "System/Userland/FreeBSD/Source/bin/chmod/chmod.c"
+        case "test":
+            return "" + "System/Userland/FreeBSD/Source/bin/test/test.c"
+        case "nproc":
+            return "" + "System/Userland/FreeBSD/Source/bin/nproc/nproc.c"
+        case "uuidgen":
+            return "" + "System/Userland/FreeBSD/Source/bin/uuidgen/uuidgen.c"
+        case "chflags":
+            return "" + "System/Userland/FreeBSD/Source/bin/chflags/chflags.c"
+        case "pwait":
+            return "" + "System/Userland/FreeBSD/Source/bin/pwait/pwait.c"
+        case "cpuset":
+            return "" + "System/Userland/FreeBSD/Source/bin/cpuset/cpuset.c"
+        case "kenv":
+            return "" + "System/Userland/FreeBSD/Source/bin/kenv/kenv.c"
+        case "getfacl":
+            return "" + "System/Userland/FreeBSD/Source/bin/getfacl/getfacl.c"
+        case "setfacl":
+            return "" + "System/Userland/FreeBSD/Source/bin/setfacl/setfacl.c"
+        case "chio":
+            return "" + "System/Userland/FreeBSD/Source/bin/chio/chio.c"
+        case "pax":
+            return "" + "System/Userland/FreeBSD/Source/bin/pax/pax.c"
+        case "sh":
+            return "" + "System/Userland/FreeBSD/Source/bin/sh/main.c"
+        default:
+            return "" + ""
+    end
+end
+
+string toolkit_source(tool: string):
+    if toolkit_hosted_tool(tool) == 1 then
+        return "" + "System/Userland/Bridge/scripts/hosted_common"
+    end
+    openbsd = toolkit_openbsd_source(tool)
+    if openbsd != "" then
+        if file_exists(openbsd) == 1 then
+            return openbsd
+        end
+    end
+    dealloc(openbsd)
+    return toolkit_freebsd_source(tool)
+end
+
+string toolkit_compile_sources(tool: string):
+    match tool then
+        case "cp":
+            return "" + "System/Userland/FreeBSD/Source/bin/cp/cp.c System/Userland/FreeBSD/Source/bin/cp/utils.c"
+        case "ls":
+            return "" + "System/Userland/FreeBSD/Source/bin/ls/ls.c System/Userland/FreeBSD/Source/bin/ls/cmp.c System/Userland/FreeBSD/Source/bin/ls/print.c System/Userland/FreeBSD/Source/bin/ls/util.c"
+        case "sed":
+            return toolkit_openbsd_path("usr.bin/sed/main.c System/Userland/OpenBSD/Source/usr.bin/sed/compile.c System/Userland/OpenBSD/Source/usr.bin/sed/misc.c System/Userland/OpenBSD/Source/usr.bin/sed/process.c")
+        case "hexdump":
+            return toolkit_openbsd_path("usr.bin/hexdump/conv.c System/Userland/OpenBSD/Source/usr.bin/hexdump/display.c System/Userland/OpenBSD/Source/usr.bin/hexdump/hexdump.c System/Userland/OpenBSD/Source/usr.bin/hexdump/hexsyntax.c System/Userland/OpenBSD/Source/usr.bin/hexdump/odsyntax.c System/Userland/OpenBSD/Source/usr.bin/hexdump/parse.c")
+        case "rs":
+            return toolkit_openbsd_path("usr.bin/rs/rs.c System/Userland/OpenBSD/Source/usr.bin/rs/utf8.c")
+        case "banner":
+            return toolkit_openbsd_path("usr.bin/banner/banner.c System/Userland/OpenBSD/Source/usr.bin/banner/chset.c")
+        case "cmp":
+            return toolkit_openbsd_path("usr.bin/cmp/cmp.c System/Userland/OpenBSD/Source/usr.bin/cmp/misc.c System/Userland/OpenBSD/Source/usr.bin/cmp/regular.c System/Userland/OpenBSD/Source/usr.bin/cmp/special.c")
+        case "tr":
+            return toolkit_openbsd_path("usr.bin/tr/tr.c System/Userland/OpenBSD/Source/usr.bin/tr/str.c")
+        case "dd":
+            return toolkit_openbsd_path("bin/dd/args.c System/Userland/OpenBSD/Source/bin/dd/conv.c System/Userland/OpenBSD/Source/bin/dd/conv_tab.c System/Userland/OpenBSD/Source/bin/dd/dd.c System/Userland/OpenBSD/Source/bin/dd/misc.c System/Userland/OpenBSD/Source/bin/dd/position.c")
+        case "pr":
+            return toolkit_openbsd_path("usr.bin/pr/pr.c System/Userland/OpenBSD/Source/usr.bin/pr/egetopt.c")
+        case "sdiff":
+            return toolkit_openbsd_path("usr.bin/sdiff/sdiff.c System/Userland/OpenBSD/Source/usr.bin/sdiff/common.c System/Userland/OpenBSD/Source/usr.bin/sdiff/edit.c")
+        case "grep":
+            return toolkit_openbsd_path("usr.bin/grep/binary.c System/Userland/OpenBSD/Source/usr.bin/grep/file.c System/Userland/OpenBSD/Source/usr.bin/grep/grep.c System/Userland/OpenBSD/Source/usr.bin/grep/mmfile.c System/Userland/OpenBSD/Source/usr.bin/grep/queue.c System/Userland/OpenBSD/Source/usr.bin/grep/util.c")
+        case "tail":
+            return toolkit_openbsd_path("usr.bin/tail/forward.c System/Userland/OpenBSD/Source/usr.bin/tail/misc.c System/Userland/OpenBSD/Source/usr.bin/tail/read.c System/Userland/OpenBSD/Source/usr.bin/tail/reverse.c System/Userland/OpenBSD/Source/usr.bin/tail/tail.c")
+        case "find":
+            return toolkit_openbsd_path("usr.bin/find/find.c System/Userland/OpenBSD/Source/usr.bin/find/function.c System/Userland/OpenBSD/Source/usr.bin/find/ls.c System/Userland/OpenBSD/Source/usr.bin/find/main.c System/Userland/OpenBSD/Source/usr.bin/find/misc.c System/Userland/OpenBSD/Source/usr.bin/find/operator.c System/Userland/OpenBSD/Source/usr.bin/find/option.c")
+        case "xargs":
+            return toolkit_openbsd_path("usr.bin/xargs/xargs.c System/Userland/OpenBSD/Source/usr.bin/xargs/strnsubst.c")
+        case "wall":
+            return toolkit_openbsd_path("usr.bin/wall/wall.c System/Userland/OpenBSD/Source/usr.bin/wall/ttymsg.c")
+        case "df":
+            return toolkit_openbsd_path("bin/df/df.c System/Libraries/LibC/Generated/df_raw_stubs.c")
+        case "tsort":
+            return toolkit_openbsd_path("usr.bin/tsort/tsort.c System/Userland/OpenBSD/Source/lib/libutil/ohash.c")
+        case "diff":
+            return toolkit_openbsd_path("usr.bin/diff/diff.c System/Userland/OpenBSD/Source/usr.bin/diff/diffdir.c System/Userland/OpenBSD/Source/usr.bin/diff/diffreg.c System/Userland/OpenBSD/Source/usr.bin/diff/xmalloc.c")
+        case "patch":
+            return toolkit_openbsd_path("usr.bin/patch/patch.c System/Userland/OpenBSD/Source/usr.bin/patch/pch.c System/Userland/OpenBSD/Source/usr.bin/patch/inp.c System/Userland/OpenBSD/Source/usr.bin/patch/util.c System/Userland/OpenBSD/Source/usr.bin/patch/backupfile.c System/Userland/OpenBSD/Source/usr.bin/patch/mkpath.c System/Userland/OpenBSD/Source/usr.bin/patch/ed.c")
+        case "file":
+            return toolkit_openbsd_path("usr.bin/file/file.c System/Userland/OpenBSD/Source/usr.bin/file/magic-dump.c System/Userland/OpenBSD/Source/usr.bin/file/magic-load.c System/Userland/OpenBSD/Source/usr.bin/file/magic-test.c System/Userland/OpenBSD/Source/usr.bin/file/magic-common.c System/Userland/OpenBSD/Source/usr.bin/file/text.c System/Userland/OpenBSD/Source/usr.bin/file/xmalloc.c System/Userland/OpenBSD/Source/lib/libutil/imsg.c System/Userland/OpenBSD/Source/lib/libutil/imsg-buffer.c")
+        case "sort":
+            return toolkit_openbsd_path("usr.bin/sort/bwstring.c System/Userland/OpenBSD/Source/usr.bin/sort/coll.c System/Userland/OpenBSD/Source/usr.bin/sort/file.c System/Userland/OpenBSD/Source/usr.bin/sort/mem.c System/Userland/OpenBSD/Source/usr.bin/sort/radixsort.c System/Userland/OpenBSD/Source/usr.bin/sort/sort.c System/Userland/OpenBSD/Source/usr.bin/sort/vsort.c System/Userland/OpenBSD/Source/lib/libc/hash/md5.c System/Libraries/LibC/Generated/md5_end.c")
+        case "m4":
+            return toolkit_openbsd_path("usr.bin/m4/eval.c System/Userland/OpenBSD/Source/usr.bin/m4/expr.c System/Userland/OpenBSD/Source/usr.bin/m4/look.c System/Userland/OpenBSD/Source/usr.bin/m4/main.c System/Userland/OpenBSD/Source/usr.bin/m4/misc.c System/Userland/OpenBSD/Source/usr.bin/m4/gnum4.c System/Userland/OpenBSD/Source/usr.bin/m4/trace.c System/Userland/Generated/build/m4/tokenizer.c System/Userland/Generated/build/m4/parser.c System/Userland/OpenBSD/Source/lib/libutil/ohash.c")
+        case "awk":
+            return "" + "System/Userland/Generated/build/awk/awkgram.tab.c System/Userland/OpenBSD/Source/usr.bin/awk/lex.c System/Userland/OpenBSD/Source/usr.bin/awk/b.c System/Userland/OpenBSD/Source/usr.bin/awk/main.c System/Userland/OpenBSD/Source/usr.bin/awk/parse.c System/Userland/Generated/build/awk/proctab.c System/Userland/OpenBSD/Source/usr.bin/awk/tran.c System/Userland/OpenBSD/Source/usr.bin/awk/lib.c System/Userland/OpenBSD/Source/usr.bin/awk/run.c"
+        case "diff3":
+            return toolkit_openbsd_path("usr.bin/diff3/diff3prog.c")
+        case "gprof":
+            return toolkit_openbsd_path("usr.bin/gprof/gprof.c System/Userland/OpenBSD/Source/usr.bin/gprof/arcs.c System/Userland/OpenBSD/Source/usr.bin/gprof/dfn.c System/Userland/OpenBSD/Source/usr.bin/gprof/elf.c System/Userland/OpenBSD/Source/usr.bin/gprof/lookup.c System/Userland/OpenBSD/Source/usr.bin/gprof/amd64.c System/Userland/OpenBSD/Source/usr.bin/gprof/hertz.c System/Userland/OpenBSD/Source/usr.bin/gprof/printgprof.c System/Userland/OpenBSD/Source/usr.bin/gprof/printlist.c")
+        case "stty":
+            return toolkit_openbsd_path("bin/stty/cchar.c System/Userland/OpenBSD/Source/bin/stty/gfmt.c System/Userland/OpenBSD/Source/bin/stty/key.c System/Userland/OpenBSD/Source/bin/stty/modes.c System/Userland/OpenBSD/Source/bin/stty/print.c System/Userland/OpenBSD/Source/bin/stty/stty.c")
+        case "pkill":
+            return toolkit_openbsd_path("usr.bin/pkill/pkill.c")
+        case "ps":
+            return toolkit_openbsd_path("bin/ps/keyword.c System/Userland/OpenBSD/Source/bin/ps/nlist.c System/Userland/OpenBSD/Source/bin/ps/print.c System/Userland/OpenBSD/Source/bin/ps/ps.c System/Userland/OpenBSD/Source/bin/ps/utf8.c")
+        case "w":
+            return toolkit_openbsd_path("usr.bin/w/pr_time.c System/Userland/OpenBSD/Source/usr.bin/w/proc_compare.c System/Userland/OpenBSD/Source/usr.bin/w/w.c")
+        case "vmstat":
+            return toolkit_openbsd_path("usr.bin/vmstat/dkstats.c System/Userland/OpenBSD/Source/usr.bin/vmstat/vmstat.c")
+        case "fdisk":
+            return toolkit_openbsd_path("sbin/fdisk/fdisk.c System/Userland/OpenBSD/Source/sbin/fdisk/user.c System/Userland/OpenBSD/Source/sbin/fdisk/misc.c System/Userland/OpenBSD/Source/sbin/fdisk/disk.c System/Userland/OpenBSD/Source/sbin/fdisk/mbr.c System/Userland/OpenBSD/Source/sbin/fdisk/part.c System/Userland/OpenBSD/Source/sbin/fdisk/cmd.c System/Userland/Generated/build/fdisk/manual.c System/Userland/OpenBSD/Source/sbin/fdisk/gpt.c")
+        case "cron":
+            return toolkit_openbsd_path("usr.sbin/cron/cron.c System/Userland/OpenBSD/Source/usr.sbin/cron/database.c System/Userland/OpenBSD/Source/usr.sbin/cron/user.c System/Userland/OpenBSD/Source/usr.sbin/cron/entry.c System/Userland/OpenBSD/Source/usr.sbin/cron/job.c System/Userland/OpenBSD/Source/usr.sbin/cron/do_command.c System/Userland/OpenBSD/Source/usr.sbin/cron/misc.c System/Userland/OpenBSD/Source/usr.sbin/cron/env.c System/Userland/OpenBSD/Source/usr.sbin/cron/popen.c System/Userland/OpenBSD/Source/usr.sbin/cron/atrun.c")
+        case "passwd":
+            return toolkit_openbsd_path("usr.bin/passwd/local_passwd.c System/Userland/OpenBSD/Source/usr.bin/passwd/passwd.c System/Userland/OpenBSD/Source/usr.bin/passwd/pwd_check.c")
+        case "login":
+            return toolkit_openbsd_path("usr.bin/login/login.c System/Userland/OpenBSD/Source/usr.bin/login/failedlogin.c")
+        case "yacc":
+            return toolkit_openbsd_path("usr.bin/yacc/closure.c System/Userland/OpenBSD/Source/usr.bin/yacc/error.c System/Userland/OpenBSD/Source/usr.bin/yacc/lalr.c System/Userland/OpenBSD/Source/usr.bin/yacc/lr0.c System/Userland/OpenBSD/Source/usr.bin/yacc/main.c System/Userland/OpenBSD/Source/usr.bin/yacc/mkpar.c System/Userland/OpenBSD/Source/usr.bin/yacc/output.c System/Userland/OpenBSD/Source/usr.bin/yacc/reader.c System/Userland/OpenBSD/Source/usr.bin/yacc/skeleton.c System/Userland/OpenBSD/Source/usr.bin/yacc/symtab.c System/Userland/OpenBSD/Source/usr.bin/yacc/verbose.c System/Userland/OpenBSD/Source/usr.bin/yacc/warshall.c")
+        case "lex":
+            return toolkit_openbsd_path("usr.bin/lex/buf.c System/Userland/OpenBSD/Source/usr.bin/lex/ccl.c System/Userland/OpenBSD/Source/usr.bin/lex/dfa.c System/Userland/OpenBSD/Source/usr.bin/lex/ecs.c System/Userland/OpenBSD/Source/usr.bin/lex/filter.c System/Userland/OpenBSD/Source/usr.bin/lex/gen.c System/Userland/OpenBSD/Source/usr.bin/lex/main.c System/Userland/OpenBSD/Source/usr.bin/lex/misc.c System/Userland/OpenBSD/Source/usr.bin/lex/nfa.c System/Userland/OpenBSD/Source/usr.bin/lex/options.c System/Userland/Generated/build/lex/parse.c System/Userland/OpenBSD/Source/usr.bin/lex/regex.c System/Userland/Generated/build/lex/scan.c System/Userland/OpenBSD/Source/usr.bin/lex/scanflags.c System/Userland/OpenBSD/Source/usr.bin/lex/scanopt.c System/Userland/Generated/build/lex/skel.c System/Userland/OpenBSD/Source/usr.bin/lex/sym.c System/Userland/OpenBSD/Source/usr.bin/lex/tables.c System/Userland/OpenBSD/Source/usr.bin/lex/tables_shared.c System/Userland/OpenBSD/Source/usr.bin/lex/tblcmp.c System/Userland/OpenBSD/Source/usr.bin/lex/yylex.c")
+        case "watch":
+            return toolkit_openbsd_path("usr.bin/watch/watch.c")
+        case "mount":
+            return toolkit_openbsd_path("sbin/mount/mount.c System/Userland/OpenBSD/Source/sbin/mount/getmntopts.c")
+        case "fsck":
+            return toolkit_openbsd_path("sbin/fsck/fsck.c System/Userland/OpenBSD/Source/sbin/fsck/fsutil.c System/Userland/OpenBSD/Source/sbin/fsck/preen.c")
+        case "swapon":
+            return toolkit_openbsd_path("sbin/swapctl/swapctl.c System/Userland/OpenBSD/Source/sbin/swapctl/swaplist.c")
+        case "top":
+            return toolkit_openbsd_path("usr.bin/top/commands.c System/Userland/OpenBSD/Source/usr.bin/top/display.c System/Userland/OpenBSD/Source/usr.bin/top/machine.c System/Userland/OpenBSD/Source/usr.bin/top/screen.c System/Userland/OpenBSD/Source/usr.bin/top/top.c System/Userland/OpenBSD/Source/usr.bin/top/utils.c")
+        case "less":
+            return toolkit_openbsd_path("usr.bin/less/main.c System/Userland/OpenBSD/Source/usr.bin/less/screen.c System/Userland/OpenBSD/Source/usr.bin/less/brac.c System/Userland/OpenBSD/Source/usr.bin/less/ch.c System/Userland/OpenBSD/Source/usr.bin/less/charset.c System/Userland/OpenBSD/Source/usr.bin/less/cmdbuf.c System/Userland/OpenBSD/Source/usr.bin/less/command.c System/Userland/OpenBSD/Source/usr.bin/less/cvt.c System/Userland/OpenBSD/Source/usr.bin/less/decode.c System/Userland/OpenBSD/Source/usr.bin/less/edit.c System/Userland/OpenBSD/Source/usr.bin/less/filename.c System/Userland/OpenBSD/Source/usr.bin/less/forwback.c System/Userland/OpenBSD/Source/usr.bin/less/ifile.c System/Userland/OpenBSD/Source/usr.bin/less/input.c System/Userland/OpenBSD/Source/usr.bin/less/jump.c System/Userland/OpenBSD/Source/usr.bin/less/line.c System/Userland/OpenBSD/Source/usr.bin/less/linenum.c System/Userland/OpenBSD/Source/usr.bin/less/lsystem.c System/Userland/OpenBSD/Source/usr.bin/less/mark.c System/Userland/OpenBSD/Source/usr.bin/less/optfunc.c System/Userland/OpenBSD/Source/usr.bin/less/option.c System/Userland/OpenBSD/Source/usr.bin/less/opttbl.c System/Userland/OpenBSD/Source/usr.bin/less/os.c System/Userland/OpenBSD/Source/usr.bin/less/output.c System/Userland/OpenBSD/Source/usr.bin/less/pattern.c System/Userland/OpenBSD/Source/usr.bin/less/position.c System/Userland/OpenBSD/Source/usr.bin/less/prompt.c System/Userland/OpenBSD/Source/usr.bin/less/search.c System/Userland/OpenBSD/Source/usr.bin/less/signal.c System/Userland/OpenBSD/Source/usr.bin/less/tags.c System/Userland/OpenBSD/Source/usr.bin/less/ttyin.c System/Userland/OpenBSD/Source/usr.bin/less/version.c")
+        case "vi":
+            return toolkit_openbsd_path("usr.bin/vi/cl/*.c System/Userland/OpenBSD/Source/usr.bin/vi/common/*.c System/Userland/OpenBSD/Source/usr.bin/vi/ex/*.c System/Userland/OpenBSD/Source/usr.bin/vi/vi/*.c")
+        case "dmesg":
+            return toolkit_openbsd_path("sbin/dmesg/dmesg.c")
+        case "getent":
+            return toolkit_openbsd_path("usr.bin/getent/getent.c")
+        case "nm":
+            return toolkit_openbsd_path("usr.bin/nm/nm.c System/Userland/OpenBSD/Source/usr.bin/nm/elf.c")
+        case "rpcgen":
+            return toolkit_openbsd_path("usr.bin/rpcgen/rpc_clntout.c System/Userland/OpenBSD/Source/usr.bin/rpcgen/rpc_cout.c System/Userland/OpenBSD/Source/usr.bin/rpcgen/rpc_hout.c System/Userland/OpenBSD/Source/usr.bin/rpcgen/rpc_main.c System/Userland/OpenBSD/Source/usr.bin/rpcgen/rpc_parse.c System/Userland/OpenBSD/Source/usr.bin/rpcgen/rpc_sample.c System/Userland/OpenBSD/Source/usr.bin/rpcgen/rpc_scan.c System/Userland/OpenBSD/Source/usr.bin/rpcgen/rpc_svcout.c System/Userland/OpenBSD/Source/usr.bin/rpcgen/rpc_tblout.c System/Userland/OpenBSD/Source/usr.bin/rpcgen/rpc_util.c")
+        case "ed":
+            return toolkit_openbsd_path("bin/ed/buf.c System/Userland/OpenBSD/Source/bin/ed/glbl.c System/Userland/OpenBSD/Source/bin/ed/io.c System/Userland/OpenBSD/Source/bin/ed/main.c System/Userland/OpenBSD/Source/bin/ed/re.c System/Userland/OpenBSD/Source/bin/ed/sub.c System/Userland/OpenBSD/Source/bin/ed/undo.c")
+        default:
+            return toolkit_source(tool)
+    end
+end
+
+string toolkit_target(tool: string):
+    prefix = "" + "System/Userland/Generated/targets/linux-x64/bin/"
+    out = prefix + tool
+    dealloc(prefix)
+    return out
+end
+
+string toolkit_report_path(tool: string):
+    prefix = "" + "System/Userland/Generated/reports/"
+    mid = prefix + tool
+    dealloc(prefix)
+    out = mid + "-gap.md"
+    dealloc(mid)
+    return out
+end
+
+string toolkit_plan_path(tool: string):
+    prefix = "" + "System/Userland/Generated/build/"
+    mid = prefix + tool
+    dealloc(prefix)
+    out = mid + "/BUILD_PLAN.md"
+    dealloc(mid)
+    return out
+end
+
+string toolkit_test_path(tool: string):
+    prefix = "" + "System/Userland/Generated/tests/"
+    mid = prefix + tool
+    dealloc(prefix)
+    out = mid + "-compat.sh"
+    dealloc(mid)
+    return out
+end
+
+string toolkit_test_report_path(tool: string):
+    prefix = "" + "System/Userland/Generated/reports/"
+    mid = prefix + tool
+    dealloc(prefix)
+    out = mid + "-compat.md"
+    dealloc(mid)
+    return out
+end
+
+string toolkit_cert_report_path(tool: string):
+    prefix = "" + "System/Userland/Generated/certification/"
+    mid = prefix + tool
+    dealloc(prefix)
+    out = mid + ".md"
+    dealloc(mid)
+    return out
+end
+
+int toolkit_require(path: string, label: string):
+    if file_exists(path) == 1 then
+        msg_ok = "OK   " + label
+        print msg_ok
+        dealloc(msg_ok)
+        return 0
+    end
+    msg_fail = "MISS " + label
+    print msg_fail
+    dealloc(msg_fail)
+    return 1
+end
+
+int toolkit_ensure_dirs_for(tool: string):
+    if file_exists("System/Userland/Generated") == 0 then
+        mkdir("System/Userland/Generated")
+    end
+    if file_exists("System/Userland/Generated/build") == 0 then
+        mkdir("System/Userland/Generated/build")
+    end
+    build_dir = "System/Userland/Generated/build/" + tool
+    if file_exists(build_dir) == 0 then
+        mkdir(build_dir)
+    end
+    dealloc(build_dir)
+    if file_exists("System/Userland/Generated/reports") == 0 then
+        mkdir("System/Userland/Generated/reports")
+    end
+    if file_exists("System/Userland/Generated/tests") == 0 then
+        mkdir("System/Userland/Generated/tests")
+    end
+    if file_exists("System/Userland/Generated/certification") == 0 then
+        mkdir("System/Userland/Generated/certification")
+    end
+    if file_exists("System/Userland/Generated/targets") == 0 then
+        mkdir("System/Userland/Generated/targets")
+    end
+    if file_exists("System/Userland/Generated/targets/linux-x64") == 0 then
+        mkdir("System/Userland/Generated/targets/linux-x64")
+    end
+    if file_exists("System/Userland/Generated/targets/linux-x64/bin") == 0 then
+        mkdir("System/Userland/Generated/targets/linux-x64/bin")
+    end
+    return 0
+end
+
+string toolkit_compile_command_raw(tool: string):
+    if tool == "lex" then
+        target_lex = toolkit_target(tool)
+        lex_prefix = "" + "mkdir -p System/Userland/Generated/build/lex System/Userland/Generated/targets/linux-x64/bin && sed 's|#define M4 \"/usr/bin/m4\"|#define M4 \"m4\"|' System/Userland/OpenBSD/Source/usr.bin/lex/config.h > System/Userland/Generated/build/lex/config.h && printf '%s\\n' '#include <sys/types.h>' '#ifndef __GLIBC__' 'typedef unsigned char u_char;' '#endif' > System/Userland/Generated/build/lex/mixtar_lex_types.h && tr -d '\\015' < System/Userland/OpenBSD/Source/usr.bin/lex/mkskel.sh > System/Userland/Generated/build/lex/mkskel.sh && bison -y -d -o System/Userland/Generated/build/lex/parse.c System/Userland/OpenBSD/Source/usr.bin/lex/parse.y && flex -o System/Userland/Generated/build/lex/scan.c System/Userland/OpenBSD/Source/usr.bin/lex/scan.l && tr -d '\\015' < System/Userland/OpenBSD/Source/usr.bin/lex/flex.skl | sed -e 's/m4_/m4postproc_/g' -e 's/m4preproc_/m4_/g' | m4 -I System/Userland/OpenBSD/Source/usr.bin/lex -P -DFLEX_MAJOR_VERSION=2 -DFLEX_MINOR_VERSION=5 -DFLEX_SUBMINOR_VERSION=39 | tr -d '\\015' | sed -e 's/m4postproc_/m4_/g' | sh System/Userland/Generated/build/lex/mkskel.sh > System/Userland/Generated/build/lex/skel.c && cc -std=gnu17 -Wall -Wextra -Werror -pedantic -Wno-sign-compare -Wno-unused-parameter -Wno-missing-field-initializers -Wno-unused-function -Wno-format-truncation -Wno-calloc-transposed-args -D_GNU_SOURCE -D_DEFAULT_SOURCE -DHAVE_CONFIG_H -D'pledge(a,b)=0' -include System/Userland/Generated/build/lex/mixtar_lex_types.h -I System/Userland/Generated/build/lex -I System/Userland/OpenBSD/Source/usr.bin/lex -I System/Userland/Bridge/include -o "
+        lex_out = lex_prefix + target_lex
+        dealloc(lex_prefix, target_lex)
+        lex_tail = lex_out + " System/Userland/OpenBSD/Source/usr.bin/lex/buf.c System/Userland/OpenBSD/Source/usr.bin/lex/ccl.c System/Userland/OpenBSD/Source/usr.bin/lex/dfa.c System/Userland/OpenBSD/Source/usr.bin/lex/ecs.c System/Userland/OpenBSD/Source/usr.bin/lex/filter.c System/Userland/OpenBSD/Source/usr.bin/lex/gen.c System/Userland/OpenBSD/Source/usr.bin/lex/main.c System/Userland/OpenBSD/Source/usr.bin/lex/misc.c System/Userland/OpenBSD/Source/usr.bin/lex/nfa.c System/Userland/OpenBSD/Source/usr.bin/lex/options.c System/Userland/Generated/build/lex/parse.c System/Userland/OpenBSD/Source/usr.bin/lex/regex.c System/Userland/Generated/build/lex/scan.c System/Userland/OpenBSD/Source/usr.bin/lex/scanflags.c System/Userland/OpenBSD/Source/usr.bin/lex/scanopt.c System/Userland/Generated/build/lex/skel.c System/Userland/OpenBSD/Source/usr.bin/lex/sym.c System/Userland/OpenBSD/Source/usr.bin/lex/tables.c System/Userland/OpenBSD/Source/usr.bin/lex/tables_shared.c System/Userland/OpenBSD/Source/usr.bin/lex/tblcmp.c System/Userland/OpenBSD/Source/usr.bin/lex/yylex.c System/Libraries/LibC/Generated/bsd_compat.c -lm"
+        dealloc(lex_out)
+        return lex_tail
+    end
+    if tool == "pkgconf" then
+        target_pkgconf = toolkit_target(tool)
+        pkgconf_prefix = "" + "mkdir -p System/Userland/Generated/build/pkgconf System/Userland/Generated/targets/linux-x64/bin && printf '%b\\n' '#define SYSTEM_LIBDIR \\042/usr/lib\\042' '#define SYSTEM_INCLUDEDIR \\042/usr/include\\042' '#define PKG_DEFAULT_PATH \\042/usr/lib/pkgconfig:/usr/local/lib/pkgconfig:/usr/local/share/pkgconfig:/usr/X11R6/lib/pkgconfig:/usr/X11R6/share/pkgconfig\\042' > System/Userland/Generated/build/pkgconf/pkgconf_config.h && cc -std=c23 -Wall -Wextra -Werror -pedantic -Wno-unused-parameter -Wno-unused-variable -Wno-unused-function -Wno-empty-body -D_GNU_SOURCE -D_DEFAULT_SOURCE -DPKGCONF_LITE -include System/Userland/Generated/build/pkgconf/pkgconf_config.h -I System/Userland/OpenBSD/Source/usr.bin/pkgconf -I System/Userland/OpenBSD/Source/usr.bin/pkgconf/libpkgconf -I System/Userland/OpenBSD/Source/usr.bin/pkgconf/cli -I System/Userland/Bridge/include -DMIXTAR_BRIDGE=1 -include System/Userland/Bridge/include/mixtar_bridge_compat.h -o "
+        pkgconf_out = pkgconf_prefix + target_pkgconf
+        dealloc(pkgconf_prefix, target_pkgconf)
+        pkgconf_tail = pkgconf_out + " System/Userland/OpenBSD/Source/usr.bin/pkgconf/libpkgconf/argvsplit.c System/Userland/OpenBSD/Source/usr.bin/pkgconf/libpkgconf/audit.c System/Userland/OpenBSD/Source/usr.bin/pkgconf/libpkgconf/bsdstubs.c System/Userland/OpenBSD/Source/usr.bin/pkgconf/libpkgconf/buffer.c System/Userland/OpenBSD/Source/usr.bin/pkgconf/libpkgconf/cache.c System/Userland/OpenBSD/Source/usr.bin/pkgconf/libpkgconf/client.c System/Userland/OpenBSD/Source/usr.bin/pkgconf/libpkgconf/dependency.c System/Userland/OpenBSD/Source/usr.bin/pkgconf/libpkgconf/fileio.c System/Userland/OpenBSD/Source/usr.bin/pkgconf/libpkgconf/fragment.c System/Userland/OpenBSD/Source/usr.bin/pkgconf/libpkgconf/parser.c System/Userland/OpenBSD/Source/usr.bin/pkgconf/libpkgconf/path.c System/Userland/OpenBSD/Source/usr.bin/pkgconf/libpkgconf/personality.c System/Userland/OpenBSD/Source/usr.bin/pkgconf/libpkgconf/pkg.c System/Userland/OpenBSD/Source/usr.bin/pkgconf/libpkgconf/queue.c System/Userland/OpenBSD/Source/usr.bin/pkgconf/libpkgconf/tuple.c System/Userland/OpenBSD/Source/usr.bin/pkgconf/cli/getopt_long.c System/Userland/OpenBSD/Source/usr.bin/pkgconf/cli/main.c System/Libraries/LibC/Generated/bsd_compat.c"
+        dealloc(pkgconf_out)
+        return pkgconf_tail
+    end
+    if tool == "sh" then
+        target_sh = toolkit_target(tool)
+        sh_prefix = "" + "rm -rf System/Userland/Generated/build/sh && mkdir -p System/Userland/Generated/build/sh System/Userland/Generated/targets/linux-x64/bin && (cd System/Userland/Generated/build/sh && mkdir -p shsrc && tr -d '\\015' < ../../../Toolkit/FreeBSD/freebsd-src/bin/sh/builtins.def > shsrc/builtins.def && tr -d '\\015' < ../../../Toolkit/FreeBSD/freebsd-src/bin/sh/shell.h > shsrc/shell.h && tr -d '\\015' < ../../../Toolkit/FreeBSD/freebsd-src/bin/sh/mkbuiltins | sed -e 's/mktemp -t ka/mktemp -t ka.XXXXXX/g' > mkbuiltins.sh && sh mkbuiltins.sh shsrc && tr -d '\\015' < ../../../Toolkit/FreeBSD/freebsd-src/bin/sh/mktokens | sed -e 's/mktemp -t ka/mktemp -t ka.XXXXXX/g' > mktokens.sh && sh mktokens.sh && cc -std=gnu17 -D_GNU_SOURCE -D_DEFAULT_SOURCE -DMIXTAR_BRIDGE=1 -I . -I ../../../Toolkit/FreeBSD/freebsd-src/bin/sh -I ../../../Toolkit/Bridge/include -include ../../../Toolkit/Bridge/include/mixtar_bridge_compat.h -o mknodes ../../../Toolkit/FreeBSD/freebsd-src/bin/sh/mknodes.c && tr -d '\\015' < ../../../Toolkit/FreeBSD/freebsd-src/bin/sh/nodetypes > nodetypes && tr -d '\\015' < ../../../Toolkit/FreeBSD/freebsd-src/bin/sh/nodes.c.pat > nodes.c.pat && ./mknodes nodetypes nodes.c.pat && cc -std=gnu17 -D_GNU_SOURCE -D_DEFAULT_SOURCE -DMIXTAR_BRIDGE=1 -I . -I ../../../Toolkit/FreeBSD/freebsd-src/bin/sh -I ../../../Toolkit/Bridge/include -include ../../../Toolkit/Bridge/include/mixtar_bridge_compat.h -o mksyntax ../../../Toolkit/FreeBSD/freebsd-src/bin/sh/mksyntax.c && ./mksyntax) && printf '%s\\n' '#define main printfcmd' '#include <../../../Toolkit/OpenBSD/src/usr.bin/printf/printf.c>' > System/Userland/Generated/build/sh/printfcmd.c && printf '%s\\n' '#include_next <setjmp.h>' '#ifdef setjmp' '#undef setjmp' '#endif' > System/Userland/Generated/build/sh/setjmp.h && cc -std=gnu17 -Wall -Wextra -Werror -pedantic -Wno-unused-parameter -Wno-sign-compare -Wno-implicit-fallthrough -Wno-return-type -Wno-missing-field-initializers -Wno-pointer-sign -Wno-pedantic -Wno-type-limits -D_GNU_SOURCE -D_DEFAULT_SOURCE -DNO_HISTORY -DSHELL -DMIXTAR_SH_COMPAT=1 -Dd_namlen=d_reclen -I System/Userland/Generated/build/sh -I System/Userland/FreeBSD/Source/bin/sh -I System/Userland/FreeBSD/Source/bin/sh/bltin -I System/Userland/FreeBSD/Source/bin/kill -I System/Userland/FreeBSD/Source/bin/test -I System/Userland/OpenBSD/Source/usr.bin/printf -I System/Userland/Bridge/include -DMIXTAR_BRIDGE=1 -include System/Userland/Bridge/include/mixtar_bridge_compat.h -o "
+        sh_out = sh_prefix + target_sh
+        dealloc(sh_prefix, target_sh)
+        sh_tail = sh_out + " System/Userland/FreeBSD/Source/bin/sh/alias.c System/Userland/FreeBSD/Source/bin/sh/arith_yacc.c System/Userland/FreeBSD/Source/bin/sh/arith_yylex.c System/Userland/FreeBSD/Source/bin/sh/cd.c System/Userland/FreeBSD/Source/bin/sh/error.c System/Userland/FreeBSD/Source/bin/sh/eval.c System/Userland/FreeBSD/Source/bin/sh/exec.c System/Userland/FreeBSD/Source/bin/sh/expand.c System/Userland/FreeBSD/Source/bin/sh/histedit.c System/Userland/FreeBSD/Source/bin/sh/input.c System/Userland/FreeBSD/Source/bin/sh/jobs.c System/Userland/FreeBSD/Source/bin/sh/mail.c System/Userland/FreeBSD/Source/bin/sh/main.c System/Userland/FreeBSD/Source/bin/sh/memalloc.c System/Userland/FreeBSD/Source/bin/sh/miscbltin.c System/Userland/FreeBSD/Source/bin/sh/mystring.c System/Userland/FreeBSD/Source/bin/sh/options.c System/Userland/FreeBSD/Source/bin/sh/output.c System/Userland/FreeBSD/Source/bin/sh/parser.c System/Userland/FreeBSD/Source/bin/sh/redir.c System/Userland/FreeBSD/Source/bin/sh/show.c System/Userland/FreeBSD/Source/bin/sh/trap.c System/Userland/FreeBSD/Source/bin/sh/var.c System/Userland/Generated/build/sh/builtins.c System/Userland/Generated/build/sh/nodes.c System/Userland/Generated/build/sh/syntax.c System/Userland/FreeBSD/Source/bin/sh/bltin/echo.c System/Userland/FreeBSD/Source/bin/kill/kill.c System/Userland/FreeBSD/Source/bin/test/test.c System/Userland/Generated/build/sh/printfcmd.c System/Libraries/LibC/Generated/bsd_compat.c"
+        dealloc(sh_out)
+        return sh_tail
+    end
+    if tool == "csh" then
+        target_csh = toolkit_target(tool)
+        csh_prefix = "" + "mkdir -p System/Userland/Generated/build/csh System/Userland/Generated/targets/linux-x64/bin && sed '/stdbool.h/d' System/Userland/Bridge/include/vis.h > System/Userland/Generated/build/csh/vis.h && printf '%s\\n' '#ifndef MIXTAR_CSH_GLOB_H' '#define MIXTAR_CSH_GLOB_H' '#include_next <glob.h>' '#ifndef GLOB_QUOTE' '#define GLOB_QUOTE 0' '#endif' '#ifndef GLOB_NOMAGIC' '#define GLOB_NOMAGIC 0' '#endif' '#ifndef GLOB_MAGCHAR' '#define GLOB_MAGCHAR 0' '#endif' '#ifndef gl_matchc' '#define gl_matchc gl_pathc' '#endif' '#ifndef gl_flags' '#define gl_flags gl_pathc' '#endif' '#endif /* MIXTAR_CSH_GLOB_H */' > System/Userland/Generated/build/csh/glob.h && printf '%s\\n' '/* Do not edit this file, make creates it. */' '#ifndef _h_sh_err' '#define _h_sh_err' > System/Userland/Generated/build/csh/error.h && grep 'ERR_' System/Userland/OpenBSD/Source/bin/csh/error.c | grep '^#define' >> System/Userland/Generated/build/csh/error.h && printf '%s\\n' '#endif /* _h_sh_err */' >> System/Userland/Generated/build/csh/error.h && printf '%s\\n' '/* temporary const.h for generation */' > System/Userland/Generated/build/csh/const.h && cc -E -D_GNU_SOURCE -D_DEFAULT_SOURCE -I System/Userland/Generated/build/csh -I System/Userland/OpenBSD/Source/bin/csh -I System/Userland/Bridge/include -DMIXTAR_BRIDGE=1 -include System/Userland/Bridge/include/mixtar_bridge_compat.h System/Userland/OpenBSD/Source/bin/csh/const.c | grep 'Char STR' | sed -e 's/Char \\([a-zA-Z0-9_]*\\)\\(.*\\)/extern Char \\1[];/' | sort > System/Userland/Generated/build/csh/const.body && printf '%s\\n' '/* Do not edit this file, make creates it. */' > System/Userland/Generated/build/csh/const.h && cat System/Userland/Generated/build/csh/const.body >> System/Userland/Generated/build/csh/const.h && cc -std=gnu17 -Wall -Wextra -Werror -pedantic -Wno-unused-parameter -Wno-sign-compare -Wno-overflow -Wno-bool-operation -Wno-bool-compare -Wno-implicit-fallthrough -Wno-return-type -Wno-pointer-sign -Wno-pedantic -Wno-dangling-pointer -D_GNU_SOURCE -D_DEFAULT_SOURCE -I System/Userland/Generated/build/csh -I System/Userland/OpenBSD/Source/bin/csh -I System/Userland/Bridge/include -DMIXTAR_BRIDGE=1 -include System/Userland/Bridge/include/mixtar_bridge_compat.h -o "
+        csh_out = csh_prefix + target_csh
+        dealloc(csh_prefix, target_csh)
+        csh_tail = csh_out + " System/Userland/OpenBSD/Source/bin/csh/alloc.c System/Userland/OpenBSD/Source/bin/csh/char.c System/Userland/OpenBSD/Source/bin/csh/const.c System/Userland/OpenBSD/Source/bin/csh/csh.c System/Userland/OpenBSD/Source/bin/csh/dir.c System/Userland/OpenBSD/Source/bin/csh/dol.c System/Userland/OpenBSD/Source/bin/csh/error.c System/Userland/OpenBSD/Source/bin/csh/exec.c System/Userland/OpenBSD/Source/bin/csh/exp.c System/Userland/OpenBSD/Source/bin/csh/file.c System/Userland/OpenBSD/Source/bin/csh/func.c System/Userland/OpenBSD/Source/bin/csh/glob.c System/Userland/OpenBSD/Source/bin/csh/hist.c System/Userland/OpenBSD/Source/bin/csh/init.c System/Userland/OpenBSD/Source/bin/csh/lex.c System/Userland/OpenBSD/Source/bin/csh/misc.c System/Userland/OpenBSD/Source/bin/csh/parse.c System/Userland/OpenBSD/Source/bin/csh/proc.c System/Userland/OpenBSD/Source/bin/csh/sem.c System/Userland/OpenBSD/Source/bin/csh/set.c System/Userland/OpenBSD/Source/bin/csh/str.c System/Userland/OpenBSD/Source/bin/csh/time.c System/Libraries/LibC/Generated/bsd_compat.c"
+        dealloc(csh_out)
+        return csh_tail
+    end
+    if tool == "pax" then
+        target_pax = toolkit_target(tool)
+        pax_prefix = "" + "mkdir -p System/Userland/Generated/targets/linux-x64/bin && cc -std=c23 -Wall -Wextra -Werror -pedantic -Wno-implicit-fallthrough -D_GNU_SOURCE -D_DEFAULT_SOURCE -I System/Userland/Bridge/include -I System/Userland/FreeBSD/Source/bin/pax -DMIXTAR_BRIDGE=1 -include System/Userland/Bridge/include/mixtar_bridge_compat.h -o "
+        pax_out = pax_prefix + target_pax
+        dealloc(pax_prefix, target_pax)
+        pax_tail = pax_out + " System/Userland/FreeBSD/Source/bin/pax/ar_io.c System/Userland/FreeBSD/Source/bin/pax/ar_subs.c System/Userland/FreeBSD/Source/bin/pax/buf_subs.c System/Userland/FreeBSD/Source/bin/pax/cache.c System/Userland/FreeBSD/Source/bin/pax/cpio.c System/Userland/FreeBSD/Source/bin/pax/file_subs.c System/Userland/FreeBSD/Source/bin/pax/ftree.c System/Userland/FreeBSD/Source/bin/pax/gen_subs.c System/Userland/FreeBSD/Source/bin/pax/getoldopt.c System/Userland/FreeBSD/Source/bin/pax/options.c System/Userland/FreeBSD/Source/bin/pax/pat_rep.c System/Userland/FreeBSD/Source/bin/pax/pax.c System/Userland/FreeBSD/Source/bin/pax/sel_subs.c System/Userland/FreeBSD/Source/bin/pax/tables.c System/Userland/FreeBSD/Source/bin/pax/tar.c System/Userland/FreeBSD/Source/bin/pax/tty_subs.c System/Libraries/LibC/Generated/bsd_compat.c"
+        dealloc(pax_out)
+        return pax_tail
+    end
+    if tool == "setfacl" then
+        target_setfacl = toolkit_target(tool)
+        setfacl_prefix = "" + "mkdir -p System/Userland/Generated/targets/linux-x64/bin && cc -std=c23 -Wall -Wextra -Werror -pedantic -D_GNU_SOURCE -D_DEFAULT_SOURCE -I System/Userland/Bridge/include -I System/Userland/FreeBSD/Source/bin/setfacl -DMIXTAR_BRIDGE=1 -include System/Userland/Bridge/include/mixtar_bridge_compat.h -o "
+        setfacl_out = setfacl_prefix + target_setfacl
+        dealloc(setfacl_prefix, target_setfacl)
+        setfacl_tail = setfacl_out + " System/Userland/FreeBSD/Source/bin/setfacl/setfacl.c System/Userland/FreeBSD/Source/bin/setfacl/file.c System/Userland/FreeBSD/Source/bin/setfacl/mask.c System/Userland/FreeBSD/Source/bin/setfacl/merge.c System/Userland/FreeBSD/Source/bin/setfacl/remove.c System/Userland/FreeBSD/Source/bin/setfacl/util.c System/Libraries/LibC/Generated/bsd_compat.c"
+        dealloc(setfacl_out)
+        return setfacl_tail
+    end
+    if tool == "chflags" then
+        target_chflags = toolkit_target(tool)
+        chflags_prefix = "" + "mkdir -p System/Userland/Generated/build/chflags System/Userland/Generated/targets/linux-x64/bin && cc -std=c23 -Wall -Wextra -Werror -pedantic -D_GNU_SOURCE -D_DEFAULT_SOURCE -DMIXTAR_CHFLAGS_COMPAT=1 -I System/Userland/Bridge/include -DMIXTAR_BRIDGE=1 -include System/Userland/Bridge/include/mixtar_bridge_compat.h -c System/Userland/FreeBSD/Source/bin/chflags/chflags.c -o System/Userland/Generated/build/chflags/chflags.o && cc -std=c23 -Wall -Wextra -Werror -pedantic -D_GNU_SOURCE -D_DEFAULT_SOURCE -I System/Userland/Bridge/include -DMIXTAR_BRIDGE=1 -include System/Userland/Bridge/include/mixtar_bridge_compat.h -c System/Libraries/LibC/Generated/bsd_compat.c -o System/Userland/Generated/build/chflags/bsd_compat.o && cc -o "
+        chflags_out = chflags_prefix + target_chflags
+        dealloc(chflags_prefix)
+        chflags_tail = chflags_out + " System/Userland/Generated/build/chflags/chflags.o System/Userland/Generated/build/chflags/bsd_compat.o"
+        dealloc(chflags_out, target_chflags)
+        return chflags_tail
+    end
+    if toolkit_hosted_tool(tool) == 1 then
+        target_hosted = toolkit_target(tool)
+        hosted_prefix = "" + "cp System/Userland/Bridge/scripts/hosted_common "
+        hosted_copy = hosted_prefix + target_hosted
+        dealloc(hosted_prefix)
+        hosted_chmod_prefix = hosted_copy + " && chmod +x "
+        dealloc(hosted_copy)
+        hosted_full = hosted_chmod_prefix + target_hosted
+        dealloc(hosted_chmod_prefix, target_hosted)
+        return hosted_full
+    end
+    src = toolkit_compile_sources(tool)
+    with_bsd_compat = src + " System/Libraries/LibC/Generated/bsd_compat.c"
+    dealloc(src)
+    src = with_bsd_compat
+    target = toolkit_target(tool)
+    cmd = "" + "cc -std=c23 -Wall -Wextra -Werror -pedantic -D_GNU_SOURCE -D_DEFAULT_SOURCE "
+    if tool == "ls" then
+        with_ls_flags = cmd + "-Wno-format -Wno-implicit-fallthrough "
+        dealloc(cmd)
+        cmd = with_ls_flags
+    end
+    if tool == "wc" then
+        with_wc_flags = cmd + "-Wno-format "
+        dealloc(cmd)
+        cmd = with_wc_flags
+    end
+    if tool == "cal" then
+        with_cal_flags = cmd + "-Wno-format-truncation "
+        dealloc(cmd)
+        cmd = with_cal_flags
+    end
+    if tool == "ln" then
+        with_ln_flags = cmd + "-Wno-sign-compare "
+        dealloc(cmd)
+        cmd = with_ln_flags
+    end
+    if tool == "cut" then
+        with_cut_flags = cmd + "-Wno-sign-compare -Wno-unused-parameter -Wno-maybe-uninitialized "
+        dealloc(cmd)
+        cmd = with_cut_flags
+    end
+    if tool == "sed" then
+        with_sed_flags = cmd + "-Wno-implicit-fallthrough "
+        dealloc(cmd)
+        cmd = with_sed_flags
+    end
+    if tool == "banner" then
+        with_banner_flags = cmd + "-Wno-unused-parameter "
+        dealloc(cmd)
+        cmd = with_banner_flags
+    end
+    if tool == "cmp" then
+        with_cmp_flags = cmd + "-Wno-sign-compare "
+        dealloc(cmd)
+        cmd = with_cmp_flags
+    end
+    if tool == "colrm" then
+        with_colrm_flags = cmd + "-Wno-pointer-sign "
+        dealloc(cmd)
+        cmd = with_colrm_flags
+    end
+    if tool == "expand" then
+        with_expand_flags = cmd + "-Wno-sign-compare "
+        dealloc(cmd)
+        cmd = with_expand_flags
+    end
+    if tool == "join" then
+        with_join_flags = cmd + "-Wno-sign-compare "
+        dealloc(cmd)
+        cmd = with_join_flags
+    end
+    if tool == "tr" then
+        with_tr_flags = cmd + "-Wno-missing-field-initializers "
+        dealloc(cmd)
+        cmd = with_tr_flags
+    end
+    if tool == "apply" then
+        with_apply_flags = cmd + "-Wno-format-truncation "
+        dealloc(cmd)
+        cmd = with_apply_flags
+    end
+    if tool == "expr" then
+        with_expr_flags = cmd + "-Wno-format "
+        dealloc(cmd)
+        cmd = with_expr_flags
+    end
+    if tool == "jot" then
+        with_jot_flags = cmd + "-Wno-implicit-fallthrough "
+        dealloc(cmd)
+        cmd = with_jot_flags
+    end
+    if tool == "csplit" then
+        with_csplit_flags = cmd + "-Wno-unused-parameter "
+        dealloc(cmd)
+        cmd = with_csplit_flags
+    end
+    if tool == "dd" then
+        with_dd_flags = cmd + "-Wno-sign-compare -Wno-unused-parameter -Wno-overflow "
+        dealloc(cmd)
+        cmd = with_dd_flags
+    end
+    if tool == "du" then
+        with_du_flags = cmd + "-Wno-pedantic -Wno-format "
+        dealloc(cmd)
+        cmd = with_du_flags
+    end
+    if tool == "locale" then
+        with_locale_flags = cmd + "-Wno-implicit-fallthrough "
+        dealloc(cmd)
+        cmd = with_locale_flags
+    end
+    if tool == "look" then
+        with_look_flags = cmd + "-Wno-sign-compare "
+        dealloc(cmd)
+        cmd = with_look_flags
+    end
+    if tool == "nologin" then
+        with_nologin_flags = cmd + "-Wno-unused-parameter "
+        dealloc(cmd)
+        cmd = with_nologin_flags
+    end
+    if tool == "pr" then
+        with_pr_flags = cmd + "-Wno-sign-compare -Wno-unused-parameter -Wno-maybe-uninitialized "
+        dealloc(cmd)
+        cmd = with_pr_flags
+    end
+    if tool == "nl" then
+        with_nl_flags = cmd + "-Wno-missing-field-initializers -Wno-missing-braces "
+        dealloc(cmd)
+        cmd = with_nl_flags
+    end
+    if tool == "printf" then
+        with_printf_flags = cmd + "-Wno-pedantic "
+        dealloc(cmd)
+        cmd = with_printf_flags
+    end
+    if tool == "sdiff" then
+        with_sdiff_flags = cmd + "-Wno-sign-compare "
+        dealloc(cmd)
+        cmd = with_sdiff_flags
+    end
+    if tool == "stat" then
+        with_stat_flags = cmd + "-Wno-sign-compare -Wno-format-truncation "
+        dealloc(cmd)
+        cmd = with_stat_flags
+    end
+    if tool == "ul" then
+        with_ul_flags = cmd + "-Wno-sign-compare -I ${MIXTAR_NCURSES_ROOT:-/usr}/include -L ${MIXTAR_NCURSES_ROOT:-/usr}/lib "
+        dealloc(cmd)
+        cmd = with_ul_flags
+    end
+    if tool == "grep" then
+        with_grep_flags = cmd + "-Wno-sign-compare -Wno-pointer-sign -Wno-unused-parameter -Wno-format -Wno-implicit-fallthrough -I ${MIXTAR_ZLIB_ROOT:-/usr}/include -L ${MIXTAR_ZLIB_ROOT:-/usr}/lib "
+        dealloc(cmd)
+        cmd = with_grep_flags
+    end
+    if tool == "tail" then
+        with_tail_flags = cmd + "-Wno-sign-compare -Wno-unused-parameter "
+        dealloc(cmd)
+        cmd = with_tail_flags
+    end
+    if tool == "find" then
+        with_find_flags = cmd + "-Wno-sign-compare -Wno-unused-parameter -Wno-format -Wno-implicit-fallthrough -Wno-pointer-sign -Wno-maybe-uninitialized -Wno-clobbered "
+        dealloc(cmd)
+        cmd = with_find_flags
+    end
+    if tool == "xargs" then
+        with_xargs_flags = cmd + "-Wno-sign-compare -Wno-unused-parameter -Wno-format "
+        dealloc(cmd)
+        cmd = with_xargs_flags
+    end
+    if tool == "which" then
+        with_which_flags = cmd + "-Wno-sign-compare "
+        dealloc(cmd)
+        cmd = with_which_flags
+    end
+    if tool == "script" then
+        with_script_flags = cmd + "-Wno-sign-compare -Wno-unused-parameter "
+        dealloc(cmd)
+        cmd = with_script_flags
+    end
+    if tool == "rmt" then
+        with_rmt_flags = cmd + "-Wno-overflow "
+        dealloc(cmd)
+        cmd = with_rmt_flags
+    end
+    if tool == "shutdown" then
+        with_shutdown_flags = cmd + "-Wno-format -Wno-deprecated-declarations -Wno-unused-parameter -Wno-error=cpp "
+        dealloc(cmd)
+        cmd = with_shutdown_flags
+    end
+    if tool == "wall" then
+        with_wall_flags = cmd + "-Wno-sign-compare -Wno-sizeof-pointer-memaccess -Wno-format-truncation "
+        dealloc(cmd)
+        cmd = with_wall_flags
+    end
+    if tool == "watch" then
+        with_watch_flags = cmd + "-D_XOPEN_SOURCE_EXTENDED -DWAIT_ANY=-1 -Wno-sign-compare -Wno-unused-parameter "
+        dealloc(cmd)
+        cmd = with_watch_flags
+    end
+    if tool == "less" then
+        with_less_flags = cmd + "-include System/Userland/Generated/build/less/mixtar_less_config.h -Wno-sign-compare -Wno-unused-parameter -Wno-implicit-fallthrough -Wno-pedantic "
+        dealloc(cmd)
+        cmd = with_less_flags
+    end
+    if tool == "vi" then
+        with_vi_flags = cmd + "-std=gnu17 -DMIXTAR_BRIDGE_VI_PROGNAME=1 -Dd_namlen=d_reclen -Wno-unused-parameter -Wno-sign-compare -Wno-format -Wno-missing-field-initializers -Wno-implicit-fallthrough -Wno-pointer-sign -Wno-unused-function -Wno-unused-variable -Wno-unused-but-set-variable -Wno-misleading-indentation -Wno-parentheses "
+        dealloc(cmd)
+        cmd = with_vi_flags
+    end
+    if tool == "vipw" then
+        with_vipw_flags = cmd + "-DMIXTAR_VIPW_COMPAT=1 -Wno-unused-parameter "
+        dealloc(cmd)
+        cmd = with_vipw_flags
+    end
+    if tool == "umount" then
+        with_umount_flags = cmd + "-DNO_NFS=1 -Wno-unused-parameter -Wno-sign-compare "
+        dealloc(cmd)
+        cmd = with_umount_flags
+    end
+    if tool == "mount" then
+        with_mount_flags = cmd + "-DSMALL=1 -Wno-unused-parameter -Wno-sign-compare -Wno-format "
+        dealloc(cmd)
+        cmd = with_mount_flags
+    end
+    if tool == "fsck" then
+        with_fsck_flags = cmd + "-Wno-unused-parameter -Wno-sign-compare -Wno-format "
+        dealloc(cmd)
+        cmd = with_fsck_flags
+    end
+    if tool == "init" then
+        with_init_flags = cmd + "-DDEBUGSHELL -DSECURE -DMIXTAR_BRIDGE_REBOOT_COMPAT=1 -Wno-unused-parameter -Wno-sign-compare -Wno-format -Wno-deprecated-declarations -Wno-pedantic "
+        dealloc(cmd)
+        cmd = with_init_flags
+    end
+    if tool == "sysctl" then
+        with_sysctl_flags = cmd + "-DMIXTAR_BRIDGE_GPROF_COMPAT=1 -Wno-unused-parameter -Wno-sign-compare -Wno-format -Wno-missing-field-initializers -Wno-pedantic -Wno-override-init -Wno-implicit-fallthrough "
+        dealloc(cmd)
+        cmd = with_sysctl_flags
+    end
+    if tool == "swapon" then
+        with_swapon_flags = cmd + "-I System/Userland/OpenBSD/Source/sbin/swapctl -Wno-unused-parameter -Wno-sign-compare "
+        dealloc(cmd)
+        cmd = with_swapon_flags
+    end
+    if tool == "ping" then
+        with_ping_flags = cmd + "-include System/Userland/Bridge/include/mixtar_ping_compat.h -Wno-unused-parameter -Wno-sign-compare -Wno-format -Wno-pointer-sign -Wno-cast-qual -Wno-shadow -Wno-missing-prototypes -Wno-missing-declarations "
+        dealloc(cmd)
+        cmd = with_ping_flags
+    end
+    if tool == "top" then
+        with_top_flags = cmd + "-I System/Userland/OpenBSD/Source/usr.bin/top -Wno-unused-parameter -Wno-sign-compare -Wno-format -Wno-missing-prototypes -Wno-missing-declarations -Wno-missing-field-initializers -Wno-pointer-sign -Wno-empty-body -Wno-incompatible-pointer-types -Wno-deprecated-declarations "
+        dealloc(cmd)
+        cmd = with_top_flags
+    end
+    if tool == "fdisk" then
+        with_fdisk_flags = cmd + "-DHAS_MBR -Wno-unused-parameter -Wno-sign-compare -Wno-format -Wno-missing-field-initializers -Wno-missing-prototypes -Wno-missing-declarations -Wno-empty-body -Wno-pointer-sign -Wno-variadic-macros "
+        dealloc(cmd)
+        cmd = with_fdisk_flags
+    end
+    if tool == "cron" then
+        with_cron_flags = cmd + "-I System/Userland/OpenBSD/Source/usr.sbin/cron -Wno-unused-parameter -Wno-sign-compare -Wno-format -Wno-missing-field-initializers -Wno-missing-prototypes -Wno-missing-declarations -Wno-pointer-sign -Wno-calloc-transposed-args -Wno-unused-variable -Wno-unused-function "
+        dealloc(cmd)
+        cmd = with_cron_flags
+    end
+    if tool == "su" then
+        with_su_flags = cmd + "-Wno-unused-parameter -Wno-sign-compare -Wno-format -Wno-missing-field-initializers "
+        dealloc(cmd)
+        cmd = with_su_flags
+    end
+    if tool == "passwd" then
+        with_passwd_flags = cmd + "-DMIXTAR_PASSWD_COMPAT=1 -I System/Userland/OpenBSD/Source/usr.bin/passwd -I System/Userland/OpenBSD/Source/usr.bin/chpass -Wno-unused-parameter -Wno-sign-compare -Wno-format -Wno-missing-field-initializers "
+        dealloc(cmd)
+        cmd = with_passwd_flags
+    end
+    if tool == "login" then
+        with_login_flags = cmd + "-DMIXTAR_BRIDGE_NO_LOGOUT_SHIM=1 -I System/Userland/OpenBSD/Source/usr.bin/login -Wno-unused-parameter -Wno-sign-compare -Wno-format -Wno-missing-field-initializers -Wno-incompatible-pointer-types "
+        dealloc(cmd)
+        cmd = with_login_flags
+    end
+    if tool == "df" then
+        with_df_flags = cmd + "-Wno-sign-compare -Wno-format "
+        dealloc(cmd)
+        cmd = with_df_flags
+    end
+    if tool == "mknod" then
+        with_mknod_flags = cmd + "-Wno-calloc-transposed-args "
+        dealloc(cmd)
+        cmd = with_mknod_flags
+    end
+    if tool == "who" then
+        with_who_flags = cmd + "-Wno-incompatible-pointer-types -Wno-stringop-overread -Wno-stringop-truncation -Wno-discarded-qualifiers "
+        dealloc(cmd)
+        cmd = with_who_flags
+    end
+    if tool == "diff" then
+        with_diff_flags = cmd + "-Wno-sign-compare -Wno-pointer-sign -Wno-maybe-uninitialized "
+        dealloc(cmd)
+        cmd = with_diff_flags
+    end
+    if tool == "patch" then
+        with_patch_flags = cmd + "-Wno-sign-compare -Wno-unused-parameter -Wno-sequence-point -Wno-maybe-uninitialized "
+        dealloc(cmd)
+        cmd = with_patch_flags
+    end
+    if tool == "zic" then
+        with_zic_flags = cmd + "-Wno-sign-compare -Wno-pointer-sign -Wno-stringop-truncation "
+        dealloc(cmd)
+        cmd = with_zic_flags
+    end
+    if tool == "zdump" then
+        with_zdump_flags = cmd + "-Wno-sign-compare -Wno-format "
+        dealloc(cmd)
+        cmd = with_zdump_flags
+    end
+    if tool == "file" then
+        with_file_flags = cmd + "-Wno-pedantic -Wno-implicit-fallthrough -Wno-sign-compare -Wno-format "
+        dealloc(cmd)
+        cmd = with_file_flags
+    end
+    if tool == "sort" then
+        with_sort_flags = cmd + "-Wno-pedantic -Wno-sign-compare -Wno-unused-parameter -Wno-missing-field-initializers -Wno-format-truncation "
+        dealloc(cmd)
+        cmd = with_sort_flags
+    end
+    if tool == "m4" then
+        with_m4_flags = cmd + "-DEXTENDED -Wno-sign-compare -Wno-unused-function -Wno-unused-parameter "
+        dealloc(cmd)
+        cmd = with_m4_flags
+    end
+    if tool == "awk" then
+        with_awk_flags = cmd + "-Wno-sign-compare -Wno-unused-parameter -Wno-format -Wno-implicit-fallthrough -Wno-use-after-free "
+        dealloc(cmd)
+        cmd = with_awk_flags
+    end
+    if tool == "diff3" then
+        with_diff3_flags = cmd + "-Wno-sign-compare "
+        dealloc(cmd)
+        cmd = with_diff3_flags
+    end
+    if tool == "gprof" then
+        with_gprof_flags = cmd + "-std=gnu17 -DMIXTAR_BRIDGE_GPROF_COMPAT=1 -I System/Userland/OpenBSD/Source/usr.bin/gprof -D'MD_INCLUDE=<amd64.h>' -Wno-sign-compare -Wno-unused-parameter -Wno-format -Wno-unused-variable "
+        dealloc(cmd)
+        cmd = with_gprof_flags
+    end
+    if tool == "ipcrm" then
+        with_ipcrm_flags = cmd + "-DMIXTAR_BRIDGE_SYSV_IPC=1 -Wno-format -Wno-implicit-fallthrough -Wno-unused-parameter "
+        dealloc(cmd)
+        cmd = with_ipcrm_flags
+    end
+    if tool == "ipcs" then
+        with_ipcs_flags = cmd + "-DMIXTAR_BRIDGE_IPCS_COMPAT=1 -Wno-format -Wno-sign-compare -Wno-unused-parameter -Wno-missing-field-initializers -Wno-calloc-transposed-args "
+        dealloc(cmd)
+        cmd = with_ipcs_flags
+    end
+    if tool == "mt" then
+        with_mt_flags = cmd + "-DMIXTAR_BRIDGE_MT_COMPAT=1 -Wno-format "
+        dealloc(cmd)
+        cmd = with_mt_flags
+    end
+    if tool == "stty" then
+        with_stty_flags = cmd + "-Wno-unused-parameter -Wno-format -Wno-missing-field-initializers "
+        dealloc(cmd)
+        cmd = with_stty_flags
+    end
+    if tool == "pkill" then
+        with_pkill_flags = cmd + "-Wno-sign-compare -Wno-format -Wno-unused-parameter -Wno-stringop-overflow "
+        dealloc(cmd)
+        cmd = with_pkill_flags
+    end
+    if tool == "ps" then
+        with_ps_flags = cmd + "-Wno-sign-compare -Wno-format -Wno-unused-parameter -Wno-incompatible-pointer-types -Wno-stringop-overread -Wno-discarded-qualifiers -Wno-missing-field-initializers "
+        dealloc(cmd)
+        cmd = with_ps_flags
+    end
+    if tool == "w" then
+        with_w_flags = cmd + "-DMIXTAR_BRIDGE_W_COMPAT=1 -Wno-format -Wno-sign-compare -Wno-unused-parameter -Wno-incompatible-pointer-types -Wno-error=cpp "
+        dealloc(cmd)
+        cmd = with_w_flags
+    end
+    if tool == "vmstat" then
+        with_vmstat_flags = cmd + "-DMIXTAR_BRIDGE_VMSTAT_COMPAT=1 -D_LIBKVM -Wno-format -Wno-sign-compare -Wno-unused-parameter -Wno-missing-field-initializers -Wno-error=cpp "
+        dealloc(cmd)
+        cmd = with_vmstat_flags
+    end
+    if tool == "yacc" then
+        with_yacc_flags = cmd + "-std=gnu17 -Wno-sign-compare -Wno-unused-parameter -Wno-missing-field-initializers "
+        dealloc(cmd)
+        cmd = with_yacc_flags
+    end
+    if tool == "lex" then
+        with_lex_flags = cmd + "-std=gnu17 -DHAVE_CONFIG_H -Wno-sign-compare -Wno-unused-parameter -Wno-missing-field-initializers -Wno-unused-function -Wno-format-truncation "
+        dealloc(cmd)
+        cmd = with_lex_flags
+    end
+    if tool == "reboot" then
+        with_reboot_flags = cmd + "-DMIXTAR_BRIDGE_REBOOT_COMPAT=1 -Wno-unused-parameter "
+        dealloc(cmd)
+        cmd = with_reboot_flags
+    end
+    if tool == "getent" then
+        with_getent_flags = cmd + "-Wno-pointer-sign -Wno-pedantic -Wno-missing-field-initializers "
+        dealloc(cmd)
+        cmd = with_getent_flags
+    end
+    if tool == "dmesg" then
+        with_dmesg_flags = cmd + "-Wno-pedantic -Wno-missing-field-initializers "
+        dealloc(cmd)
+        cmd = with_dmesg_flags
+    end
+    if tool == "rpcgen" then
+        with_rpcgen_flags = cmd + "-Wno-sign-compare -Wno-unused-parameter -Wno-missing-field-initializers -Wno-old-style-definition "
+        dealloc(cmd)
+        cmd = with_rpcgen_flags
+    end
+    if tool == "nm" then
+        with_nm_flags = cmd + "-DMIXTAR_NM_COMPAT=1 -Wno-sign-compare -Wno-unused-parameter -Wno-format -Wno-pedantic -Wno-old-style-definition -Wno-missing-field-initializers -Wno-implicit-fallthrough -Wno-pointer-sign "
+        dealloc(cmd)
+        cmd = with_nm_flags
+    end
+    if tool == "ed" then
+        with_ed_flags = cmd + "-Wno-sign-compare -Wno-deprecated-declarations -Wno-unused-parameter "
+        dealloc(cmd)
+        cmd = with_ed_flags
+    end
+    if tool == "nproc" then
+        with_nproc_flags = cmd + "-Wno-format "
+        dealloc(cmd)
+        cmd = with_nproc_flags
+    end
+    if tool == "pwait" then
+        with_pwait_flags = cmd + "-DMIXTAR_PWAIT_COMPAT=1 -Wno-pedantic "
+        dealloc(cmd)
+        cmd = with_pwait_flags
+    end
+    if tool == "cpuset" then
+        with_cpuset_flags = cmd + "-Wno-type-limits "
+        dealloc(cmd)
+        cmd = with_cpuset_flags
+    end
+    if tool == "chio" then
+        with_chio_flags = cmd + "-Wno-sequence-point "
+        dealloc(cmd)
+        cmd = with_chio_flags
+    end
+    if tool == "pax" then
+        with_pax_flags = cmd + "-Wno-implicit-fallthrough "
+        dealloc(cmd)
+        cmd = with_pax_flags
+    end
+    if tool == "uuidgen" then
+        with_uuidgen_flags = cmd + "-Wno-pointer-sign "
+        dealloc(cmd)
+        cmd = with_uuidgen_flags
+    end
+    with_include = cmd + "-I System/Userland/Bridge/include"
+    dealloc(cmd)
+    if tool == "tsort" then
+        with_tsort_include = with_include + " -I System/Userland/OpenBSD/Source/lib/libutil"
+        dealloc(with_include)
+        with_include = with_tsort_include
+    end
+    if tool == "zic" then
+        with_zic_include = with_include + " -I System/Userland/OpenBSD/Source/lib/libc/time"
+        dealloc(with_include)
+        with_include = with_zic_include
+    end
+    if tool == "file" then
+        with_file_include = with_include + " -I System/Userland/OpenBSD/Source/lib/libutil -I System/Userland/OpenBSD/Source/usr.bin/file"
+        dealloc(with_include)
+        with_include = with_file_include
+    end
+    if tool == "sort" then
+        with_sort_include = with_include + " -I System/Userland/OpenBSD/Source/usr.bin/sort"
+        dealloc(with_include)
+        with_include = with_sort_include
+    end
+    if tool == "rpcgen" then
+        with_rpcgen_include = with_include + " -I System/Userland/OpenBSD/Source/usr.bin/rpcgen"
+        dealloc(with_include)
+        with_include = with_rpcgen_include
+    end
+    if tool == "m4" then
+        with_m4_include = with_include + " -I System/Userland/OpenBSD/Source/lib/libutil -I System/Userland/OpenBSD/Source/usr.bin/m4 -I System/Userland/Generated/build/m4"
+        dealloc(with_include)
+        with_include = with_m4_include
+    end
+    if tool == "awk" then
+        with_awk_include = with_include + " -I System/Userland/OpenBSD/Source/usr.bin/awk -I System/Userland/Generated/build/awk"
+        dealloc(with_include)
+        with_include = with_awk_include
+    end
+    if tool == "ps" then
+        with_ps_include = with_include + " -I System/Userland/OpenBSD/Source/bin/ps"
+        dealloc(with_include)
+        with_include = with_ps_include
+    end
+    if tool == "yacc" then
+        with_yacc_include = with_include + " -I System/Userland/OpenBSD/Source/usr.bin/yacc"
+        dealloc(with_include)
+        with_include = with_yacc_include
+    end
+    if tool == "lex" then
+        with_lex_include = with_include + " -I System/Userland/Generated/build/lex -I System/Userland/OpenBSD/Source/usr.bin/lex"
+        dealloc(with_include)
+        with_include = with_lex_include
+    end
+    if tool == "fdisk" then
+        with_fdisk_include = with_include + " -I System/Userland/OpenBSD/Source/sbin/fdisk -I System/Userland/Generated/build/fdisk"
+        dealloc(with_include)
+        with_include = with_fdisk_include
+    end
+    if tool == "cron" then
+        with_cron_include = with_include + " -I System/Userland/OpenBSD/Source/usr.sbin/cron"
+        dealloc(with_include)
+        with_include = with_cron_include
+    end
+    if tool == "passwd" then
+        with_passwd_include = with_include + " -I System/Userland/OpenBSD/Source/usr.bin/passwd -I System/Userland/OpenBSD/Source/usr.bin/chpass"
+        dealloc(with_include)
+        with_include = with_passwd_include
+    end
+    if tool == "login" then
+        with_login_include = with_include + " -I System/Userland/OpenBSD/Source/usr.bin/login"
+        dealloc(with_include)
+        with_include = with_login_include
+    end
+    if tool == "vi" then
+        with_vi_include = with_include + " -I System/Userland/Generated/build/vi -I System/Userland/OpenBSD/Source/usr.bin/vi/build -I System/Userland/OpenBSD/Source/usr.bin/vi/include -I System/Userland/OpenBSD/Source/usr.bin/vi/cl -I System/Userland/OpenBSD/Source/usr.bin/vi/common -I System/Userland/OpenBSD/Source/usr.bin/vi/ex -I System/Userland/OpenBSD/Source/usr.bin/vi/vi"
+        dealloc(with_include)
+        with_include = with_vi_include
+    end
+    with_define = with_include + " -DMIXTAR_BRIDGE=1 -include System/Userland/Bridge/include/mixtar_bridge_compat.h "
+    dealloc(with_include)
+    if tool == "vi" then
+        with_vi_define = with_define + "-include System/Userland/Bridge/include/mixtar_vi_compat.h "
+        dealloc(with_define)
+        with_define = with_vi_define
+    end
+    if tool == "diff" then
+        with_diff_include = with_define + "-include System/Userland/Bridge/include/mixtar_diff_compat.h "
+        dealloc(with_define)
+        with_define = with_diff_include
+    end
+    if tool == "cat" then
+        with_cat = with_define + "-DNO_UDOM_SUPPORT -DBOOTSTRAP_CAT "
+        dealloc(with_define)
+        with_define = with_cat
+    end
+    if tool == "patch" then
+        with_patch_define = with_define + "-Dd_namlen=d_reclen "
+        dealloc(with_define)
+        with_define = with_patch_define
+    end
+    if tool == "awk" then
+        with_awk_define = with_define + "-DHAS_ISBLANK -DNDEBUG "
+        dealloc(with_define)
+        with_define = with_awk_define
+    end
+    with_out = with_define + "-o " + target
+    dealloc(with_define)
+    full = with_out + " " + src
+    dealloc(with_out)
+    if tool == "seq" then
+        full_with_libm = full + " -lm"
+        dealloc(full)
+        full = full_with_libm
+    end
+    if tool == "jot" then
+        full_with_jot_libm = full + " -lm"
+        dealloc(full)
+        full = full_with_jot_libm
+    end
+    if tool == "ul" then
+        full_with_ul_lib = full + " -lncursesw"
+        dealloc(full)
+        full = full_with_ul_lib
+    end
+    if tool == "grep" then
+        full_with_grep_lib = full + " -lz"
+        dealloc(full)
+        full = full_with_grep_lib
+    end
+    if tool == "shutdown" then
+        full_with_shutdown_lib = full + " -lutil"
+        dealloc(full)
+        full = full_with_shutdown_lib
+    end
+    if tool == "wall" then
+        full_with_wall_lib = full + " -lutil"
+        dealloc(full)
+        full = full_with_wall_lib
+    end
+    if tool == "watch" then
+        full_with_watch_lib = full + " -lncursesw"
+        dealloc(full)
+        full = full_with_watch_lib
+    end
+    if tool == "less" then
+        full_with_less_lib = full + " -lncursesw"
+        dealloc(full)
+        full = full_with_less_lib
+    end
+    if tool == "vi" then
+        full_with_vi_lib = full + " -lncursesw -lutil"
+        dealloc(full)
+        full = full_with_vi_lib
+    end
+    if tool == "ping" then
+        full_with_ping_lib = full + " -lm"
+        dealloc(full)
+        full = full_with_ping_lib
+    end
+    if tool == "top" then
+        full_with_top_lib = full + " -lncursesw -lutil"
+        dealloc(full)
+        full = full_with_top_lib
+    end
+    if tool == "file" then
+        full_with_file_lib = full + " -lutil"
+        dealloc(full)
+        full = full_with_file_lib
+    end
+    if tool == "m4" then
+        full_with_m4_lib = full + " -lm -lutil"
+        dealloc(full)
+        full = full_with_m4_lib
+    end
+    if tool == "awk" then
+        full_with_awk_lib = full + " -lm"
+        dealloc(full)
+        full = full_with_awk_lib
+    end
+    if tool == "lex" then
+        full_with_lex_lib = full + " -lm"
+        dealloc(full)
+        full = full_with_lex_lib
+    end
+    if tool == "ps" then
+        full_with_ps_lib = full + " -lm -lutil"
+        dealloc(full)
+        full = full_with_ps_lib
+    end
+    if tool == "m4" then
+        m4_prefix = "" + "mkdir -p System/Userland/Generated/build/m4 && flex -o System/Userland/Generated/build/m4/tokenizer.c System/Userland/OpenBSD/Source/usr.bin/m4/tokenizer.l && bison -y -d -o System/Userland/Generated/build/m4/parser.c System/Userland/OpenBSD/Source/usr.bin/m4/parser.y && "
+        full_m4 = m4_prefix + full
+        dealloc(m4_prefix)
+        dealloc(full)
+        full = full_m4
+    end
+    if tool == "awk" then
+        awk_prefix = "" + "mkdir -p System/Userland/Generated/build/awk && bison -Wno-conflicts-sr -Wno-conflicts-rr -y -d -o System/Userland/Generated/build/awk/awkgram.tab.c System/Userland/OpenBSD/Source/usr.bin/awk/awkgram.y && cc -D_GNU_SOURCE -D_DEFAULT_SOURCE -I System/Userland/OpenBSD/Source/usr.bin/awk -I System/Userland/Generated/build/awk -DHAS_ISBLANK -DNDEBUG System/Userland/OpenBSD/Source/usr.bin/awk/maketab.c -o System/Userland/Generated/build/awk/maketab && System/Userland/Generated/build/awk/maketab System/Userland/Generated/build/awk/awkgram.tab.h > System/Userland/Generated/build/awk/proctab.c && "
+        full_awk = awk_prefix + full
+        dealloc(awk_prefix)
+        dealloc(full)
+        full = full_awk
+    end
+    if tool == "lex" then
+        lex_prefix = "" + "mkdir -p System/Userland/Generated/build/lex && sed 's|#define M4 \"/usr/bin/m4\"|#define M4 \"m4\"|' System/Userland/OpenBSD/Source/usr.bin/lex/config.h > System/Userland/Generated/build/lex/config.h && bison -y -d -o System/Userland/Generated/build/lex/parse.c System/Userland/OpenBSD/Source/usr.bin/lex/parse.y && flex -o System/Userland/Generated/build/lex/scan.c System/Userland/OpenBSD/Source/usr.bin/lex/scan.l && sed -e 's/m4_/m4postproc_/g' -e 's/m4preproc_/m4_/g' System/Userland/OpenBSD/Source/usr.bin/lex/flex.skl | m4 -I System/Userland/OpenBSD/Source/usr.bin/lex -P -DFLEX_MAJOR_VERSION=2 -DFLEX_MINOR_VERSION=5 -DFLEX_SUBMINOR_VERSION=39 | sed -e 's/m4postproc_/m4_/g' | sh System/Userland/OpenBSD/Source/usr.bin/lex/mkskel.sh > System/Userland/Generated/build/lex/skel.c && "
+        full_lex = lex_prefix + full
+        dealloc(lex_prefix)
+        dealloc(full)
+        full = full_lex
+    end
+    if tool == "less" then
+        less_prefix = "" + "mkdir -p System/Userland/Generated/build/less && printf '%b\\n' '#ifndef MIXTAR_LESS_CONFIG_H' '#define MIXTAR_LESS_CONFIG_H' '#ifndef TCSASOFT' '#define TCSASOFT 0' '#endif' '#define SYSDIR \\042/etc\\042' '#define HELPDIR \\042/usr/share/misc\\042' '#endif' > System/Userland/Generated/build/less/mixtar_less_config.h && "
+        full_less = less_prefix + full
+        dealloc(less_prefix)
+        dealloc(full)
+        full = full_less
+    end
+    if tool == "vi" then
+        vi_prefix = "" + "mkdir -p System/Userland/Generated/build/vi && tr -d '\\r' < System/Userland/OpenBSD/Source/usr.bin/vi/common/options.c | gawk -f System/Userland/OpenBSD/Source/usr.bin/vi/common/options.awk > System/Userland/Generated/build/vi/options_def.h && tr -d '\\r' < System/Userland/OpenBSD/Source/usr.bin/vi/ex/ex_cmd.c | gawk -f System/Userland/OpenBSD/Source/usr.bin/vi/ex/ex.awk > System/Userland/Generated/build/vi/ex_def.h && cp System/Userland/OpenBSD/Source/usr.bin/vi/build/config.h System/Userland/Generated/build/vi/config.h && printf '%s\\n' '#undef _PATH_PRESERVE' > System/Userland/Generated/build/vi/pathnames.h && cat System/Userland/OpenBSD/Source/usr.bin/vi/build/pathnames.h >> System/Userland/Generated/build/vi/pathnames.h && "
+        full_vi = vi_prefix + full
+        dealloc(vi_prefix)
+        dealloc(full)
+        full = full_vi
+    end
+    if tool == "diff3" then
+        dealloc(full)
+        full = "" + "mkdir -p System/Userland/Generated/targets/linux-x64/bin System/Userland/Generated/targets/linux-x64/libexec && cc -std=c23 -Wall -Wextra -Werror -pedantic -D_GNU_SOURCE -D_DEFAULT_SOURCE -DMIXTAR_BRIDGE=1 -I System/Userland/Bridge/include -include System/Userland/Bridge/include/mixtar_bridge_compat.h -Wno-sign-compare -o System/Userland/Generated/targets/linux-x64/libexec/diff3prog System/Userland/OpenBSD/Source/usr.bin/diff3/diff3prog.c System/Libraries/LibC/Generated/bsd_compat.c && cp System/Userland/Bridge/scripts/diff3 System/Userland/Generated/targets/linux-x64/bin/diff3 && chmod +x System/Userland/Generated/targets/linux-x64/bin/diff3"
+    end
+    if tool == "nm" then
+        dealloc(full)
+        full = "" + "mkdir -p System/Userland/Generated/build/nm System/Userland/Generated/targets/linux-x64/bin && cc -std=c23 -Wall -Wextra -Werror -pedantic -D_GNU_SOURCE -D_DEFAULT_SOURCE -DMIXTAR_BRIDGE=1 -DMIXTAR_NM_COMPAT=1 -I System/Userland/Bridge/include -include System/Userland/Bridge/include/mixtar_bridge_compat.h -Wno-sign-compare -Wno-unused-parameter -Wno-format -Wno-pedantic -Wno-old-style-definition -Wno-missing-field-initializers -Wno-implicit-fallthrough -Wno-pointer-sign -DELFSIZE=32 -c System/Userland/OpenBSD/Source/usr.bin/nm/elf.c -o System/Userland/Generated/build/nm/elf32.o && cc -std=c23 -Wall -Wextra -Werror -pedantic -D_GNU_SOURCE -D_DEFAULT_SOURCE -DMIXTAR_BRIDGE=1 -DMIXTAR_NM_COMPAT=1 -I System/Userland/Bridge/include -include System/Userland/Bridge/include/mixtar_bridge_compat.h -Wno-sign-compare -Wno-unused-parameter -Wno-format -Wno-pedantic -Wno-old-style-definition -Wno-missing-field-initializers -Wno-implicit-fallthrough -Wno-pointer-sign -DELFSIZE=64 -c System/Userland/OpenBSD/Source/usr.bin/nm/elf.c -o System/Userland/Generated/build/nm/elf64.o && cc -std=c23 -Wall -Wextra -Werror -pedantic -D_GNU_SOURCE -D_DEFAULT_SOURCE -DMIXTAR_BRIDGE=1 -DMIXTAR_NM_COMPAT=1 -I System/Userland/Bridge/include -include System/Userland/Bridge/include/mixtar_bridge_compat.h -Wno-sign-compare -Wno-unused-parameter -Wno-format -Wno-pedantic -Wno-old-style-definition -Wno-missing-field-initializers -Wno-implicit-fallthrough -Wno-pointer-sign -c System/Userland/OpenBSD/Source/usr.bin/nm/nm.c -o System/Userland/Generated/build/nm/nm.o && cc -o System/Userland/Generated/targets/linux-x64/bin/nm System/Userland/Generated/build/nm/nm.o System/Userland/Generated/build/nm/elf32.o System/Userland/Generated/build/nm/elf64.o System/Libraries/LibC/Generated/bsd_compat.c -lm -lutil"
+    end
+    dealloc(src, target)
+    return full
+end
+
+string toolkit_compile_command(tool: string):
+    raw = toolkit_compile_command_raw(tool)
+    normalized = toolkit_normalize_openbsd_roots(raw)
+    dealloc(raw)
+    return normalized
+end
+
+string toolkit_wsl_command(tool: string):
+    compile = toolkit_compile_command(tool)
+    prefix = "" + "wsl.exe -d Debian -- bash -lc \"mkdir -p System/Userland/Generated/targets/linux-x64/bin && "
+    body = prefix + compile
+    dealloc(prefix)
+    full = body + "\""
+    dealloc(body)
+    dealloc(compile)
+    return full
+end
+
+string toolkit_wsl_script_command(tool: string):
+    script_path = toolkit_test_path(tool)
+    prefix = "" + "wsl.exe -d Debian -- bash "
+    cmd = prefix + script_path
+    dealloc(prefix)
+    dealloc(script_path)
+    return cmd
+end

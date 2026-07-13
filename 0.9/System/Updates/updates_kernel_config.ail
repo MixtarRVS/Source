@@ -1,0 +1,507 @@
+const string KERNEL_CONFIG_DEFAULT_DB = "/System/Configuration/Updates.config"
+const int KERNEL_CONFIG_OK = 0
+const int KERNEL_CONFIG_USAGE = 64
+const int KERNEL_CONFIG_BLOCKED = 65
+const int MI_SQLITE_ROW = 100
+const int MI_SQLITE_DONE = 101
+
+void config_line(prefix: string, value: string):
+    line = prefix + value
+    print line
+    dealloc(line)
+end
+
+int config_fail(message: string):
+    config_line("kernel-config: ", message)
+    return KERNEL_CONFIG_BLOCKED
+end
+
+string config_db_path():
+    if argc() >= 3 then
+        return "" + argv(2)
+    end
+    return "" + KERNEL_CONFIG_DEFAULT_DB
+end
+
+string query_text(db: int, sql: string):
+    stmt = sql_prepare(db, sql)
+    if stmt == 0 then
+        return "" + ""
+    end
+    rc = sql_step(stmt)
+    if rc != MI_SQLITE_ROW then
+        sql_finalize(stmt)
+        return "" + ""
+    end
+    value = "" + sql_column_text(stmt, 0)
+    sql_finalize(stmt)
+    return value
+end
+
+string required_symbol_list(db: int):
+    return query_text(db, "SELECT group_concat(symbol, char(10)) FROM (SELECT symbol FROM kernel_required_symbol WHERE component_id='linux-rt' AND required=1 ORDER BY symbol)")
+end
+
+int symbol_count(symbols: string):
+    if strlen(symbols) == 0 then
+        return 0
+    end
+    count = 1
+    cursor = 0
+    while cursor < strlen(symbols) then
+        newline = index_of(symbols, "\n", cursor)
+        if newline < 0 then
+            return count
+        end
+        count++
+        cursor = newline + 1
+    end
+    return count
+end
+
+string symbol_at(symbols: string, wanted: int):
+    cursor = 0
+    index = 0
+    while cursor <= strlen(symbols) then
+        newline = index_of(symbols, "\n", cursor)
+        if newline < 0 then
+            newline = strlen(symbols)
+        end
+        if index == wanted then
+            return substr(symbols, cursor, newline - cursor)
+        end
+        if newline >= strlen(symbols) then
+            return "" + ""
+        end
+        cursor = newline + 1
+        index++
+    end
+    return "" + ""
+end
+
+string capture_argv(args: str_array):
+    env = str_array_new(0)
+    ops = str_array_new(0)
+    targets = str_array_new(0)
+    output = process_capture_argv_env_redirs(args, env, ops, targets)
+    rc = process_last_capture_status()
+    dealloc_str_array(env)
+    dealloc_str_array(ops)
+    dealloc_str_array(targets)
+    if rc != 0 then
+        dealloc(output)
+        return "" + ""
+    end
+    return output
+end
+
+string list_kconfig_files(find_exe: string, source_root: string):
+    args = str_array_new(11)
+    args = str_array_push(args, find_exe)
+    args = str_array_push(args, source_root)
+    args = str_array_push(args, "-type")
+    args = str_array_push(args, "f")
+    args = str_array_push(args, "(")
+    args = str_array_push(args, "-name")
+    args = str_array_push(args, "Kconfig")
+    args = str_array_push(args, "-o")
+    args = str_array_push(args, "-name")
+    args = str_array_push(args, "Kconfig.*")
+    args = str_array_push(args, ")")
+    output = capture_argv(args)
+    dealloc_str_array(args)
+    return output
+end
+
+int config_block_start(content: string, symbol: string):
+    config_left = "\nconfig " + symbol
+    config_marker = config_left + "\n"
+    dealloc(config_left)
+    menu_left = "\nmenuconfig " + symbol
+    menu_marker = menu_left + "\n"
+    dealloc(menu_left)
+    config_at = index_of(content, config_marker)
+    menu_at = index_of(content, menu_marker)
+    dealloc(config_marker, menu_marker)
+    if config_at >= 0 and menu_at >= 0 then
+        if config_at < menu_at then
+            return config_at
+        end
+        return menu_at
+    end
+    if config_at >= 0 then
+        return config_at
+    end
+    return menu_at
+end
+
+int next_config_block(content: string, start: int):
+    config_at = index_of(content, "\nconfig ", start + 1)
+    menu_at = index_of(content, "\nmenuconfig ", start + 1)
+    if config_at >= 0 and menu_at >= 0 then
+        if config_at < menu_at then
+            return config_at
+        end
+        return menu_at
+    end
+    if config_at >= 0 then
+        return config_at
+    end
+    if menu_at >= 0 then
+        return menu_at
+    end
+    return strlen(content)
+end
+
+int block_excludes_rt(content: string, symbol: string):
+    start = config_block_start(content, symbol)
+    if start < 0 then
+        return 0
+    end
+    finish = next_config_block(content, start)
+    block = substr(content, start, finish - start)
+    cursor = 0
+    while cursor < strlen(block) then
+        dependency = index_of(block, "depends on", cursor)
+        if dependency < 0 then
+            dealloc(block)
+            return 0
+        end
+        newline = index_of(block, "\n", dependency)
+        if newline < 0 then
+            newline = strlen(block)
+        end
+        line = substr(block, dependency, newline - dependency)
+        excludes = index_of(line, "!PREEMPT_RT")
+        dealloc(line)
+        if excludes >= 0 then
+            dealloc(block)
+            return 1
+        end
+        cursor = newline + 1
+    end
+    dealloc(block)
+    return 0
+end
+
+string add_conflict(string_set: string, symbol: string):
+    marker_left = "\n" + symbol
+    marker = marker_left + "\n"
+    dealloc(marker_left)
+    if index_of(string_set, marker) >= 0 then
+        dealloc(marker)
+        return "" + string_set
+    end
+    next = string_set + marker
+    dealloc(marker)
+    return next
+end
+
+int has_conflict(string_set: string, symbol: string):
+    marker_left = "\n" + symbol
+    marker = marker_left + "\n"
+    dealloc(marker_left)
+    found = index_of(string_set, marker)
+    dealloc(marker)
+    if found >= 0 then
+        return 1
+    end
+    return 0
+end
+
+string strip_cr(path: string):
+    if strlen(path) == 0 then
+        return "" + ""
+    end
+    raw = reinterpret(i64, path)
+    if peek8(raw, strlen(path) - 1) == 13 then
+        return substr(path, 0, strlen(path) - 1)
+    end
+    return "" + path
+end
+
+string scan_rt_conflicts(paths: string, symbols: string):
+    conflicts = "" + "\n"
+    count = symbol_count(symbols)
+    cursor = 0
+    while cursor < strlen(paths) then
+        newline = index_of(paths, "\n", cursor)
+        if newline < 0 then
+            newline = strlen(paths)
+        end
+        raw_path = substr(paths, cursor, newline - cursor)
+        path = strip_cr(raw_path)
+        dealloc(raw_path)
+        if strlen(path) > 0 then
+            file_content = read_file(path)
+            if strlen(file_content) > 0 then
+                normalized = "\n" + file_content
+                i = 0
+                while i < count then
+                    symbol = symbol_at(symbols, i)
+                    if block_excludes_rt(normalized, symbol) == 1 then
+                        next = add_conflict(conflicts, symbol)
+                        dealloc(conflicts)
+                        conflicts = next
+                    end
+                    dealloc(symbol)
+                    i++
+                end
+                dealloc(normalized, file_content)
+            else
+                dealloc(file_content)
+            end
+        end
+        dealloc(path)
+        cursor = newline + 1
+    end
+    return conflicts
+end
+
+int symbol_enabled(config: string, symbol: string):
+    prefix = "CONFIG_" + symbol
+    built_in = prefix + "=y"
+    module = prefix + "=m"
+    dealloc(prefix)
+    enabled = 0
+    if index_of(config, built_in) >= 0 or index_of(config, module) >= 0 then
+        enabled = 1
+    end
+    if symbol == "PREEMPT_RT" and index_of(config, built_in) < 0 then
+        enabled = 0
+    end
+    dealloc(built_in, module)
+    return enabled
+end
+
+string capture_sha256(executable: string, path: string):
+    args = str_array_new(2)
+    args = str_array_push(args, executable)
+    args = str_array_push(args, path)
+    output = capture_argv(args)
+    dealloc_str_array(args)
+    if strlen(output) < 64 then
+        dealloc(output)
+        return "" + ""
+    end
+    digest = substr(output, 0, 64)
+    dealloc(output)
+    return digest
+end
+
+int approval_valid(db: int, version: string, symbol: string, sha256_exe: string):
+    stmt = sql_prepare(db, "SELECT patch_sha256,patch_path FROM kernel_patch_approval WHERE component_id='linux-rt' AND kernel_version=? AND symbol=? AND approved=1")
+    if stmt == 0 then
+        return 0
+    end
+    sql_bind_text(stmt, 1, version)
+    sql_bind_text(stmt, 2, symbol)
+    if sql_step(stmt) != MI_SQLITE_ROW then
+        sql_finalize(stmt)
+        return 0
+    end
+    expected = "" + sql_column_text(stmt, 0)
+    patch_path = "" + sql_column_text(stmt, 1)
+    sql_finalize(stmt)
+    if strlen(expected) != 64 or strlen(patch_path) == 0 then
+        dealloc(expected, patch_path)
+        return 0
+    end
+    actual = capture_sha256(sha256_exe, patch_path)
+    valid = 0
+    if actual == expected then
+        valid = 1
+    end
+    dealloc(expected, patch_path, actual)
+    return valid
+end
+
+int save_build_gate(db: int, version: string, source_root: string, config_path: string, required_count: int, conflict_count: int, approved_count: int, state: string, detail: string):
+    if sql_exec(db, "BEGIN IMMEDIATE") != 0 then
+        return KERNEL_CONFIG_BLOCKED
+    end
+    stmt = sql_prepare(db, "INSERT INTO kernel_build_gate(component_id,kernel_version,source_root,config_path,required_count,conflict_count,approved_conflict_count,status,detail,checked_at_ms) VALUES('linux-rt',?,?,?,?,?,?,?,?,?) ON CONFLICT(component_id) DO UPDATE SET kernel_version=excluded.kernel_version,source_root=excluded.source_root,config_path=excluded.config_path,required_count=excluded.required_count,conflict_count=excluded.conflict_count,approved_conflict_count=excluded.approved_conflict_count,status=excluded.status,detail=excluded.detail,checked_at_ms=excluded.checked_at_ms")
+    if stmt == 0 then
+        sql_exec(db, "ROLLBACK")
+        return KERNEL_CONFIG_BLOCKED
+    end
+    sql_bind_text(stmt, 1, version)
+    sql_bind_text(stmt, 2, source_root)
+    sql_bind_text(stmt, 3, config_path)
+    sql_bind_int(stmt, 4, required_count)
+    sql_bind_int(stmt, 5, conflict_count)
+    sql_bind_int(stmt, 6, approved_count)
+    sql_bind_text(stmt, 7, state)
+    sql_bind_text(stmt, 8, detail)
+    sql_bind_int(stmt, 9, time_ms())
+    rc = sql_step(stmt)
+    sql_finalize(stmt)
+    if rc != MI_SQLITE_DONE then
+        sql_exec(db, "ROLLBACK")
+        return KERNEL_CONFIG_BLOCKED
+    end
+    stmt = sql_prepare(db, "UPDATE observation SET status=?,detail=? WHERE component_id='linux-rt'")
+    if stmt == 0 then
+        sql_exec(db, "ROLLBACK")
+        return KERNEL_CONFIG_BLOCKED
+    end
+    sql_bind_text(stmt, 1, state)
+    sql_bind_text(stmt, 2, detail)
+    rc = sql_step(stmt)
+    sql_finalize(stmt)
+    if rc != MI_SQLITE_DONE or sql_exec(db, "COMMIT") != 0 then
+        sql_exec(db, "ROLLBACK")
+        return KERNEL_CONFIG_BLOCKED
+    end
+    return KERNEL_CONFIG_OK
+end
+
+int updates_gate_kernel_config(db: int, source_root: string, config_path: string):
+    source_state = query_text(db, "SELECT status FROM kernel_observation WHERE component_id='linux-rt'")
+    version = query_text(db, "SELECT stable_version FROM kernel_observation WHERE component_id='linux-rt'")
+    find_exe = query_text(db, "SELECT value FROM setting WHERE key='tool.find'")
+    sha256_exe = query_text(db, "SELECT value FROM setting WHERE key='tool.sha256'")
+    if source_state != "verified-source" then
+        config_line("Kernel config gate: BLOCKED, source state=", source_state)
+        dealloc(source_state, version, find_exe, sha256_exe)
+        return KERNEL_CONFIG_BLOCKED
+    end
+    symbols = required_symbol_list(db)
+    required_count = symbol_count(symbols)
+    if required_count == 0 or strlen(find_exe) == 0 or strlen(sha256_exe) == 0 then
+        dealloc(source_state, version, find_exe, sha256_exe)
+        dealloc(symbols)
+        return config_fail("required-symbol or tool policy is incomplete")
+    end
+    config = read_file(config_path)
+    if strlen(config) == 0 then
+        detail = "" + "kernel .config is missing or empty"
+        save_build_gate(db, version, source_root, config_path, required_count, 0, 0, "blocked-config-missing", detail)
+        dealloc(source_state, version, find_exe, sha256_exe, config, detail)
+        dealloc(symbols)
+        return KERNEL_CONFIG_BLOCKED
+    end
+    i = 0
+    while i < required_count then
+        symbol = symbol_at(symbols, i)
+        if symbol_enabled(config, symbol) == 0 then
+            detail = "required kernel symbol is not enabled: " + symbol
+            save_build_gate(db, version, source_root, config_path, required_count, 0, 0, "blocked-required-symbol", detail)
+            config_line("Kernel config gate: BLOCKED, symbol=", symbol)
+            dealloc(source_state, version, find_exe, sha256_exe, config, detail, symbol, symbols)
+            return KERNEL_CONFIG_BLOCKED
+        end
+        dealloc(symbol)
+        i++
+    end
+    paths = list_kconfig_files(find_exe, source_root)
+    if strlen(paths) == 0 then
+        detail = "" + "kernel source contains no readable Kconfig files"
+        save_build_gate(db, version, source_root, config_path, required_count, 0, 0, "blocked-kconfig-missing", detail)
+        dealloc(source_state, version, find_exe, sha256_exe, config, paths, detail)
+        dealloc(symbols)
+        return KERNEL_CONFIG_BLOCKED
+    end
+    conflicts = scan_rt_conflicts(paths, symbols)
+    conflict_count = 0
+    approved_count = 0
+    first_unapproved = "" + ""
+    i = 0
+    while i < required_count then
+        symbol = symbol_at(symbols, i)
+        if has_conflict(conflicts, symbol) == 1 then
+            conflict_count++
+            if approval_valid(db, version, symbol, sha256_exe) == 1 then
+                approved_count++
+            else
+                if strlen(first_unapproved) == 0 then
+                    dealloc(first_unapproved)
+                    first_unapproved = "" + symbol
+                end
+            end
+        end
+        dealloc(symbol)
+        i++
+    end
+    if conflict_count != approved_count then
+        detail_left = "unapproved !PREEMPT_RT conflict: " + first_unapproved
+        detail = detail_left + "; exact approved patch SHA-256 is required"
+        dealloc(detail_left)
+        save_build_gate(db, version, source_root, config_path, required_count, conflict_count, approved_count, "blocked-preempt-rt-conflict", detail)
+        config_line("Kernel config gate: BLOCKED, !PREEMPT_RT symbol=", first_unapproved)
+        dealloc(source_state, version, find_exe, sha256_exe, config, paths, conflicts, first_unapproved, detail)
+        dealloc(symbols)
+        return KERNEL_CONFIG_BLOCKED
+    end
+    detail = "" + "all required symbols enabled and every !PREEMPT_RT conflict has an exact approved patch hash"
+    rc = save_build_gate(db, version, source_root, config_path, required_count, conflict_count, approved_count, "build-gate-pass", detail)
+    if rc == KERNEL_CONFIG_OK then
+        print "Kernel config gate: PASS"
+    end
+    dealloc(source_state, version, find_exe, sha256_exe, config, paths, conflicts, first_unapproved, detail)
+    dealloc(symbols)
+    return rc
+end
+
+int updates_kernel_config_status(db: int):
+    version = query_text(db, "SELECT kernel_version FROM kernel_build_gate WHERE component_id='linux-rt'")
+    state = query_text(db, "SELECT status FROM kernel_build_gate WHERE component_id='linux-rt'")
+    detail = query_text(db, "SELECT detail FROM kernel_build_gate WHERE component_id='linux-rt'")
+    if strlen(state) == 0 then
+        dealloc(version, state, detail)
+        return config_fail("kernel config gate has not run")
+    end
+    config_line("Kernel version: ", version)
+    config_line("Kernel config state: ", state)
+    config_line("Detail: ", detail)
+    dealloc(version, state, detail)
+    return KERNEL_CONFIG_OK
+end
+
+void kernel_config_usage():
+    print "usage: updates-kernel-config gate-kernel-config Updates.config SOURCE_ROOT CONFIG_PATH"
+    print "       updates-kernel-config status-kernel-config Updates.config"
+end
+
+def main(): int
+    if argc() < 2 then
+        kernel_config_usage()
+        return KERNEL_CONFIG_USAGE
+    end
+    command = argv(1)
+    config_path = config_db_path()
+    if command == "status-kernel-config" then
+        db = sql_open_readonly(config_path)
+    else
+        db = sql_open(config_path)
+    end
+    if db == 0 then
+        dealloc(config_path)
+        return config_fail("cannot open Updates.config")
+    end
+    sql_exec(db, "PRAGMA foreign_keys=ON")
+    rc = KERNEL_CONFIG_USAGE
+    match command then
+        case "gate-kernel-config":
+            if argc() < 5 then
+                kernel_config_usage()
+                rc = KERNEL_CONFIG_USAGE
+            else
+                source_root = "" + argv(3)
+                kernel_dot_config = "" + argv(4)
+                rc = updates_gate_kernel_config(db, source_root, kernel_dot_config)
+                dealloc(source_root, kernel_dot_config)
+            end
+        case "status-kernel-config":
+            rc = updates_kernel_config_status(db)
+        case "help":
+            kernel_config_usage()
+            rc = KERNEL_CONFIG_OK
+        default:
+            kernel_config_usage()
+            rc = KERNEL_CONFIG_USAGE
+    end
+    sql_close(db)
+    dealloc(config_path)
+    return rc
+end
