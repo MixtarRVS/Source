@@ -1056,7 +1056,6 @@ mi_fix_ssh_permissions() {
 }
 
 mi_log() {
-  print -r -- "$1"
   print -r -- "$1" >>/System/Runtime/Networking/networking.log
   print -r -- "$1" >>/System/Logs/networking.log
 }
