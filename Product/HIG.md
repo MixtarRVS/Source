@@ -21,9 +21,13 @@ zmianę TUTAJ (commit w tym pliku), nigdy wartość ad-hoc w kodzie.
 - Minimalny obszar kliknięcia: **24x24 px** niezależnie od wizualnego rozmiaru.
 - Promień narożników: 4 (kontrolki), 8 (okna/karty), pełny (kropki okna).
 
-## Okna
-- Pasek tytułu: wysokość 34, glify sterujące wycentrowane W PIONIE I POZIOMIE.
-- Kropki (min/max/close): wizualnie **18 px**, obszar kliku 24x24, odstęp 8.
+## Okna (wzorzec: Windows, nie macOS)
+- Pasek tytułu: wysokość 34. Przyciski sterujące PROSTOKĄTNE, przy prawej
+  krawędzi, w kolejności — □ ✕; obszar 34x26, glif wycentrowany; hover
+  rozjaśnia, hover zamknięcia = czerwień (#C42B1C).
+- BRAK globalnego górnego paska menu. Zegar/status żyją w pasku zadań.
+- KAŻDE okno (w tym menu Start) ma zmienialny rozmiar: uchwyty na
+  krawędziach/rogach, min. rozmiar zdefiniowany per okno. [do implementacji]
 - Aktywne okno: mocniejsza ramka + cień; nieaktywne przygaszone. Nigdy dwa
   okna „aktywne" naraz.
 
