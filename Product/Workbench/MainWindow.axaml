@@ -150,7 +150,7 @@
     <Style Selector="Button.task">
       <Setter Property="Height" Value="31" />
       <Setter Property="MinWidth" Value="92" />
-      <Setter Property="Padding" Value="10,0" />
+      <Setter Property="Padding" Value="10,0,10,2" />
       <Setter Property="HorizontalContentAlignment" Value="Left" />
       <Setter Property="VerticalContentAlignment" Value="Center" />
       <Setter Property="Background" Value="Transparent" />
@@ -168,7 +168,7 @@
     <Style Selector="Button.task.minimized"><Setter Property="Opacity" Value="0.55" /></Style>
     <Style Selector="Button.start">
       <Setter Property="Height" Value="34" />
-      <Setter Property="Padding" Value="14,0" />
+      <Setter Property="Padding" Value="14,0,14,2" />
       <Setter Property="Background" Value="#0B65D8" />
       <Setter Property="BorderBrush" Value="#5EA8FF" />
       <Setter Property="BorderThickness" Value="1" />
