@@ -204,6 +204,8 @@ public sealed partial class MainWindow : Window
             : $"fixed ({scale * 100:0}%)";
     }
 
+    private Size _lastCanvasSize;
+
     private void OnRootSizeChanged(object? sender, SizeChangedEventArgs e)
     {
         RedrawBackgroundGrid(e.NewSize);
@@ -212,7 +214,30 @@ public sealed partial class MainWindow : Window
             _windowsPlaced = true;
             PlaceWindows(e.NewSize);
         }
+        else if (_lastCanvasSize.Width > 0 && _lastCanvasSize.Height > 0 &&
+                 e.NewSize.Width > 0 && e.NewSize != _lastCanvasSize)
+        {
+            // HIG: on resolution change the whole layout rescales
+            // proportionally so windows can never get stranded off-screen.
+            var ratioX = e.NewSize.Width / _lastCanvasSize.Width;
+            var ratioY = e.NewSize.Height / _lastCanvasSize.Height;
+            foreach (var window in DesktopWindows())
+            {
+                Canvas.SetLeft(window, Canvas.GetLeft(window) * ratioX);
+                Canvas.SetTop(window, Math.Max(8, Canvas.GetTop(window) * ratioY));
+                window.Width = Math.Max(260, window.Width * ratioX);
+                window.Height = Math.Max(160, window.Height * ratioY);
+            }
 
+            foreach (var key in _restoreBounds.Keys.ToList())
+            {
+                var saved = _restoreBounds[key];
+                _restoreBounds[key] = new DesktopBounds(saved.Left * ratioX, saved.Top * ratioY,
+                    Math.Max(260, saved.Width * ratioX), Math.Max(160, saved.Height * ratioY));
+            }
+        }
+
+        _lastCanvasSize = e.NewSize;
         ClampWindowsIntoView(e.NewSize);
     }
 

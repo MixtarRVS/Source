@@ -63,7 +63,7 @@ zmianę TUTAJ (commit w tym pliku), nigdy wartość ad-hoc w kodzie.
 - [x] przywracanie przez odciągnięcie (tear-off spod krawędzi, Windows-style)
 - [x] kolejność Z + fokus aktywnego okna
 - [x] recykling z-index (renormalizacja po 5000)
-- [ ] always-on-top (np. menedżer zadań)
+- [x] always-on-top (toggle w menu kontekstowym przycisku paska)
 - [x] Alt+Tab cykliczne przełączanie okien
 - [x] pokaż pulpit / minimalizuj wszystko (przycisk przy tacce, toggle)
 - [ ] karty w oknach (add/switch/close)
@@ -103,7 +103,7 @@ zmianę TUTAJ (commit w tym pliku), nigdy wartość ad-hoc w kodzie.
 - [ ] zaznaczanie wielokrotne + gumka (rubber-band)
 - [x] podgląd plików tekstowych
 - [ ] podgląd obrazów
-- [ ] menu kontekstowe pliku i tła
+- [x] menu kontekstowe pliku (Open/View, Copy path, Delete); tła — do zrobienia
 - [ ] kopiuj / wklej
 - [x] usuń (dwustopniowe)
 - [ ] zmiana nazwy (inline)
