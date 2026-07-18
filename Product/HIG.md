@@ -52,15 +52,118 @@ zmianę TUTAJ (commit w tym pliku), nigdy wartość ad-hoc w kodzie.
 
 ## Backlog funkcjonalny Workbencha
 Źródło: pierwszy koncept pulpitu (FreeBSD-Mixtar-Theme/desktop-env/client,
-~95 funkcji w 21 kategoriach — pełny spis w js/ tamtego repo). Kolejność
-portowania:
-1. Snapping okien (krawędzie+narożniki) z podglądem; 2. resize okien w 8
-kierunkach (wymóg HIG wyżej); 3. karty w oknach; 4. persistencja pozycji
-okien i układu; 5. skróty klawiszowe konfigurowalne z TOML; 6. Spotlight
-(apki+pliki); 7. menedżer plików: resize/reorder kolumn, gumka zaznaczania,
-podgląd obrazów, kopiuj/wklej/rename/właściwości, szablony nowych plików;
-8. menedżer zadań (procesy+kill, CPU/RAM); 9. dock: przypinanie i
-drag-reorder; 10. tryb wydajności (globalne wyłączenie efektów).
+~95 funkcji — odhaczać po weryfikacji na podglądzie/obrazie).
+
+### Zarządzanie oknami
+- [x] otwieranie okien z kaskadą pozycji
+- [x] przeciąganie za pasek tytułu
+- [x] resize w 8 kierunkach (krawędzie+narożniki, kursory)
+- [ ] snapping krawędziowy i narożnikowy z podglądem
+- [x] minimalizacja / maksymalizacja / przywracanie
+- [ ] przywracanie przez odciągnięcie od krawędzi
+- [x] kolejność Z + fokus aktywnego okna
+- [ ] recykling z-index
+- [ ] always-on-top (np. menedżer zadań)
+- [ ] Alt+Tab cykliczne przełączanie okien
+- [ ] pokaż pulpit / minimalizuj wszystko
+- [ ] karty w oknach (add/switch/close)
+- [ ] zapis pozycji okien między sesjami
+
+### Pasek zadań / dock / Start
+- [x] pasek zadań z przyciskami okien
+- [ ] przypinanie/odpinanie aplikacji z persistencją
+- [ ] drag-reorder przypiętych ikon
+- [ ] menu kontekstowe docka
+- [x] dwukolumnowe menu Start
+- [ ] działająca wyszukiwarka w menu Start
+- [ ] "All Programs" (lista aplikacji APX)
+- [ ] skróty lokalizacji w Starcie (Dokumenty itd.)
+- [ ] ustawienia paska (układ, ukrywanie)
+- [x] zegar w tacce
+- [ ] panel sieci w tacce
+- [ ] panel baterii w tacce (laptop/T480)
+- [x] menu Start: zmienny rozmiar (wymóg HIG "resize wszystkiego")
+
+### Logowanie / sesja / zasilanie
+- [ ] graficzny ekran logowania (spec: login.html pierwszego konceptu)
+- [ ] auto-login (opcja)
+- [ ] zegar/data na ekranie logowania
+- [x] menu zasilania: reboot / power off (przez openrc-shutdown)
+- [ ] wylogowanie (po wprowadzeniu sesji użytkownika)
+- [ ] overlay z animacją przy wylogowaniu/restarcie
+- [ ] Guru Meditation — systemowy ekran błędu
+
+### Menedżer plików
+- [x] przeglądanie prawdziwego systemu plików
+- [x] historia wstecz/naprzód/w górę
+- [x] breadcrumb klikalny + edytowalny pasek adresu
+- [x] dropdown lokacji przy pasku adresu
+- [x] sortowanie kolumn
+- [ ] resize / reorder / drag kolumn
+- [ ] zaznaczanie wielokrotne + gumka (rubber-band)
+- [x] podgląd plików tekstowych
+- [ ] podgląd obrazów
+- [ ] menu kontekstowe pliku i tła
+- [ ] kopiuj / wklej
+- [x] usuń (dwustopniowe)
+- [ ] zmiana nazwy (inline)
+- [ ] właściwości pliku
+- [x] nowy folder
+- [ ] nowy plik z szablonów
+- [x] wyszukiwanie w bieżącym katalogu
+- [x] sidebar lokalizacji
+- [x] wolne miejsce wolumenu w pasku statusu
+
+### Terminal
+- [ ] prawdziwy PTY do zsh (przez Executor; devpts w /System/Devices/pts)
+- [ ] Ctrl+C / Ctrl+D do procesu
+- [ ] obsługa sekwencji ANSI
+- [x] historia komend (góra/dół)
+- [x] built-iny na realnych danych (ls/cat/ps/free/df/state...)
+
+### Ustawienia
+- [x] okno ustawień
+- [x] skala UI (auto + kroki)
+- [ ] persistencja ustawień (plik w /System/State lub profilu)
+- [ ] ustawienia zegara (sekundy, 12/24h)
+- [ ] tryb wydajności (globalne wyłączenie efektów)
+- [ ] ustawienia tapety
+
+### Powiadomienia i widgety
+- [ ] toasty powiadomień (ikona/tytuł/treść, kolejka)
+- [ ] widget zegara/kalendarza na pulpicie
+- [ ] widget pogody (po sieci w Workbenchu)
+
+### Tapeta
+- [ ] statyczna tapeta z pliku
+- [ ] Aurora / animowana tapeta (po przejściu na GLES2)
+- [ ] reakcja tapety na porę dnia / obciążenie
+
+### Wyszukiwanie globalne
+- [ ] Spotlight: aplikacje + pliki, nawigacja klawiaturą
+
+### Aplikacje
+- [ ] odkrywanie zainstalowanych APX + uruchamianie
+- [ ] menedżer zadań: lista procesów, sortowanie, filtr, kill
+- [ ] zakładka wydajności (wykresy CPU/RAM) — częściowo w Runtime Monitor
+- [x] Runtime Monitor: CPU/RAM/procesy/uptime/stany serwisów
+- [ ] przeglądarka (daleka przyszłość)
+- [ ] Snake / gra demo (na deser)
+
+### Ikony pulpitu
+- [ ] ikony na siatce + przeciąganie + zapis układu
+- [ ] inline rename ikon
+- [ ] menu kontekstowe pulpitu
+
+### Skróty klawiszowe
+- [x] Ctrl+K paleta, Ctrl+L adres, Escape zamyka warstwę
+- [ ] konfigurowalne skróty z pliku TOML (~17 akcji jak w koncepcie)
+
+### Boot / infrastruktura
+- [ ] sekwencja bootowania z logiem czasów (splash)
+- [ ] globalna obsługa błędów UI (odpowiednik window.onerror)
+- [ ] lokalizacja/języki
+- [ ] tryb mobilny / launcher dotykowy (kiedyś, po desktopie)
 Dalej: Alt+Tab, pokaż pulpit, ikony pulpitu z siatką i zapisem, toasty
 powiadomień, widget pogody/kalendarza, panele sieci/baterii, menu zasilania
 z overlayami, ekran logowania (spec: login.html tamtego repo), Guru

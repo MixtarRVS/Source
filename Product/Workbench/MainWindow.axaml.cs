@@ -62,10 +62,21 @@ public sealed partial class MainWindow : Window
 
     private static bool HasProcfs => Directory.Exists(ProcRoot);
 
+    private Border? _resizeWindow;
+    private int _resizeFlags;
+    private Rect _resizeStartBounds;
+    private Point _resizeStartPointer;
+
     public MainWindow()
     {
         InitializeComponent();
         SizeToPrimaryScreen();
+        foreach (var window in DesktopWindows())
+        {
+            window.PointerPressed += OnWindowResizePressed;
+            window.PointerMoved += OnWindowResizeMoved;
+            window.PointerReleased += OnWindowResizeReleased;
+        }
         BuildTree();
         AppendSysinfo();
         Navigate(StartPath(), recordHistory: true);
@@ -659,6 +670,113 @@ public sealed partial class MainWindow : Window
         TaskFor(window)?.Classes.Add("active");
         TaskFor(window)?.Classes.Remove("minimized");
         _activeWindow = window;
+    }
+
+    // HIG: every window resizes from all 8 edges/corners (7px band).
+    private static int EdgeFlags(Border window, Point position)
+    {
+        const double band = 7;
+        var flags = 0;
+        if (position.X <= band) flags |= 1;
+        if (position.X >= window.Bounds.Width - band) flags |= 2;
+        if (position.Y <= band) flags |= 4;
+        if (position.Y >= window.Bounds.Height - band) flags |= 8;
+        return flags;
+    }
+
+    private static StandardCursorType CursorFor(int flags) => flags switch
+    {
+        1 or 2 => StandardCursorType.SizeWestEast,
+        4 or 8 => StandardCursorType.SizeNorthSouth,
+        5 or 10 => StandardCursorType.TopLeftCorner,
+        6 or 9 => StandardCursorType.TopRightCorner,
+        _ => StandardCursorType.Arrow
+    };
+
+    private void OnWindowResizePressed(object? sender, PointerPressedEventArgs e)
+    {
+        if (sender is not Border window || _restoreBounds.ContainsKey(window))
+        {
+            return;
+        }
+
+        var flags = EdgeFlags(window, e.GetPosition(window));
+        if (flags == 0 || !e.GetCurrentPoint(window).Properties.IsLeftButtonPressed)
+        {
+            return;
+        }
+
+        ActivateWindow(window);
+        _resizeWindow = window;
+        _resizeFlags = flags;
+        _resizeStartBounds = new Rect(Canvas.GetLeft(window), Canvas.GetTop(window),
+            window.Width, window.Height);
+        _resizeStartPointer = e.GetPosition(DesktopCanvas);
+        e.Pointer.Capture(window);
+        e.Handled = true;
+    }
+
+    private void OnWindowResizeMoved(object? sender, PointerEventArgs e)
+    {
+        if (sender is not Border window)
+        {
+            return;
+        }
+
+        if (_resizeWindow != window)
+        {
+            window.Cursor = new Cursor(CursorFor(
+                _restoreBounds.ContainsKey(window) ? 0 : EdgeFlags(window, e.GetPosition(window))));
+            return;
+        }
+
+        const double minWidth = 260;
+        const double minHeight = 160;
+        var delta = e.GetPosition(DesktopCanvas) - _resizeStartPointer;
+        var left = _resizeStartBounds.X;
+        var top = _resizeStartBounds.Y;
+        var width = _resizeStartBounds.Width;
+        var height = _resizeStartBounds.Height;
+
+        if ((_resizeFlags & 1) != 0)
+        {
+            var newWidth = Math.Max(minWidth, width - delta.X);
+            left += width - newWidth;
+            width = newWidth;
+        }
+        else if ((_resizeFlags & 2) != 0)
+        {
+            width = Math.Max(minWidth, width + delta.X);
+        }
+
+        if ((_resizeFlags & 4) != 0)
+        {
+            var newHeight = Math.Max(minHeight, height - delta.Y);
+            top += height - newHeight;
+            height = newHeight;
+        }
+        else if ((_resizeFlags & 8) != 0)
+        {
+            height = Math.Max(minHeight, height + delta.Y);
+        }
+
+        Canvas.SetLeft(window, left);
+        Canvas.SetTop(window, Math.Max(8, top));
+        window.Width = width;
+        window.Height = height;
+    }
+
+    private void OnWindowResizeReleased(object? sender, PointerReleasedEventArgs e)
+    {
+        if (_resizeWindow is null || sender != _resizeWindow)
+        {
+            return;
+        }
+
+        e.Pointer.Capture(null);
+        _resizeWindow = null;
+        _resizeFlags = 0;
+        e.Handled = true;
     }
 
     private void FocusDesktopWindow(object? sender, PointerPressedEventArgs e)
