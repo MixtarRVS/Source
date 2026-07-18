@@ -1685,10 +1685,15 @@ public sealed partial class MainWindow : Window
     {
         if (!_consoleDragging)
         {
+            var probe = e.GetPosition(RootLayout);
+            ConsoleGrip.Opacity = !_consoleOpen && probe.Y <= 18 &&
+                Math.Abs(probe.X - RootLayout.Bounds.Width / 2) < RootLayout.Bounds.Width * 0.22
+                ? 1
+                : 0;
             return;
         }
 
-        ConsoleGrip.IsVisible = false;
+        ConsoleGrip.Opacity = 0;
 
         var offset = e.GetPosition(RootLayout).Y - _consoleDragStartY;
         SetConsoleOffset(_consoleClosingDrag
