@@ -256,9 +256,9 @@
               <Grid ColumnDefinitions="*,Auto">
                 <TextBlock Classes="window-title" Text="TERMINAL - WORKBENCH SHELL" />
                 <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="0" VerticalAlignment="Center">
-                  <Button Classes="window-dot min" Tag="TerminalWindow" Content="-" Click="OnDesktopMinimize" />
+                  <Button Classes="window-dot min" Tag="TerminalWindow" Content="–" Click="OnDesktopMinimize" />
                   <Button Classes="window-dot max" Tag="TerminalWindow" Content="□" Click="OnDesktopMaximize" />
-                  <Button Classes="window-dot close" Tag="TerminalWindow" Content="x" Click="OnDesktopClose" />
+                  <Button Classes="window-dot close" Tag="TerminalWindow" Content="✕" Click="OnDesktopClose" />
                 </StackPanel>
               </Grid>
             </Border>
@@ -285,9 +285,9 @@
               <Grid ColumnDefinitions="*,Auto">
                 <TextBlock x:Name="FilesTitle" Classes="window-title" Text="FILES" />
                 <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="0" VerticalAlignment="Center">
-                  <Button Classes="window-dot min" Tag="FilesWindow" Content="-" Click="OnDesktopMinimize" />
+                  <Button Classes="window-dot min" Tag="FilesWindow" Content="–" Click="OnDesktopMinimize" />
                   <Button Classes="window-dot max" Tag="FilesWindow" Content="□" Click="OnDesktopMaximize" />
-                  <Button Classes="window-dot close" Tag="FilesWindow" Content="x" Click="OnDesktopClose" />
+                  <Button Classes="window-dot close" Tag="FilesWindow" Content="✕" Click="OnDesktopClose" />
                 </StackPanel>
               </Grid>
             </Border>
@@ -365,8 +365,8 @@
               <Grid ColumnDefinitions="*,Auto">
                 <TextBlock Classes="window-title" Text="RUNTIME MONITOR" />
                 <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="0" VerticalAlignment="Center">
-                  <Button Classes="window-dot min" Tag="RuntimeWindow" Content="-" Click="OnDesktopMinimize" />
-                  <Button Classes="window-dot close" Tag="RuntimeWindow" Content="x" Click="OnDesktopClose" />
+                  <Button Classes="window-dot min" Tag="RuntimeWindow" Content="–" Click="OnDesktopMinimize" />
+                  <Button Classes="window-dot close" Tag="RuntimeWindow" Content="✕" Click="OnDesktopClose" />
                 </StackPanel>
               </Grid>
             </Border>
@@ -417,8 +417,8 @@
               <Grid ColumnDefinitions="*,Auto">
                 <TextBlock Classes="window-title" Text="NETWORK INSPECTOR" />
                 <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="0" VerticalAlignment="Center">
-                  <Button Classes="window-dot min" Tag="NetworkWindow" Content="-" Click="OnDesktopMinimize" />
-                  <Button Classes="window-dot close" Tag="NetworkWindow" Content="x" Click="OnDesktopClose" />
+                  <Button Classes="window-dot min" Tag="NetworkWindow" Content="–" Click="OnDesktopMinimize" />
+                  <Button Classes="window-dot close" Tag="NetworkWindow" Content="✕" Click="OnDesktopClose" />
                 </StackPanel>
               </Grid>
             </Border>
@@ -463,7 +463,7 @@
                 <TextBlock x:Name="ViewerTitle" Classes="window-title" Text="VIEWER" />
                 <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="0" VerticalAlignment="Center">
                   <Button Classes="window-dot max" Tag="ViewerWindow" Content="□" Click="OnDesktopMaximize" />
-                  <Button Classes="window-dot close" Tag="ViewerWindow" Content="x" Click="OnDesktopClose" />
+                  <Button Classes="window-dot close" Tag="ViewerWindow" Content="✕" Click="OnDesktopClose" />
                 </StackPanel>
               </Grid>
             </Border>
@@ -482,7 +482,7 @@
                     PointerPressed="BeginDesktopWindowDrag" PointerMoved="ContinueDesktopWindowDrag" PointerReleased="EndDesktopWindowDrag">
               <Grid ColumnDefinitions="*,Auto">
                 <TextBlock Classes="window-title" Text="SETTINGS" />
-                <Button Grid.Column="1" Classes="window-dot close" Tag="SettingsWindow" Content="x" Click="OnDesktopClose" />
+                <Button Grid.Column="1" Classes="window-dot close" Tag="SettingsWindow" Content="✕" Click="OnDesktopClose" />
               </Grid>
             </Border>
             <StackPanel Grid.Row="1" Margin="14,12" Spacing="10">

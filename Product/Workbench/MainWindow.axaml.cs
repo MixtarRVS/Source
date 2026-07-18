@@ -1672,6 +1672,7 @@ public sealed partial class MainWindow : Window
         else
         {
             _consoleOpen = true;
+            ConsoleGrip.Opacity = 0;
             ConsoleTransform.Transitions = null;
             SetConsoleOffset(-RootLayout.Bounds.Height);
             ConsoleLayer.IsVisible = true;
@@ -1729,6 +1730,7 @@ public sealed partial class MainWindow : Window
         if (pulled > RootLayout.Bounds.Height * 0.2)
         {
             _consoleOpen = true;
+            ConsoleGrip.Opacity = 0;
             AnimateConsole(0, hideAfter: false);
             ConsolePrompt.Text = $"root@{HostName()}:{_currentPath}#";
             ConsoleInput.Focus();
