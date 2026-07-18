@@ -123,6 +123,24 @@ public sealed partial class MainWindow : Window
 
     private double AutoScale()
     {
+        // When the host compositor already applies a user-chosen DPI scale
+        // (e.g. Windows at 125%), auto must not multiply on top of it. The
+        // resolution heuristic only kicks in where no scaling exists yet -
+        // which is exactly the Mixtar/MWM case.
+        double osScaling = 1.0;
+        try
+        {
+            osScaling = (Screens.Primary ?? Screens.All.FirstOrDefault())?.Scaling ?? 1.0;
+        }
+        catch
+        {
+        }
+
+        if (osScaling > 1.05)
+        {
+            return 1.0;
+        }
+
         var width = ClientSize.Width;
         var height = ClientSize.Height;
         if (width <= 0 || height <= 0)
@@ -1025,17 +1043,57 @@ public sealed partial class MainWindow : Window
         _currentPath = path;
         FilesTitle.Text = $"FILES - {path.ToUpperInvariant()}";
         PathHint.Text = path;
-        BreadcrumbText.Text = path == "/"
-            ? "⌂  MixtarRVS"
-            : $"⌂  MixtarRVS   >   {string.Join("   >   ", path.Split(['/', '\\'], StringSplitOptions.RemoveEmptyEntries))}";
+        BuildBreadcrumb(path);
         AddressBox.Text = path;
-        FileSearch.PlaceholderText = $"Search {path}";
         TerminalPrompt.Text = $"root@{HostName()}:{path}#";
         SelectionStatus.Text = "No selection";
         _selectedFileRow = null;
         _selectedPath = null;
         UpdateVolumeInfo(path);
         RenderFiles();
+    }
+
+    private void BuildBreadcrumb(string path)
+    {
+        BreadcrumbPanel.Children.Clear();
+        var isDrivePath = path.Length >= 2 && path[1] == ':';
+        var rootLabel = "⌂ MixtarRVS";
+        var rootTarget = isDrivePath ? path[..2] + IOPath.DirectorySeparatorChar : "/";
+        BreadcrumbPanel.Children.Add(CrumbButton(rootLabel, rootTarget));
+
+        var segments = path.Split(['/', '\\'], StringSplitOptions.RemoveEmptyEntries);
+        var accumulated = isDrivePath ? string.Empty : "";
+        for (var index = 0; index < segments.Length; index++)
+        {
+            var segment = segments[index];
+            accumulated = index == 0 && isDrivePath
+                ? segment + IOPath.DirectorySeparatorChar
+                : (isDrivePath
+                    ? IOPath.Combine(accumulated, segment)
+                    : accumulated + "/" + segment);
+            if (index == 0 && isDrivePath)
+            {
+                continue;
+            }
+
+            BreadcrumbPanel.Children.Add(new TextBlock
+            {
+                Text = "›",
+                Foreground = new SolidColorBrush(Color.Parse("#5E86BC")),
+                FontSize = 10,
+                Margin = new Thickness(2, 0),
+                VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center
+            });
+            BreadcrumbPanel.Children.Add(CrumbButton(segment, accumulated));
+        }
+    }
+
+    private Button CrumbButton(string label, string target)
+    {
+        var button = new Button { Content = label, Tag = target };
+        button.Classes.Add("crumb");
+        button.Click += (_, _) => Navigate(target, recordHistory: true);
+        return button;
     }
 
     private void UpdateVolumeInfo(string path)
@@ -1293,6 +1351,10 @@ public sealed partial class MainWindow : Window
                 content = slice.Contains((byte)0)
                     ? $"(binary file, {FormatSize(info.Length)})"
                     : System.Text.Encoding.UTF8.GetString(slice);
+                if (content.Length == 0)
+                {
+                    content = "(empty file)";
+                }
             }
 
             if (info.Length > limit && !content.StartsWith("(binary", StringComparison.Ordinal))
@@ -1365,12 +1427,96 @@ public sealed partial class MainWindow : Window
 
     private void OnFileSearchChanged(object? sender, TextChangedEventArgs e) => RenderFiles();
 
+    private void OnGlobalPointerPressed(object? sender, PointerPressedEventArgs e)
+    {
+        if (e.Source is not Control control)
+        {
+            return;
+        }
+
+        var ancestors = control.GetVisualAncestors().OfType<Control>().ToList();
+        bool Within(Control host) => control == host || ancestors.Contains(host);
+        var withinButton = control is Button || ancestors.OfType<Button>().Any();
+
+        if (!withinButton)
+        {
+            if (StartMenu.IsVisible && !Within(StartMenu))
+            {
+                StartMenu.IsVisible = false;
+            }
+
+            if (CommandPalette.IsVisible && !Within(CommandPalette))
+            {
+                CommandPalette.IsVisible = false;
+            }
+        }
+
+        if (AddressBox.IsVisible && !Within(AddressBox) && !Within(AddressSuggestions))
+        {
+            ExitAddressMode();
+        }
+    }
+
     private void EnterAddressMode()
     {
         Breadcrumb.IsVisible = false;
         AddressBox.IsVisible = true;
+        BuildAddressSuggestions();
+        AddressPopup.IsOpen = true;
         AddressBox.Focus();
         AddressBox.SelectAll();
+    }
+
+    private void BuildAddressSuggestions()
+    {
+        AddressSuggestions.Children.Clear();
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var recent = Enumerable.Reverse(_history).Where(seen.Add).Take(6).ToList();
+        var roots = new[] { "/", "/Applications", "/System", "/Users", "/Volumes", "/Temporary" }
+            .Where(path => Directory.Exists(path) && seen.Add(path))
+            .ToList();
+        if (roots.Count == 0)
+        {
+            roots = DriveInfo.GetDrives().Where(drive => drive.IsReady)
+                .Select(drive => drive.RootDirectory.FullName)
+                .Where(seen.Add)
+                .ToList();
+        }
+
+        foreach (var section in new[] { ("RECENT", recent), ("LOCATIONS", roots) })
+        {
+            if (section.Item2.Count == 0)
+            {
+                continue;
+            }
+
+            AddressSuggestions.Children.Add(new TextBlock
+            {
+                Text = section.Item1,
+                Foreground = new SolidColorBrush(Color.Parse("#7EAFE8")),
+                FontFamily = new FontFamily("Noto Sans Mono"),
+                FontSize = 8,
+                FontWeight = FontWeight.Bold,
+                Margin = new Thickness(6, 4, 6, 2)
+            });
+            foreach (var path in section.Item2)
+            {
+                var button = new Button
+                {
+                    Content = path,
+                    HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Stretch,
+                    HorizontalContentAlignment = Avalonia.Layout.HorizontalAlignment.Left
+                };
+                button.Classes.Add("tree");
+                var captured = path;
+                button.Click += (_, _) =>
+                {
+                    Navigate(captured, recordHistory: true);
+                    ExitAddressMode();
+                };
+                AddressSuggestions.Children.Add(button);
+            }
+        }
     }
 
     private void OnAddressPressed(object? sender, PointerPressedEventArgs e)
@@ -1394,10 +1540,9 @@ public sealed partial class MainWindow : Window
         }
     }
 
-    private void OnAddressLostFocus(object? sender, RoutedEventArgs e) => ExitAddressMode();
-
     private void ExitAddressMode()
     {
+        AddressPopup.IsOpen = false;
         AddressBox.IsVisible = false;
         Breadcrumb.IsVisible = true;
     }

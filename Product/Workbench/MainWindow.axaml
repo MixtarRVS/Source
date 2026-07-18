@@ -105,6 +105,19 @@
       <Setter Property="FontSize" Value="9" />
     </Style>
     <Style Selector="Button.column-header:pointerover"><Setter Property="Foreground" Value="White" /></Style>
+    <Style Selector="Button.crumb">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="Padding" Value="5,2" />
+      <Setter Property="CornerRadius" Value="4" />
+      <Setter Property="Foreground" Value="#C2DBFF" />
+      <Setter Property="FontFamily" Value="Noto Sans Mono" />
+      <Setter Property="FontSize" Value="10" />
+    </Style>
+    <Style Selector="Button.crumb:pointerover">
+      <Setter Property="Background" Value="#33417EE6" />
+      <Setter Property="Foreground" Value="White" />
+    </Style>
     <Style Selector="Button.task">
       <Setter Property="Height" Value="31" />
       <Setter Property="MinWidth" Value="92" />
@@ -181,11 +194,12 @@
       <Setter Property="CaretBrush" Value="White" />
       <Setter Property="SelectionBrush" Value="#703580DB" />
       <Setter Property="FontSize" Value="11" />
+      <Setter Property="VerticalContentAlignment" Value="Center" />
     </Style>
   </Window.Styles>
 
   <LayoutTransformControl x:Name="ScaleHost">
-    <Grid x:Name="RootLayout" ClipToBounds="True" SizeChanged="OnRootSizeChanged">
+    <Grid x:Name="RootLayout" ClipToBounds="True" SizeChanged="OnRootSizeChanged" PointerPressed="OnGlobalPointerPressed">
       <Border Background="#020713" />
 
       <Ellipse Width="900" Height="620" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,-330,-120,0" IsHitTestVisible="False">
@@ -260,12 +274,20 @@
               </StackPanel>
               <Grid Grid.Column="1">
                 <Border x:Name="Breadcrumb" Background="#D30A2854" BorderBrush="#5A5FA2FF" BorderThickness="1"
-                        CornerRadius="5" Padding="8,0" PointerPressed="OnAddressPressed">
-                  <TextBlock x:Name="BreadcrumbText" Text="⌂  MixtarRVS" VerticalAlignment="Center"
-                             FontFamily="Noto Sans Mono" FontSize="10" TextTrimming="CharacterEllipsis" />
+                        CornerRadius="5" Padding="4,0" PointerPressed="OnAddressPressed">
+                  <ScrollViewer HorizontalScrollBarVisibility="Hidden" VerticalScrollBarVisibility="Disabled">
+                    <StackPanel x:Name="BreadcrumbPanel" Orientation="Horizontal" VerticalAlignment="Center" />
+                  </ScrollViewer>
                 </Border>
                 <TextBox x:Name="AddressBox" IsVisible="False" Text="/" Padding="8,0"
-                         FontFamily="Noto Sans Mono" KeyDown="OnAddressKeyDown" LostFocus="OnAddressLostFocus" />
+                         FontFamily="Noto Sans Mono" KeyDown="OnAddressKeyDown" />
+                <Popup x:Name="AddressPopup" PlacementTarget="{Binding ElementName=AddressBox}"
+                       Placement="BottomEdgeAlignedLeft" IsLightDismissEnabled="False">
+                  <Border Background="#F5051630" BorderBrush="{StaticResource StrokeBrush}" BorderThickness="1"
+                          CornerRadius="7" Padding="6" MinWidth="380" BoxShadow="0 14 40 0 #C0000000">
+                    <StackPanel x:Name="AddressSuggestions" Spacing="1" />
+                  </Border>
+                </Popup>
               </Grid>
               <TextBox x:Name="FileSearch" Grid.Column="2" PlaceholderText="Search" Padding="8,0" TextChanged="OnFileSearchChanged" />
             </Grid>
