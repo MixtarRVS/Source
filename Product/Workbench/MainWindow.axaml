@@ -18,10 +18,10 @@
   <!-- HIG tokens: layered dark surfaces (bg < panel < card), neutral chrome
        text, accent reserved for interaction. -->
   <Window.Resources>
-    <SolidColorBrush x:Key="PanelBrush" Color="#F5111B2E" />
-    <SolidColorBrush x:Key="PanelSoftBrush" Color="#F016233A" />
-    <SolidColorBrush x:Key="StrokeBrush" Color="#2C3D5C" />
-    <SolidColorBrush x:Key="StrokeStrongBrush" Color="#4C6FA8" />
+    <SolidColorBrush x:Key="PanelBrush" Color="#D914161A" />
+    <SolidColorBrush x:Key="PanelSoftBrush" Color="#E6191B20" />
+    <SolidColorBrush x:Key="StrokeBrush" Color="#26FFFFFF" />
+    <SolidColorBrush x:Key="StrokeStrongBrush" Color="#4DFFFFFF" />
     <SolidColorBrush x:Key="AccentBrush" Color="#18B9FF" />
     <SolidColorBrush x:Key="TextBrush" Color="#E8EEF7" />
     <SolidColorBrush x:Key="SoftBrush" Color="#A7B8CF" />
@@ -44,8 +44,8 @@
     </Style>
     <Style Selector="Border.titlebar">
       <Setter Property="Height" Value="34" />
-      <Setter Property="Background" Value="#16FFFFFF" />
-      <Setter Property="BorderBrush" Value="#344997FF" />
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderBrush" Value="#1AFFFFFF" />
       <Setter Property="BorderThickness" Value="0,0,0,1" />
       <Setter Property="Padding" Value="12,0,0,0" />
     </Style>
