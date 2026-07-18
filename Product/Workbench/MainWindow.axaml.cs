@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.IO;
 using System.Linq;
 using Avalonia;
 using Avalonia.Controls;
@@ -10,88 +11,23 @@ using Avalonia.Interactivity;
 using Avalonia.Media;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
+using IOPath = System.IO.Path;
 
 namespace Mixtar.Product.Workbench;
 
 public sealed partial class MainWindow : Window
 {
-    private sealed record FileEntry(string Name, string Type, string Items, string Modified, string Role);
     private sealed record DesktopBounds(double Left, double Top, double Width, double Height);
-    private sealed record NetworkNode(string Name, string Address, string Location);
+
+    private const string ProcRoot = "/System/Processes";
+    private const string StateRoot = "/System/State";
+    private const string IdentityPath = "/System/Configuration/Product/Identity.config";
 
     private readonly DispatcherTimer _clockTimer;
+    private readonly DispatcherTimer _metricsTimer;
     private readonly Dictionary<Border, DesktopBounds> _restoreBounds = new();
-    private readonly Dictionary<string, FileEntry[]> _fileSystem = new(StringComparer.OrdinalIgnoreCase)
-    {
-        ["/"] =
-        [
-            new("Applications", "Dir", "24", "Today", "APX bundles"),
-            new("System", "Dir", "10", "Today", "Native system"),
-            new("Users", "Dir", "3", "Today", "Profiles"),
-            new("Volumes", "Dir", "4", "Live", "Mounted storage"),
-            new("Temporary", "Dir", "14", "Live", "Ephemeral data")
-        ],
-        ["/Applications"] =
-        [
-            new("Files.apx", "Application", "1", "Today", "File explorer"),
-            new("Terminal.apx", "Application", "1", "Today", "zsh session"),
-            new("NetworkInspector.apx", "Application", "1", "Today", "Network tools"),
-            new("RuntimeMonitor.apx", "Application", "1", "Today", "Runtime metrics")
-        ],
-        ["/System"] =
-        [
-            new("Tools", "Dir", "24", "Today", "Native CLI"),
-            new("Shells", "Dir", "6", "Today", "APX shells"),
-            new("Libraries", "Dir", "132", "Today", "Runtime"),
-            new("Configuration", "Dir", "18", "Yesterday", "TOML-compatible config"),
-            new("Resources", "Dir", "42", "Today", "Themes and fonts"),
-            new("Logs", "Dir", "9", "Today", "Persistent logs"),
-            new("Runtime", "Service", "11", "Live", "Ephemeral state"),
-            new("Kernel", "Dir", "4", "Today", "Kernel and modules"),
-            new("Init", "Dir", "8", "Today", "System tasks"),
-            new("Compatibility", "Dir", "3", "Hidden", "Application islands")
-        ],
-        ["/System/Runtime"] =
-        [
-            new("Executor", "Service", "1", "Live", "APX lifecycle"),
-            new("Tasks", "Service", "12", "Live", "Scheduled work"),
-            new("Devices", "Service", "31", "Live", "Device objects"),
-            new("Processes", "Service", "47", "Live", "Process view")
-        ],
-        ["/System/Logs"] =
-        [
-            new("system.log", "Log", "1", "Today", "Core events"),
-            new("executor.log", "Log", "1", "Today", "APX lifecycle"),
-            new("network.log", "Log", "1", "Today", "Network inspection"),
-            new("boot.log", "Log", "1", "Today", "Init timeline")
-        ],
-        ["/Users"] =
-        [
-            new("Administrator", "User", "12", "Today", "Administrative profile"),
-            new("Superuser", "User", "8", "Today", "Privileged profile"),
-            new("V", "User", "34", "Today", "Primary user")
-        ],
-        ["/Volumes"] =
-        [
-            new("System", "Volume", "1", "Mounted", "Boot volume"),
-            new("Data", "Volume", "1", "Mounted", "User data"),
-            new("Recovery", "Volume", "1", "Ready", "Recovery image"),
-            new("RemoteVault", "Volume", "1", "Online", "Remote APX mount")
-        ],
-        ["/Temporary"] =
-        [
-            new("session-cache", "Temp", "14", "Live", "Auto-clean"),
-            new("apx-build", "Temp", "3", "Live", "Build workspace")
-        ]
-    };
-
-    private readonly Dictionary<string, NetworkNode> _nodes = new()
-    {
-        ["local"] = new("local.mix", "127.0.0.1", "Local machine"),
-        ["relay"] = new("relay-ams.mix", "198.51.100.12", "Amsterdam / relay"),
-        ["vault"] = new("vault.mix", "192.0.2.77", "Reykjavik / pinned relay"),
-        ["edge"] = new("edge-tokyo.mix", "203.0.113.42", "Tokyo / edge")
-    };
+    private readonly List<string> _history = new();
+    private int _historyIndex = -1;
 
     private Border? _activeWindow;
     private Border? _dragWindow;
@@ -101,54 +37,331 @@ public sealed partial class MainWindow : Window
     private Border? _selectedFileRow;
     private int _topZ = 30;
     private string _currentPath = "/System";
+    private long _previousCpuIdle;
+    private long _previousCpuTotal;
 
     public MainWindow()
     {
         InitializeComponent();
-        BuildBackgroundGrid();
-        Navigate("/System");
+        SizeToPrimaryScreen();
+        AppendSysinfo();
+        Navigate("/System", recordHistory: true);
         ActivateWindow(TerminalWindow);
 
         _clockTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
         _clockTimer.Tick += (_, _) => UpdateClock();
         _clockTimer.Start();
         UpdateClock();
-        Closed += (_, _) => _clockTimer.Stop();
+
+        _metricsTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(2) };
+        _metricsTimer.Tick += (_, _) => UpdateMetrics();
+        _metricsTimer.Start();
+        UpdateMetrics();
+
+        Closed += (_, _) =>
+        {
+            _clockTimer.Stop();
+            _metricsTimer.Stop();
+        };
     }
 
-    private void BuildBackgroundGrid()
+    private void SizeToPrimaryScreen()
     {
+        try
+        {
+            var screen = Screens.Primary ?? Screens.All.FirstOrDefault();
+            if (screen is null)
+            {
+                return;
+            }
+
+            var scaling = screen.Scaling > 0 ? screen.Scaling : 1.0;
+            Width = screen.Bounds.Width / scaling;
+            Height = screen.Bounds.Height / scaling;
+            Position = new PixelPoint(screen.Bounds.X, screen.Bounds.Y);
+        }
+        catch
+        {
+            // Keep the XAML fallback size when the backend exposes no outputs.
+        }
+    }
+
+    private void OnRootSizeChanged(object? sender, SizeChangedEventArgs e)
+    {
+        RedrawBackgroundGrid(e.NewSize);
+        ClampWindowsIntoView(e.NewSize);
+    }
+
+    private void RedrawBackgroundGrid(Size size)
+    {
+        GridLines.Children.Clear();
         var stroke = new SolidColorBrush(Color.Parse("#202569D2"));
-        for (var x = 0; x <= 1600; x += 36)
+        for (var x = 0d; x <= size.Width; x += 36)
         {
             GridLines.Children.Add(new Line
             {
                 StartPoint = new Point(x, 0),
-                EndPoint = new Point(x, 900),
+                EndPoint = new Point(x, size.Height),
                 Stroke = stroke,
                 StrokeThickness = 1
             });
         }
 
-        for (var y = 0; y <= 900; y += 36)
+        for (var y = 0d; y <= size.Height; y += 36)
         {
             GridLines.Children.Add(new Line
             {
                 StartPoint = new Point(0, y),
-                EndPoint = new Point(1600, y),
+                EndPoint = new Point(size.Width, y),
                 Stroke = stroke,
                 StrokeThickness = 1
             });
         }
     }
 
+    private void ClampWindowsIntoView(Size size)
+    {
+        foreach (var window in DesktopWindows())
+        {
+            var left = Canvas.GetLeft(window);
+            var top = Canvas.GetTop(window);
+            var maxLeft = Math.Max(0, size.Width - window.Width);
+            var maxTop = Math.Max(40, size.Height - 48 - 34);
+            Canvas.SetLeft(window, Math.Clamp(double.IsNaN(left) ? 0 : left, 0, maxLeft));
+            Canvas.SetTop(window, Math.Clamp(double.IsNaN(top) ? 40 : top, 40, maxTop));
+        }
+    }
+
+    private IEnumerable<Border> DesktopWindows() => new[] { TerminalWindow, FilesWindow, RuntimeWindow };
+
     private void UpdateClock() =>
         ClockText.Text = DateTime.Now.ToString("HH:mm:ss", CultureInfo.InvariantCulture);
+
+    // ------------------------------------------------------------------
+    // Real system data
+    // ------------------------------------------------------------------
+
+    private static string ReadProcLine(string relative)
+    {
+        try
+        {
+            using var reader = new StreamReader(IOPath.Combine(ProcRoot, relative));
+            return reader.ReadLine() ?? string.Empty;
+        }
+        catch
+        {
+            return string.Empty;
+        }
+    }
+
+    private static string IdentityValue(string key, string fallback)
+    {
+        try
+        {
+            foreach (var line in File.ReadLines(IdentityPath))
+            {
+                var separator = line.IndexOf('=');
+                if (separator <= 0)
+                {
+                    continue;
+                }
+
+                if (!line[..separator].Trim().Equals(key, StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                var value = line[(separator + 1)..].Trim();
+                if (value.Length >= 2 && value[0] == '"' && value[^1] == '"')
+                {
+                    value = value[1..^1];
+                }
+
+                return value.Length > 0 ? value : fallback;
+            }
+        }
+        catch
+        {
+        }
+
+        return fallback;
+    }
+
+    private static string KernelRelease()
+    {
+        var version = ReadProcLine("version");
+        var parts = version.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        return parts.Length >= 3 ? $"{parts[0]} {parts[2]}" : "unknown";
+    }
+
+    private static string HostName()
+    {
+        var name = ReadProcLine("sys/kernel/hostname");
+        return name.Length > 0 ? name : "mixtar";
+    }
+
+    private static (long Idle, long Total) ReadCpuSample()
+    {
+        var line = ReadProcLine("stat");
+        if (!line.StartsWith("cpu ", StringComparison.Ordinal))
+        {
+            return (0, 0);
+        }
+
+        var fields = line.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        long total = 0;
+        long idle = 0;
+        for (var index = 1; index < fields.Length; index++)
+        {
+            if (!long.TryParse(fields[index], out var value))
+            {
+                continue;
+            }
+
+            total += value;
+            if (index == 4 || index == 5)
+            {
+                idle += value;
+            }
+        }
+
+        return (idle, total);
+    }
+
+    private static (long TotalKib, long AvailableKib) ReadMemory()
+    {
+        long total = 0;
+        long available = 0;
+        try
+        {
+            foreach (var line in File.ReadLines(IOPath.Combine(ProcRoot, "meminfo")))
+            {
+                if (line.StartsWith("MemTotal:", StringComparison.Ordinal))
+                {
+                    total = ParseMeminfoKib(line);
+                }
+                else if (line.StartsWith("MemAvailable:", StringComparison.Ordinal))
+                {
+                    available = ParseMeminfoKib(line);
+                    break;
+                }
+            }
+        }
+        catch
+        {
+        }
+
+        return (total, available);
+    }
+
+    private static long ParseMeminfoKib(string line)
+    {
+        var fields = line.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        return fields.Length >= 2 && long.TryParse(fields[1], out var value) ? value : 0;
+    }
+
+    private static int CountProcesses()
+    {
+        try
+        {
+            return Directory.EnumerateDirectories(ProcRoot)
+                .Count(path => IOPath.GetFileName(path).All(char.IsAsciiDigit));
+        }
+        catch
+        {
+            return 0;
+        }
+    }
+
+    private static string ReadUptime()
+    {
+        var line = ReadProcLine("uptime");
+        var fields = line.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        if (fields.Length == 0 || !double.TryParse(fields[0], CultureInfo.InvariantCulture, out var seconds))
+        {
+            return "--";
+        }
+
+        var span = TimeSpan.FromSeconds(seconds);
+        return span.TotalHours >= 1
+            ? $"{(int)span.TotalHours}h {span.Minutes:00}m"
+            : $"{span.Minutes}m {span.Seconds:00}s";
+    }
+
+    private static bool StateReady(string relative)
+    {
+        try
+        {
+            foreach (var line in File.ReadLines(IOPath.Combine(StateRoot, relative)))
+            {
+                var compact = line.Replace(" ", string.Empty);
+                if (compact.StartsWith("ready=", StringComparison.OrdinalIgnoreCase))
+                {
+                    return compact[6..].StartsWith("true", StringComparison.OrdinalIgnoreCase);
+                }
+            }
+        }
+        catch
+        {
+        }
+
+        return false;
+    }
+
+    private void UpdateMetrics()
+    {
+        var (idle, total) = ReadCpuSample();
+        double cpuFraction = 0;
+        if (_previousCpuTotal > 0 && total > _previousCpuTotal)
+        {
+            var deltaTotal = total - _previousCpuTotal;
+            var deltaIdle = idle - _previousCpuIdle;
+            cpuFraction = Math.Clamp(1.0 - (double)deltaIdle / deltaTotal, 0, 1);
+        }
+
+        _previousCpuIdle = idle;
+        _previousCpuTotal = total;
+        CpuText.Text = _previousCpuTotal > 0 ? $"{cpuFraction * 100:0}%" : "--";
+        CpuBar.Width = Math.Max(0, CpuTrack.Bounds.Width * cpuFraction);
+
+        var (memTotal, memAvailable) = ReadMemory();
+        if (memTotal > 0)
+        {
+            var used = Math.Clamp(1.0 - (double)memAvailable / memTotal, 0, 1);
+            MemText.Text = $"{used * 100:0}%";
+            MemBar.Width = Math.Max(0, MemTrack.Bounds.Width * used);
+        }
+
+        ProcText.Text = CountProcesses().ToString(CultureInfo.InvariantCulture);
+        UptimeText.Text = ReadUptime();
+
+        var graphicsReady = StateReady("Graphics/Status.config");
+        var volumesReady = StateReady("Volumes/Status.config");
+        GraphicsDot.Foreground = new SolidColorBrush(Color.Parse(graphicsReady ? "#9ED8C6" : "#668AB9"));
+        VolumesDot.Foreground = new SolidColorBrush(Color.Parse(volumesReady ? "#9ED8C6" : "#668AB9"));
+        StateLines.Text =
+            $"MWM {(graphicsReady ? "ready" : "down")}\n" +
+            $"Volumes {(volumesReady ? "mounted" : "none")}\n" +
+            $"Host {HostName()}";
+    }
+
+    private void AppendSysinfo()
+    {
+        var name = IdentityValue("name", "MixtarRVS");
+        var version = IdentityValue("version", "1.1");
+        AppendTerminal($"{name} {version}", "#91B7E8");
+        AppendTerminal($"Kernel : {KernelRelease()}", "#91B7E8");
+        AppendTerminal($"Host   : {HostName()}", "#91B7E8");
+        AppendTerminal("Shell  : Workbench built-ins (PTY session planned) - type 'help'", "#91B7E8");
+    }
+
+    // ------------------------------------------------------------------
+    // Window management (real, unchanged behavior)
+    // ------------------------------------------------------------------
 
     private Border? WindowByName(string? name) => name switch
     {
         nameof(TerminalWindow) => TerminalWindow,
-        nameof(NetworkWindow) => NetworkWindow,
         nameof(FilesWindow) => FilesWindow,
         nameof(RuntimeWindow) => RuntimeWindow,
         _ => null
@@ -157,7 +370,6 @@ public sealed partial class MainWindow : Window
     private Button? TaskFor(Border window)
     {
         if (window == TerminalWindow) return TerminalTask;
-        if (window == NetworkWindow) return NetworkTask;
         if (window == FilesWindow) return FilesTask;
         if (window == RuntimeWindow) return RuntimeTask;
         return null;
@@ -168,7 +380,7 @@ public sealed partial class MainWindow : Window
         window.IsVisible = true;
         window.ZIndex = ++_topZ;
 
-        foreach (var item in new[] { TerminalWindow, NetworkWindow, FilesWindow, RuntimeWindow })
+        foreach (var item in DesktopWindows())
         {
             item.Classes.Remove("active");
             TaskFor(item)?.Classes.Remove("active");
@@ -228,9 +440,12 @@ public sealed partial class MainWindow : Window
             return;
         }
 
+        var bounds = DesktopCanvas.Bounds;
         var point = e.GetPosition(DesktopCanvas);
-        var x = Math.Clamp(_dragWindowOrigin.X + point.X - _dragPointerOrigin.X, 0, 1600 - _dragWindow.Bounds.Width);
-        var y = Math.Clamp(_dragWindowOrigin.Y + point.Y - _dragPointerOrigin.Y, 40, 852 - 34);
+        var x = Math.Clamp(_dragWindowOrigin.X + point.X - _dragPointerOrigin.X, 0,
+            Math.Max(0, bounds.Width - _dragWindow.Bounds.Width));
+        var y = Math.Clamp(_dragWindowOrigin.Y + point.Y - _dragPointerOrigin.Y, 40,
+            Math.Max(40, bounds.Height - 48 - 34));
         Canvas.SetLeft(_dragWindow, x);
         Canvas.SetTop(_dragWindow, y);
     }
@@ -280,6 +495,7 @@ public sealed partial class MainWindow : Window
         var window = WindowFromButton(sender);
         if (window is null) return;
 
+        var bounds = DesktopCanvas.Bounds;
         if (_restoreBounds.Remove(window, out var saved))
         {
             Canvas.SetLeft(window, saved.Left);
@@ -293,8 +509,8 @@ public sealed partial class MainWindow : Window
                 Canvas.GetLeft(window), Canvas.GetTop(window), window.Width, window.Height);
             Canvas.SetLeft(window, 0);
             Canvas.SetTop(window, 40);
-            window.Width = 1600;
-            window.Height = 812;
+            window.Width = bounds.Width;
+            window.Height = Math.Max(200, bounds.Height - 40 - 48);
         }
 
         ActivateWindow(window);
@@ -329,6 +545,10 @@ public sealed partial class MainWindow : Window
         ActivateWindow(window);
     }
 
+    // ------------------------------------------------------------------
+    // Actions
+    // ------------------------------------------------------------------
+
     private void OnAction(object? sender, RoutedEventArgs e)
     {
         if (sender is not Button button || button.Tag is not string action)
@@ -351,45 +571,38 @@ public sealed partial class MainWindow : Window
             case "files":
                 ShowWindow(FilesWindow);
                 break;
-            case "network":
-                ShowWindow(NetworkWindow);
-                break;
             case "runtime":
                 ShowWindow(RuntimeWindow);
                 break;
             case "root":
                 ShowWindow(FilesWindow);
-                Navigate("/");
+                Navigate("/", recordHistory: true);
                 break;
             case "apx":
                 ShowWindow(FilesWindow);
-                Navigate("/Applications");
+                Navigate("/Applications", recordHistory: true);
+                break;
+            case "back":
+                NavigateHistory(-1);
+                break;
+            case "forward":
+                NavigateHistory(1);
                 break;
             case "up":
-                Navigate(ParentPath(_currentPath));
+                Navigate(ParentPath(_currentPath), recordHistory: true);
                 break;
             case "reload":
                 RenderFiles();
-                AppendTerminal($"[FS] refreshed {_currentPath}", "#91B7E8");
-                break;
-            case "trace":
-                ShowWindow(NetworkWindow);
-                AppendTerminal("[NET] route verified: local > relay-ams > vault", "#91B7E8");
-                break;
-            case "recon":
-                ShowWindow(NetworkWindow);
-                AppendTerminal($"[SEC] authorized recon completed for {NodeName.Text}", "#91B7E8");
-                break;
-            case "ssh":
-                AppendTerminal($"[SSH] pinned-key session granted for {NodeName.Text}", "#91B7E8");
                 break;
             case "verify":
                 ShowWindow(TerminalWindow);
-                AppendTerminal("MixtarRVS visual verifier: PASS", "#27EE91");
+                RunCommand("state");
                 break;
             case "reboot":
-                ShowWindow(TerminalWindow);
-                AppendTerminal("[INIT] controlled reboot request queued through Supervisor", "#FFC65C");
+                RunPowerCommand("-r");
+                break;
+            case "poweroff":
+                RunPowerCommand("-p");
                 break;
         }
 
@@ -397,21 +610,62 @@ public sealed partial class MainWindow : Window
         CommandPalette.IsVisible = false;
     }
 
+    private void RunPowerCommand(string argument)
+    {
+        AppendTerminal($"openrc-shutdown {argument} now", "#FFC65C");
+        try
+        {
+            System.Diagnostics.Process.Start("/System/Init/openrc-shutdown", $"{argument} now");
+        }
+        catch (Exception error)
+        {
+            AppendTerminal($"shutdown failed: {error.Message}", "#FF5C7B");
+        }
+    }
+
+    // ------------------------------------------------------------------
+    // Files: the real filesystem
+    // ------------------------------------------------------------------
+
     private void OnTreePath(object? sender, RoutedEventArgs e)
     {
         if (sender is Button { Tag: string path })
         {
-            Navigate(path);
+            ShowWindow(FilesWindow);
+            Navigate(path, recordHistory: true);
         }
     }
 
-    private void Navigate(string path)
+    private void NavigateHistory(int direction)
+    {
+        var target = _historyIndex + direction;
+        if (target < 0 || target >= _history.Count)
+        {
+            return;
+        }
+
+        _historyIndex = target;
+        Navigate(_history[target], recordHistory: false);
+    }
+
+    private void Navigate(string path, bool recordHistory)
     {
         path = NormalizePath(path);
-        if (!_fileSystem.ContainsKey(path))
+        if (!Directory.Exists(path))
         {
             AppendTerminal($"[FS] path not found: {path}", "#FF5C7B");
             return;
+        }
+
+        if (recordHistory)
+        {
+            if (_historyIndex < _history.Count - 1)
+            {
+                _history.RemoveRange(_historyIndex + 1, _history.Count - _historyIndex - 1);
+            }
+
+            _history.Add(path);
+            _historyIndex = _history.Count - 1;
         }
 
         _currentPath = path;
@@ -422,19 +676,76 @@ public sealed partial class MainWindow : Window
             : $"⌂  MixtarRVS   >   {string.Join("   >   ", path.Split('/', StringSplitOptions.RemoveEmptyEntries))}";
         AddressBox.Text = $"MIXTARROOT:{path}";
         FileSearch.PlaceholderText = $"Search {path}";
-        TerminalPrompt.Text = $"root@mixtar:{path}#";
+        TerminalPrompt.Text = $"root@{HostName()}:{path}#";
         SelectionStatus.Text = "No selection";
         _selectedFileRow = null;
         RenderFiles();
+    }
+
+    private sealed record Listing(string Name, string FullPath, bool IsDirectory, string Type, string Size,
+        string Modified, string Entries);
+
+    private static Listing DescribeEntry(FileSystemInfo info)
+    {
+        var isDirectory = info is DirectoryInfo;
+        var type = isDirectory ? "Dir" : "File";
+        if ((info.Attributes & FileAttributes.ReparsePoint) != 0)
+        {
+            type = "Link";
+        }
+
+        var size = info is FileInfo file ? FormatSize(file.Length) : "-";
+        var entries = "-";
+        if (isDirectory && type != "Link")
+        {
+            try
+            {
+                entries = Directory.EnumerateFileSystemEntries(info.FullName).Take(1000).Count()
+                    .ToString(CultureInfo.InvariantCulture);
+            }
+            catch
+            {
+                entries = "?";
+            }
+        }
+
+        var modified = info.LastWriteTime.ToString("dd.MM HH:mm", CultureInfo.InvariantCulture);
+        return new Listing(info.Name, info.FullName, isDirectory, type, size, modified, entries);
+    }
+
+    private static string FormatSize(long bytes) => bytes switch
+    {
+        < 1024 => $"{bytes} B",
+        < 1024 * 1024 => $"{bytes / 1024.0:0.#} K",
+        < 1024L * 1024 * 1024 => $"{bytes / (1024.0 * 1024):0.#} M",
+        _ => $"{bytes / (1024.0 * 1024 * 1024):0.##} G"
+    };
+
+    private Listing[] ListDirectory(string path)
+    {
+        try
+        {
+            var directory = new DirectoryInfo(path);
+            return directory.EnumerateFileSystemInfos()
+                .Select(DescribeEntry)
+                .OrderByDescending(entry => entry.IsDirectory)
+                .ThenBy(entry => entry.Name, StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+        }
+        catch (Exception error)
+        {
+            AppendTerminal($"[FS] {path}: {error.Message}", "#FF5C7B");
+            return [];
+        }
     }
 
     private void RenderFiles()
     {
         FileRows.Children.Clear();
         var query = FileSearch.Text?.Trim() ?? string.Empty;
-        var entries = _fileSystem[_currentPath]
+        var entries = ListDirectory(_currentPath)
             .Where(entry => query.Length == 0 ||
-                $"{entry.Name} {entry.Type} {entry.Role}".Contains(query, StringComparison.OrdinalIgnoreCase))
+                entry.Name.Contains(query, StringComparison.OrdinalIgnoreCase))
             .ToArray();
 
         foreach (var entry in entries)
@@ -447,26 +758,34 @@ public sealed partial class MainWindow : Window
                 ColumnDefinitions =
                 {
                     new ColumnDefinition(new GridLength(190)),
+                    new ColumnDefinition(new GridLength(60)),
                     new ColumnDefinition(new GridLength(74)),
-                    new ColumnDefinition(new GridLength(45)),
-                    new ColumnDefinition(new GridLength(72)),
+                    new ColumnDefinition(new GridLength(96)),
                     new ColumnDefinition(GridLength.Star)
                 }
             };
 
             grid.Children.Add(Cell($"{IconFor(entry)}  {entry.Name}", 0, "#D8E7FF"));
             grid.Children.Add(Cell(entry.Type, 1, "#9EC1EF"));
-            grid.Children.Add(Cell(entry.Items, 2, "#9EC1EF"));
+            grid.Children.Add(Cell(entry.Size, 2, "#9EC1EF"));
             grid.Children.Add(Cell(entry.Modified, 3, "#9EC1EF"));
-            grid.Children.Add(Cell(entry.Role, 4, "#9EC1EF"));
+            grid.Children.Add(Cell(entry.Entries, 4, "#9EC1EF"));
             row.Child = grid;
 
+            var captured = entry;
             row.PointerPressed += (_, args) =>
             {
+                if (args.ClickCount >= 2 && captured.IsDirectory)
+                {
+                    Navigate(captured.FullPath, recordHistory: true);
+                    args.Handled = true;
+                    return;
+                }
+
                 _selectedFileRow?.Classes.Remove("selected");
                 row.Classes.Add("selected");
                 _selectedFileRow = row;
-                SelectionStatus.Text = $"{entry.Name} selected";
+                SelectionStatus.Text = $"{captured.Name} selected";
                 args.Handled = true;
             };
 
@@ -490,14 +809,10 @@ public sealed partial class MainWindow : Window
         return block;
     }
 
-    private static string IconFor(FileEntry entry) => entry.Type switch
+    private static string IconFor(Listing entry) => entry.Type switch
     {
         "Dir" => "▣",
-        "Service" => "◈",
-        "Application" => "◇",
-        "Volume" => "▰",
-        "User" => "●",
-        "Log" => "≡",
+        "Link" => "◈",
         _ => "□"
     };
 
@@ -541,7 +856,7 @@ public sealed partial class MainWindow : Window
     {
         if (e.Key == Key.Enter)
         {
-            Navigate(AddressBox.Text ?? "/");
+            Navigate(AddressBox.Text ?? "/", recordHistory: true);
             ExitAddressMode();
             e.Handled = true;
         }
@@ -560,6 +875,10 @@ public sealed partial class MainWindow : Window
         Breadcrumb.IsVisible = true;
     }
 
+    // ------------------------------------------------------------------
+    // Terminal: honest built-ins on real data (PTY session comes later)
+    // ------------------------------------------------------------------
+
     private void OnTerminalKeyDown(object? sender, KeyEventArgs e)
     {
         if (e.Key != Key.Enter) return;
@@ -569,34 +888,99 @@ public sealed partial class MainWindow : Window
 
         AppendTerminal($"{TerminalPrompt.Text} {command}", "#FFFFFF");
         TerminalInput.Text = string.Empty;
+        RunCommand(command);
+        e.Handled = true;
+    }
 
-        switch (command.ToLowerInvariant())
+    private void RunCommand(string command)
+    {
+        var parts = command.Split(' ', 2, StringSplitOptions.RemoveEmptyEntries);
+        var argument = parts.Length > 1 ? parts[1].Trim() : string.Empty;
+
+        switch (parts[0].ToLowerInvariant())
         {
             case "clear":
                 TerminalLines.Children.Clear();
                 break;
+            case "help":
+                AppendTerminal("built-ins: sysinfo ls [path] cat <file> uname ps free state clear", "#91B7E8");
+                AppendTerminal("windows  : files runtime", "#91B7E8");
+                break;
+            case "sysinfo":
+                AppendSysinfo();
+                break;
+            case "uname":
+                AppendTerminal(ReadProcLine("version"), "#91B7E8");
+                break;
+            case "ps":
+                AppendTerminal($"{CountProcesses()} processes in {ProcRoot}", "#91B7E8");
+                break;
+            case "free":
+                var (memTotal, memAvailable) = ReadMemory();
+                AppendTerminal(
+                    $"memory: {FormatSize(memTotal * 1024)} total, {FormatSize(memAvailable * 1024)} available",
+                    "#91B7E8");
+                break;
+            case "state":
+                AppendTerminal($"graphics : {(StateReady("Graphics/Status.config") ? "ready" : "down")}", "#91B7E8");
+                AppendTerminal($"volumes  : {(StateReady("Volumes/Status.config") ? "mounted" : "none")}", "#91B7E8");
+                AppendTerminal($"logging  : {(StateReady("Logging/System.config") ? "ready" : "down")}", "#91B7E8");
+                break;
+            case "ls":
+                var target = argument.Length > 0 ? NormalizePath(argument) : _currentPath;
+                foreach (var entry in ListDirectory(target).Take(60))
+                {
+                    AppendTerminal($"{entry.Type,-5} {entry.Size,10}  {entry.Name}", "#91B7E8");
+                }
+                break;
+            case "cat":
+                RunCat(argument);
+                break;
             case "files":
                 ShowWindow(FilesWindow);
-                break;
-            case "network":
-                ShowWindow(NetworkWindow);
                 break;
             case "runtime":
                 ShowWindow(RuntimeWindow);
                 break;
-            case "root":
-                ShowWindow(FilesWindow);
-                Navigate("/");
-                break;
-            case "verify":
-                AppendTerminal("ok: native root clean | APX Executor online | PASS", "#27EE91");
-                break;
             default:
-                AppendTerminal("visual shell: command simulated", "#FFC65C");
+                AppendTerminal("unknown built-in (real zsh session is on the roadmap) - type 'help'", "#FFC65C");
                 break;
         }
 
-        e.Handled = true;
+        TerminalScroll.ScrollToEnd();
+    }
+
+    private void RunCat(string argument)
+    {
+        if (argument.Length == 0)
+        {
+            AppendTerminal("cat: missing file path", "#FF5C7B");
+            return;
+        }
+
+        var path = argument.StartsWith('/') ? argument : $"{_currentPath.TrimEnd('/')}/{argument}";
+        try
+        {
+            var shown = 0;
+            foreach (var line in File.ReadLines(path))
+            {
+                AppendTerminal(line.Length > 400 ? line[..400] : line, "#9FC5F4");
+                if (++shown >= 60)
+                {
+                    AppendTerminal("... (truncated at 60 lines)", "#668AB9");
+                    break;
+                }
+            }
+
+            if (shown == 0)
+            {
+                AppendTerminal("(empty file)", "#668AB9");
+            }
+        }
+        catch (Exception error)
+        {
+            AppendTerminal($"cat: {error.Message}", "#FF5C7B");
+        }
     }
 
     private void AppendTerminal(string text, string color)
@@ -609,33 +993,16 @@ public sealed partial class MainWindow : Window
             FontSize = 10,
             TextWrapping = TextWrapping.Wrap
         });
-    }
 
-    private void OnNetworkNode(object? sender, RoutedEventArgs e)
-    {
-        if (sender is not Button { Tag: string id } || !_nodes.TryGetValue(id, out var node))
+        if (TerminalLines.Children.Count > 400)
         {
-            return;
-        }
-
-        NodeName.Text = node.Name;
-        NodeIp.Text = node.Address;
-        NodeLocation.Text = node.Location;
-        AppendTerminal($"[NET] selected {node.Name} ({node.Address})", "#91B7E8");
-    }
-
-    private void OnHudPointerPressed(object? sender, PointerPressedEventArgs e)
-    {
-        if (e.Source is Button || e.Source is Control source && source.FindAncestorOfType<Button>() is not null)
-        {
-            return;
-        }
-
-        if (e.GetCurrentPoint(this).Properties.IsLeftButtonPressed)
-        {
-            BeginMoveDrag(e);
+            TerminalLines.Children.RemoveRange(0, TerminalLines.Children.Count - 400);
         }
     }
+
+    // ------------------------------------------------------------------
+    // Global keys and power
+    // ------------------------------------------------------------------
 
     private void OnWindowKeyDown(object? sender, KeyEventArgs e)
     {
