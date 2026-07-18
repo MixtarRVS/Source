@@ -250,15 +250,16 @@ volumes_scan() {
       continue
     fi
 
+    # Never brute-mount a partition blkid cannot identify: each failed
+    # attempt on a busy device (e.g. the root pool member, which this blkid
+    # does not recognise) makes the kernel print "Can't open blockdev"
+    # straight onto the console for every candidate filesystem.
     filesystem="$(blkid_value TYPE "$device" || true)"
-    if [ -n "$filesystem" ]; then
-      case " $allowed " in
-        *" $filesystem "*) candidates="$filesystem" ;;
-        *) continue ;;
-      esac
-    else
-      candidates="$allowed"
-    fi
+    [ -n "$filesystem" ] || continue
+    case " $allowed " in
+      *" $filesystem "*) candidates="$filesystem" ;;
+      *) continue ;;
+    esac
 
     label="$(blkid_value LABEL "$device" || true)"
     label="$(printf '%s' "$label" | $BB tr -cd 'A-Za-z0-9._-')"

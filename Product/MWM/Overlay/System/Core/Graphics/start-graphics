@@ -84,7 +84,7 @@ prepare_drm() {
 prepare_input() {
   log="$1"
   timeout="$2"
-  for module in evdev atkbd psmouse virtio_input; do
+  for module in evdev atkbd psmouse virtio_input hyperv_keyboard hid_hyperv; do
     if $BB modprobe "$module" >>"$log" 2>&1; then
       printf 'MixtarRVS: loaded input module %s\n' "$module" >>"$log"
     fi

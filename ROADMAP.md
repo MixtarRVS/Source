@@ -6,8 +6,9 @@
 - P1 jest zakończone: Mixtar startuje z rootem OpenZFS przez UEFI w QEMU i Hyper-V Gen2.
 - P2 jest zakończone: pełna dystrybucja konsolowa przeszła dwubootową akceptację w QEMU/OVMF i Hyper-V Generation 2.
 - P3 jest zakończone: M1 ma odtwarzalny build, atomowe aktualizacje, rollback, recovery i podpisane artefakty.
-- P4 jest zdefiniowane i odblokowane po zakończeniu P3, ale nie zostało jeszcze rozpoczęte: obejmuje warstwę produktu Mixtar 1.0+, APX/Executor, pulpit, namespace użytkownika, dostawców zgodności, politykę i narzędzia administracyjne.
-- AILang, msh, MDDM, MWM i archiwalny RVS nie wracają automatycznie jako zależności; P4 oceni je względem obecnej architektury Mixtara.
+- P4 jest aktywne: P4-pre i 1.0 są zakończone, a kanoniczny obraz 1.1 uruchamia w QEMU łańcuch DRM/KMS -> MDDM -> MWM/Wayland -> Avalonia Workbench z działającą myszą i klawiaturą.
+- MDDM i MWM wróciły jako jawnie wybrane komponenty P4; AILang, msh i archiwalny RVS pozostają poza bieżącą ścieżką krytyczną.
+- Workbench pozostaje prototypem funkcjonalnym: wizualny Terminal nie jest jeszcze prawdziwą sesją zsh, a bramka graficzna Hyper-V nadal jest otwarta.
 
 ## 2. Cel wydania M1
 
@@ -307,14 +308,16 @@ publicznych aliasów FHS.
 - [x] Uruchomić bramkę zagnieżdżoną MDDM/Wayland -> MWM/pixman+shm -> Workbench/Avalonia pod `strace` i `perf`.
 - [x] Dostarczyć w overlayu P4 fizyczne, kanoniczne ABI `/System/Libraries` i loader `/System/Libraries/Loader`, bez symlinków i hardlinków.
 - [x] Wyprofilować i obniżyć zużycie CPU Workbencha: jawny framebuffer Waylanda (`MIXTAR_GRAPHICS_MODE=software`) zużywa 0,029 rdzenia, 1,97 IPC i 1,89% branch-miss w ośmiosekundowym teście WSL, zamiast bazowych 0,968 rdzenia, 2,15 IPC i 1,68% branch-miss; to spadek użycia CPU o około 97%, a tryb `auto` zachowuje ścieżkę EGL/GPU dla obrazu Mixtara.
-- [ ] Uruchomić i zmierzyć ścieżkę Linux GPU/DRM/KMS -> MDDM -> MWM/Wayland -> Login UI/Avalonia -> pulpit w QEMU oraz Hyper-V.
+- [x] Uruchomić kanoniczny cold boot ścieżki Linux GPU/DRM/KMS -> MDDM -> MWM/Wayland -> Avalonia Workbench w QEMU. Dowód tury 7: mysz i fokus okien w `Output/P4/InputProof3-*.png`, klawiatura i akcja UI w `Output/P4/InputProof5-*.png`.
+- [ ] Uruchomić i zmierzyć tę samą ścieżkę graficzną w Hyper-V.
+- [ ] Zastąpić symulowany wizualny Terminal prawdziwą sesją zsh/APX; obecna bramka potwierdza transport wejścia i akcje UI, nie wykonanie komend w oknie.
 - [ ] Przed wydaniem produktu zamknąć eksperymentalność backendu Wayland testami zgodności Mixtara albo przypiąć zaakceptowaną wersję upstream do czasu jego stabilizacji.
 
 ### Linia wydań P4
 
 - [x] **P4-pre — Product contracts:** kontrakt `P4.md`, maszynowe budżety, bramka konsoli oraz prototyp `mixtar_builder.apx` definiują APX, Executor, sesję, namespace i UI bez uznawania prototypu za publiczne API.
 - [x] **1.0 — Core Identity:** APX, Executor, `zsh.apx`, init/runtime i podstawowy boot produktu na czystym publicznym root Mixtara. Dowód: [Core.release.json](Output/P4/Core.release.json).
-- [ ] **1.1 — Mixtar Workbench:** okna, pasek zadań, Start, `Ctrl+K` i pełny lifecycle aplikacji.
+- [ ] **1.1 — Mixtar Workbench:** okna, pasek zadań, Start, `Ctrl+K` i pełny lifecycle aplikacji. Bramka platformowa QEMU (rendering, fokus, mysz i klawiatura) jest zaliczona; prawdziwy Terminal i pełny lifecycle pozostają otwarte.
 - [ ] **1.2 — Namespace:** aplikacja Files oraz graficzna obsługa `/Applications`, `/System`, `/Users`, `/Volumes` i `/Temporary`.
 - [ ] **1.3 — Connected System:** SSH, Network Inspector, traceroute i monitoring runtime nad siecią dostarczoną już przez P2.
 - [ ] **1.4 — Visual and Interaction Freeze:** zamrożony język wizualny, dostępność, DPI, pełna klawiatura, finalne zachowanie okien i stabilne Mixtar UI API.
