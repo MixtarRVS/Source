@@ -5,6 +5,8 @@ using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
 using Avalonia;
+using Avalonia.Animation;
+using Avalonia.Animation.Easings;
 using Avalonia.Controls;
 using Avalonia.Controls.Shapes;
 using Avalonia.Input;
@@ -81,6 +83,15 @@ public sealed partial class MainWindow : Window
         RootLayout.PointerMoved += OnConsoleDragMoved;
         RootLayout.PointerReleased += OnConsoleDragReleased;
         ConsoleLayer.RenderTransform = new TranslateTransform(0, 0);
+        _consoleSlide = new Transitions
+        {
+            new DoubleTransition
+            {
+                Property = TranslateTransform.YProperty,
+                Duration = TimeSpan.FromMilliseconds(260),
+                Easing = new CubicEaseOut()
+            }
+        };
         BuildTree();
         AppendSysinfo();
         Navigate(StartPath(), recordHistory: true);
@@ -250,7 +261,9 @@ public sealed partial class MainWindow : Window
 
     private void UpdateClock()
     {
-        ClockText.Text = DateTime.Now.ToString("HH:mm:ss", CultureInfo.InvariantCulture);
+        var clock = DateTime.Now.ToString("HH:mm:ss", CultureInfo.InvariantCulture);
+        ClockText.Text = clock;
+        TrayClock.Text = clock;
         DateText.Text = DateTime.Now.ToString("ddd dd.MM", CultureInfo.InvariantCulture);
     }
 
@@ -548,6 +561,8 @@ public sealed partial class MainWindow : Window
         var volumesReady = StateReady("Volumes/Status.config");
         GraphicsDot.Foreground = new SolidColorBrush(Color.Parse(graphicsReady ? "#9ED8C6" : "#668AB9"));
         VolumesDot.Foreground = new SolidColorBrush(Color.Parse(volumesReady ? "#9ED8C6" : "#668AB9"));
+        TrayGraphicsDot.Foreground = GraphicsDot.Foreground;
+        TrayVolumesDot.Foreground = VolumesDot.Foreground;
         StateLines.Text = HasProcfs
             ? $"MWM {(graphicsReady ? "ready" : "down")}\n" +
               $"Volumes {(volumesReady ? "mounted" : "none")}\n" +
@@ -1554,22 +1569,42 @@ public sealed partial class MainWindow : Window
     private bool _consoleOpen;
     private bool _consoleDragging;
     private double _consoleDragStartY;
+    private Transitions? _consoleSlide;
 
-    private void SetConsoleOffset(double offset) =>
-        ((TranslateTransform)ConsoleLayer.RenderTransform!).Y = offset;
+    private TranslateTransform ConsoleTransform => (TranslateTransform)ConsoleLayer.RenderTransform!;
+
+    private void SetConsoleOffset(double offset) => ConsoleTransform.Y = offset;
+
+    private void AnimateConsole(double target, bool hideAfter)
+    {
+        ConsoleTransform.Transitions = _consoleSlide;
+        SetConsoleOffset(target);
+        if (hideAfter)
+        {
+            DispatcherTimer.RunOnce(() =>
+            {
+                if (!_consoleOpen)
+                {
+                    ConsoleLayer.IsVisible = false;
+                }
+            }, TimeSpan.FromMilliseconds(300));
+        }
+    }
 
     private void ToggleConsole()
     {
         if (_consoleOpen)
         {
             _consoleOpen = false;
-            ConsoleLayer.IsVisible = false;
+            AnimateConsole(-RootLayout.Bounds.Height, hideAfter: true);
         }
         else
         {
             _consoleOpen = true;
+            ConsoleTransform.Transitions = null;
+            SetConsoleOffset(-RootLayout.Bounds.Height);
             ConsoleLayer.IsVisible = true;
-            SetConsoleOffset(0);
+            AnimateConsole(0, hideAfter: false);
             ConsolePrompt.Text = $"root@{HostName()}:{_currentPath}#";
             ConsoleInput.Focus();
         }
@@ -1595,17 +1630,17 @@ public sealed partial class MainWindow : Window
 
         _consoleDragging = false;
         var pulled = e.GetPosition(RootLayout).Y - _consoleDragStartY;
-        if (pulled > RootLayout.Bounds.Height * 0.25)
+        if (pulled > RootLayout.Bounds.Height * 0.2)
         {
             _consoleOpen = true;
-            SetConsoleOffset(0);
+            AnimateConsole(0, hideAfter: false);
             ConsolePrompt.Text = $"root@{HostName()}:{_currentPath}#";
             ConsoleInput.Focus();
         }
         else
         {
             _consoleOpen = false;
-            ConsoleLayer.IsVisible = false;
+            AnimateConsole(-RootLayout.Bounds.Height, hideAfter: true);
         }
     }
 
@@ -1641,11 +1676,12 @@ public sealed partial class MainWindow : Window
         if (!_consoleOpen)
         {
             var position = e.GetPosition(RootLayout);
-            if (position.Y <= 12 && Math.Abs(position.X - RootLayout.Bounds.Width / 2) <
-                RootLayout.Bounds.Width * 0.18)
+            if (position.Y <= 18 && Math.Abs(position.X - RootLayout.Bounds.Width / 2) <
+                RootLayout.Bounds.Width * 0.22)
             {
                 _consoleDragging = true;
                 _consoleDragStartY = position.Y;
+                ConsoleTransform.Transitions = null;
                 ConsoleLayer.IsVisible = true;
                 SetConsoleOffset(-RootLayout.Bounds.Height);
                 e.Handled = true;

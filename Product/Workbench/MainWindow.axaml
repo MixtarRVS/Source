@@ -487,7 +487,7 @@
       </Canvas>
 
       <!-- HUD -->
-      <Border x:Name="Hud" Height="40" VerticalAlignment="Top" ZIndex="100"
+      <Border x:Name="Hud" IsVisible="False" Height="40" VerticalAlignment="Top" ZIndex="100"
               Background="#F5061125" BorderBrush="#484796FF" BorderThickness="0,0,0,1">
         <Grid ColumnDefinitions="*,Auto" Margin="12,0">
           <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Spacing="8">
@@ -581,6 +581,11 @@
             <Button x:Name="NetworkTask" Classes="task" Tag="NetworkWindow" Content="◇  Network" Click="OnTaskClick" IsVisible="False" />
           </StackPanel>
           <StackPanel Grid.Column="3" Orientation="Horizontal" Spacing="12" VerticalAlignment="Center">
+            <TextBlock x:Name="TrayGraphicsDot" Text="● MWM" Foreground="#6E7F98" FontFamily="Noto Sans Mono" FontSize="10" />
+            <TextBlock x:Name="TrayVolumesDot" Text="● VOL" Foreground="#6E7F98" FontFamily="Noto Sans Mono" FontSize="10" />
+            <Border BorderBrush="#20FFFFFF" BorderThickness="1,0,0,0" Padding="12,0,0,0">
+              <TextBlock x:Name="TrayClock" Text="--:--:--" Foreground="#C4DCFF" FontFamily="Noto Sans Mono" FontSize="10" />
+            </Border>
             <TextBlock x:Name="DateText" Text="" Foreground="#91B7E8" FontFamily="Noto Sans Mono" FontSize="9" />
             <Button Width="30" Height="30" Padding="0" Background="Transparent" BorderThickness="0" Content="⏻" Foreground="#DCEAFF" Click="OnPowerClick" />
           </StackPanel>
