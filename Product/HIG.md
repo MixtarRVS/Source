@@ -169,6 +169,23 @@ zmianę TUTAJ (commit w tym pliku), nigdy wartość ad-hoc w kodzie.
   shaderowej pod konsolą (Aurora aktywuje się razem z warstwą)
 - [ ] tło konsoli = aktywna tapeta shaderowa (po GLES2)
 
+### Pasek tytułu wg Mixtar-Studio (WZORZEC OBOWIĄZUJĄCY)
+Źródło: C:/Users/V/source/repos/Mixtar-Studio/Studio/dark_plex_aero_vs_faux_aero.html
+(iteracja QML Mixtara). Przenieść CAŁY górny pasek: wygląd i logikę —
+karty w pasku tytułu (ikona+nazwa, przełączanie, dodawanie), pod nim rząd
+nawigacji (strzałki, breadcrumb, szukajka), przyciski minimalizuj/maksymalizuj/
+zamknij w stylu z tego pliku (cienkie glify, czyste prostokąty, czerwony
+hover na zamknięciu). Obecne przyciski wyglądają niepoważnie — do wymiany
+zgodnie z tym wzorcem.
+- [ ] port paska tytułu z kartami (wygląd+logika) do Workbencha
+
+### Bugi zgłoszone 18.07 (naprawiać w tej kolejności)
+- [ ] gest W GÓRĘ nie zamyka pełnoekranowej konsoli (ma domykać jak w HTML)
+- [ ] menu Start nie ma zmienianego rozmiaru (HIG wymaga resize wszystkiego)
+- [x] okna nie dały się przesunąć wyżej niż ~40px (stary limit po HUD) — limit 8px
+- [x] uchwyt konsoli widoczny od razu po najechaniu — ma być jak w HTML
+      (pojawia się dopiero podczas przeciągania)
+
 ### Zgodność i ergonomia (runda po uwagach 18.07)
 - [ ] PEŁNY przegląd centrowania/metryk: każdy panel na siatce 4px, fonty
       13/12/11 (min 10), kontrolki 32/28, teksty wycentrowane w pionie

@@ -80,6 +80,10 @@ public sealed partial class MainWindow : Window
             window.PointerReleased += OnWindowResizeReleased;
         }
 
+        StartMenu.PointerPressed += OnStartMenuResizePressed;
+        StartMenu.PointerMoved += OnStartMenuResizeMoved;
+        StartMenu.PointerReleased += OnStartMenuResizeReleased;
+
         RootLayout.PointerMoved += OnConsoleDragMoved;
         RootLayout.PointerReleased += OnConsoleDragReleased;
         ConsoleLayer.RenderTransform = new TranslateTransform(0, 0);
@@ -850,8 +854,8 @@ public sealed partial class MainWindow : Window
         var point = e.GetPosition(DesktopCanvas);
         var x = Math.Clamp(_dragWindowOrigin.X + point.X - _dragPointerOrigin.X, 0,
             Math.Max(0, bounds.Width - _dragWindow.Bounds.Width));
-        var y = Math.Clamp(_dragWindowOrigin.Y + point.Y - _dragPointerOrigin.Y, 40,
-            Math.Max(40, bounds.Height - 48 - 34));
+        var y = Math.Clamp(_dragWindowOrigin.Y + point.Y - _dragPointerOrigin.Y, 8,
+            Math.Max(8, bounds.Height - 48 - 34));
         Canvas.SetLeft(_dragWindow, x);
         Canvas.SetTop(_dragWindow, y);
     }
@@ -1564,10 +1568,77 @@ public sealed partial class MainWindow : Window
 
     private void OnFileSearchChanged(object? sender, TextChangedEventArgs e) => RenderFiles();
 
+    // HIG: the Start menu resizes too (right edge = width, top edge = height;
+    // bottom-anchored, so height growth extends upward).
+    private int _startMenuResize;
+    private Point _startMenuPointer;
+    private Size _startMenuSize;
+
+    private void OnStartMenuResizePressed(object? sender, PointerPressedEventArgs e)
+    {
+        var position = e.GetPosition(StartMenu);
+        var flags = 0;
+        if (position.X >= StartMenu.Bounds.Width - 8) flags |= 1;
+        if (position.Y <= 8) flags |= 2;
+        if (flags == 0 || !e.GetCurrentPoint(StartMenu).Properties.IsLeftButtonPressed)
+        {
+            return;
+        }
+
+        _startMenuResize = flags;
+        _startMenuPointer = e.GetPosition(RootLayout);
+        _startMenuSize = new Size(StartMenu.Bounds.Width, StartMenu.Bounds.Height);
+        e.Pointer.Capture(StartMenu);
+        e.Handled = true;
+    }
+
+    private void OnStartMenuResizeMoved(object? sender, PointerEventArgs e)
+    {
+        if (_startMenuResize == 0)
+        {
+            var probe = e.GetPosition(StartMenu);
+            var hover = 0;
+            if (probe.X >= StartMenu.Bounds.Width - 8) hover |= 1;
+            if (probe.Y <= 8) hover |= 2;
+            StartMenu.Cursor = new Cursor(hover switch
+            {
+                1 => StandardCursorType.SizeWestEast,
+                2 => StandardCursorType.SizeNorthSouth,
+                3 => StandardCursorType.TopRightCorner,
+                _ => StandardCursorType.Arrow
+            });
+            return;
+        }
+
+        var delta = e.GetPosition(RootLayout) - _startMenuPointer;
+        if ((_startMenuResize & 1) != 0)
+        {
+            StartMenu.Width = Math.Clamp(_startMenuSize.Width + delta.X, 320, RootLayout.Bounds.Width - 20);
+        }
+
+        if ((_startMenuResize & 2) != 0)
+        {
+            StartMenu.Height = Math.Clamp(_startMenuSize.Height - delta.Y, 260, RootLayout.Bounds.Height - 80);
+        }
+    }
+
+    private void OnStartMenuResizeReleased(object? sender, PointerReleasedEventArgs e)
+    {
+        if (_startMenuResize == 0)
+        {
+            return;
+        }
+
+        e.Pointer.Capture(null);
+        _startMenuResize = 0;
+        e.Handled = true;
+    }
+
     // System console layer (first-concept screen manager): drag down from the
     // top-center edge of the desktop, or F12. Escape closes.
     private bool _consoleOpen;
     private bool _consoleDragging;
+    private bool _consoleClosingDrag;
     private double _consoleDragStartY;
     private Transitions? _consoleSlide;
 
@@ -1614,14 +1685,15 @@ public sealed partial class MainWindow : Window
     {
         if (!_consoleDragging)
         {
-            var position = e.GetPosition(RootLayout);
-            ConsoleGrip.IsVisible = !_consoleOpen && position.Y <= 18 &&
-                Math.Abs(position.X - RootLayout.Bounds.Width / 2) < RootLayout.Bounds.Width * 0.22;
             return;
         }
 
+        ConsoleGrip.IsVisible = false;
+
         var offset = e.GetPosition(RootLayout).Y - _consoleDragStartY;
-        SetConsoleOffset(Math.Min(0, -RootLayout.Bounds.Height + Math.Max(0, offset)));
+        SetConsoleOffset(_consoleClosingDrag
+            ? Math.Min(0, offset)
+            : Math.Min(0, -RootLayout.Bounds.Height + Math.Max(0, offset)));
     }
 
     private void OnConsoleDragReleased(object? sender, PointerReleasedEventArgs e)
@@ -1633,6 +1705,22 @@ public sealed partial class MainWindow : Window
 
         _consoleDragging = false;
         var pulled = e.GetPosition(RootLayout).Y - _consoleDragStartY;
+        if (_consoleClosingDrag)
+        {
+            _consoleClosingDrag = false;
+            if (-pulled > RootLayout.Bounds.Height * 0.15)
+            {
+                _consoleOpen = false;
+                AnimateConsole(-RootLayout.Bounds.Height, hideAfter: true);
+            }
+            else
+            {
+                AnimateConsole(0, hideAfter: false);
+            }
+
+            return;
+        }
+
         if (pulled > RootLayout.Bounds.Height * 0.2)
         {
             _consoleOpen = true;
@@ -1676,7 +1764,20 @@ public sealed partial class MainWindow : Window
             return;
         }
 
-        if (!_consoleOpen)
+        if (_consoleOpen)
+        {
+            var closePosition = e.GetPosition(RootLayout);
+            if (closePosition.Y >= RootLayout.Bounds.Height - 26)
+            {
+                _consoleDragging = true;
+                _consoleClosingDrag = true;
+                _consoleDragStartY = closePosition.Y;
+                ConsoleTransform.Transitions = null;
+                e.Handled = true;
+                return;
+            }
+        }
+        else
         {
             var position = e.GetPosition(RootLayout);
             if (position.Y <= 18 && Math.Abs(position.X - RootLayout.Bounds.Width / 2) <
