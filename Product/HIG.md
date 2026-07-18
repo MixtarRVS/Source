@@ -177,20 +177,29 @@ nawigacji (strzałki, breadcrumb, szukajka), przyciski minimalizuj/maksymalizuj/
 zamknij w stylu z tego pliku (cienkie glify, czyste prostokąty, czerwony
 hover na zamknięciu). Obecne przyciski wyglądają niepoważnie — do wymiany
 zgodnie z tym wzorcem.
-- [ ] port paska tytułu z kartami (wygląd+logika) do Workbencha
+- [x] przyciski – □ ✕ w stylu Plex (46px, gradienty hover, czerwone zamknięcie)
+- [x] szklana krawędź (inset highlight) + miękki cień okien
+- [x] tytuły sans 12, teksty list 11-12, kontrast stref (sidebar ciemniejszy)
+- [ ] port paska tytułu z KARTAMI (wygląd+logika) do Workbencha — największy
+      brakujący element względem referencji
+- [ ] ikony w kartach/sidebarze
 
-### Bugi zgłoszone 18.07 (naprawiać w tej kolejności)
-- [ ] gest W GÓRĘ nie zamyka pełnoekranowej konsoli (ma domykać jak w HTML)
-- [ ] menu Start nie ma zmienianego rozmiaru (HIG wymaga resize wszystkiego)
+### Bugi zgłoszone 18.07
+- [x] gest W GÓRĘ zamyka pełnoekranową konsolę (próg 15%, animowane)
+- [x] menu Start ma resize (prawa/górna krawędź, rośnie w górę)
+- [x] menu Start zamyka się też przy kliknięciach w przyciski
+      (AddHandler z handledEventsToo — Button połyka PointerPressed)
+- [x] motyw ujednolicony do grafitu Plex (akcenty niebieskie tylko interakcje)
 - [x] okna nie dały się przesunąć wyżej niż ~40px (stary limit po HUD) — limit 8px
 - [x] uchwyt konsoli widoczny od razu po najechaniu — ma być jak w HTML
       (pojawia się dopiero podczas przeciągania)
 
 ### Zgodność i ergonomia (runda po uwagach 18.07)
 - [ ] PEŁNY przegląd centrowania/metryk: każdy panel na siatce 4px, fonty
-      13/12/11 (min 10), kontrolki 32/28, teksty wycentrowane w pionie
-- [ ] widoczny uchwyt gestu konsoli przy najechaniu na górną krawędź
-- [ ] podgląd Windows: przełącznik fullscreen/okno (F11) do wygodnych testów
+      docelowo 13/12/11 (min 10; listy już 11-12), kontrolki 32/28, teksty
+      wycentrowane w pionie — częściowo zrobione, dokończyć panel po panelu
+- [x] uchwyt gestu konsoli z płynną tranzycją (0.2s), znika po otwarciu
+- [x] podgląd Windows: przełącznik fullscreen/okno (F11)
 
 ### Boot / infrastruktura
 - [ ] sekwencja bootowania z logiem czasów (splash)

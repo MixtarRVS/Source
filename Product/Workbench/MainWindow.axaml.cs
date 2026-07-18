@@ -84,6 +84,10 @@ public sealed partial class MainWindow : Window
         StartMenu.PointerMoved += OnStartMenuResizeMoved;
         StartMenu.PointerReleased += OnStartMenuResizeReleased;
 
+        // Buttons mark PointerPressed as handled, so light dismiss must see
+        // handled events too - otherwise taskbar/toolbar clicks keep menus open.
+        RootLayout.AddHandler(PointerPressedEvent, OnGlobalPointerPressed,
+            RoutingStrategies.Bubble, handledEventsToo: true);
         RootLayout.PointerMoved += OnConsoleDragMoved;
         RootLayout.PointerReleased += OnConsoleDragReleased;
         ConsoleLayer.RenderTransform = new TranslateTransform(0, 0);
@@ -1771,7 +1775,7 @@ public sealed partial class MainWindow : Window
             return;
         }
 
-        if (_consoleOpen)
+        if (_consoleOpen && !e.Handled)
         {
             var closePosition = e.GetPosition(RootLayout);
             if (closePosition.Y >= RootLayout.Bounds.Height - 26)
@@ -1784,10 +1788,11 @@ public sealed partial class MainWindow : Window
                 return;
             }
         }
-        else
+        else if (!_consoleOpen)
         {
             var position = e.GetPosition(RootLayout);
-            if (position.Y <= 18 && Math.Abs(position.X - RootLayout.Bounds.Width / 2) <
+            if (!e.Handled && position.Y <= 18 &&
+                Math.Abs(position.X - RootLayout.Bounds.Width / 2) <
                 RootLayout.Bounds.Width * 0.22)
             {
                 _consoleDragging = true;
