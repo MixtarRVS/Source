@@ -106,6 +106,7 @@
       <Setter Property="CornerRadius" Value="5" />
       <Setter Property="Foreground" Value="{StaticResource TextBrush}" />
       <Setter Property="FontSize" Value="11" />
+      <Setter Property="VerticalContentAlignment" Value="Center" />
     </Style>
     <Style Selector="Button.tool:pointerover"><Setter Property="BorderBrush" Value="{StaticResource AccentBrush}" /></Style>
     <Style Selector="Button.tool.danger"><Setter Property="BorderBrush" Value="#B0FF5C7B" /></Style>
@@ -118,6 +119,7 @@
       <Setter Property="CornerRadius" Value="4" />
       <Setter Property="Foreground" Value="#C2DBFF" />
       <Setter Property="FontSize" Value="11" />
+      <Setter Property="VerticalContentAlignment" Value="Center" />
     </Style>
     <Style Selector="Button.tree:pointerover"><Setter Property="Background" Value="#293A7EE6" /></Style>
     <Style Selector="Button.column-header">
@@ -128,6 +130,7 @@
       <Setter Property="Foreground" Value="#8BBCFF" />
       <Setter Property="FontFamily" Value="Noto Sans Mono" />
       <Setter Property="FontSize" Value="9" />
+      <Setter Property="VerticalContentAlignment" Value="Center" />
     </Style>
     <Style Selector="Button.column-header:pointerover"><Setter Property="Foreground" Value="White" /></Style>
     <Style Selector="Button.crumb">
@@ -138,6 +141,7 @@
       <Setter Property="Foreground" Value="#C2DBFF" />
       <Setter Property="FontFamily" Value="Noto Sans Mono" />
       <Setter Property="FontSize" Value="10" />
+      <Setter Property="VerticalContentAlignment" Value="Center" />
     </Style>
     <Style Selector="Button.crumb:pointerover">
       <Setter Property="Background" Value="#33417EE6" />
@@ -148,6 +152,7 @@
       <Setter Property="MinWidth" Value="92" />
       <Setter Property="Padding" Value="10,0" />
       <Setter Property="HorizontalContentAlignment" Value="Left" />
+      <Setter Property="VerticalContentAlignment" Value="Center" />
       <Setter Property="Background" Value="Transparent" />
       <Setter Property="BorderBrush" Value="Transparent" />
       <Setter Property="BorderThickness" Value="1" />
@@ -170,6 +175,8 @@
       <Setter Property="CornerRadius" Value="7" />
       <Setter Property="Foreground" Value="White" />
       <Setter Property="FontWeight" Value="Bold" />
+      <Setter Property="VerticalContentAlignment" Value="Center" />
+      <Setter Property="HorizontalContentAlignment" Value="Center" />
     </Style>
     <Style Selector="Button.hud-item">
       <Setter Property="Background" Value="Transparent" />
@@ -177,6 +184,7 @@
       <Setter Property="Padding" Value="8,0" />
       <Setter Property="Foreground" Value="{StaticResource SoftBrush}" />
       <Setter Property="FontSize" Value="11" />
+      <Setter Property="VerticalContentAlignment" Value="Center" />
     </Style>
     <Style Selector="Button.hud-item:pointerover"><Setter Property="Foreground" Value="White" /></Style>
     <Style Selector="Button.map-node">
