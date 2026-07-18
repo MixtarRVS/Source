@@ -7,24 +7,26 @@
     Height="800"
     MinWidth="800"
     MinHeight="600"
-    Background="#020713"
-    Foreground="#DCEAFF"
+    Background="#0B1220"
+    Foreground="#E8EEF7"
     FontFamily="Noto Sans"
     WindowStartupLocation="CenterScreen"
     WindowDecorations="None"
     ExtendClientAreaToDecorationsHint="True"
     KeyDown="OnWindowKeyDown">
 
+  <!-- HIG tokens: layered dark surfaces (bg < panel < card), neutral chrome
+       text, accent reserved for interaction. -->
   <Window.Resources>
-    <SolidColorBrush x:Key="PanelBrush" Color="#E605142C" />
-    <SolidColorBrush x:Key="PanelSoftBrush" Color="#D9081D3D" />
-    <SolidColorBrush x:Key="StrokeBrush" Color="#574897FF" />
-    <SolidColorBrush x:Key="StrokeStrongBrush" Color="#A357A4FF" />
+    <SolidColorBrush x:Key="PanelBrush" Color="#F5111B2E" />
+    <SolidColorBrush x:Key="PanelSoftBrush" Color="#F016233A" />
+    <SolidColorBrush x:Key="StrokeBrush" Color="#2C3D5C" />
+    <SolidColorBrush x:Key="StrokeStrongBrush" Color="#4C6FA8" />
     <SolidColorBrush x:Key="AccentBrush" Color="#18B9FF" />
-    <SolidColorBrush x:Key="TextBrush" Color="#DCEAFF" />
-    <SolidColorBrush x:Key="SoftBrush" Color="#91B7E8" />
-    <SolidColorBrush x:Key="MutedBrush" Color="#668AB9" />
-    <SolidColorBrush x:Key="MonoBrush" Color="#9FC5F4" />
+    <SolidColorBrush x:Key="TextBrush" Color="#E8EEF7" />
+    <SolidColorBrush x:Key="SoftBrush" Color="#A7B8CF" />
+    <SolidColorBrush x:Key="MutedBrush" Color="#6E7F98" />
+    <SolidColorBrush x:Key="MonoBrush" Color="#B9CBE4" />
   </Window.Resources>
 
   <Window.Styles>
@@ -204,7 +206,7 @@
 
   <LayoutTransformControl x:Name="ScaleHost">
     <Grid x:Name="RootLayout" ClipToBounds="True" SizeChanged="OnRootSizeChanged" PointerPressed="OnGlobalPointerPressed">
-      <Border Background="#020713" />
+      <Border Background="#0B1220" />
 
       <Ellipse Width="900" Height="620" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,-330,-120,0" IsHitTestVisible="False">
         <Ellipse.Fill>
