@@ -623,14 +623,14 @@ public sealed partial class MainWindow : Window
                     {
                         Text = name.Length > 22 ? name[..22] : name,
                         FontFamily = new FontFamily("Noto Sans Mono"),
-                        FontSize = 9,
+                        FontSize = 11,
                         Foreground = new SolidColorBrush(Color.Parse("#C6DCFA"))
                     },
                     WithColumn(new TextBlock
                     {
                         Text = rss > 0 ? FormatSize(rss) : "",
                         FontFamily = new FontFamily("Noto Sans Mono"),
-                        FontSize = 9,
+                        FontSize = 11,
                         Foreground = new SolidColorBrush(Color.Parse("#7FAEE6"))
                     }, 1)
                 }
@@ -1128,7 +1128,7 @@ public sealed partial class MainWindow : Window
         Margin = new Thickness(7, 6, 7, 3),
         Foreground = new SolidColorBrush(Color.Parse("#7EAFE8")),
         FontFamily = new FontFamily("Noto Sans Mono"),
-        FontSize = 9,
+        FontSize = 11,
         FontWeight = FontWeight.Bold
     };
 
@@ -1518,7 +1518,7 @@ public sealed partial class MainWindow : Window
         var block = new TextBlock
         {
             Text = text,
-            FontSize = 9,
+            FontSize = 11,
             Foreground = new SolidColorBrush(Color.Parse(color)),
             VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center,
             TextTrimming = TextTrimming.CharacterEllipsis

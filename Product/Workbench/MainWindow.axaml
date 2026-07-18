@@ -36,11 +36,11 @@
       <Setter Property="BorderThickness" Value="1" />
       <Setter Property="CornerRadius" Value="9" />
       <Setter Property="ClipToBounds" Value="True" />
-      <Setter Property="BoxShadow" Value="0 22 56 0 #B8000000" />
+      <Setter Property="BoxShadow" Value="inset 0 1 1 0 #1AFFFFFF, 0 15 35 0 #99000000" />
     </Style>
     <Style Selector="Border.desktop-window.active">
       <Setter Property="BorderBrush" Value="{StaticResource StrokeStrongBrush}" />
-      <Setter Property="BoxShadow" Value="0 28 68 0 #D0000000, 0 0 16 0 #302E78FF" />
+      <Setter Property="BoxShadow" Value="inset 0 1 1 0 #26FFFFFF, 0 18 42 0 #B3000000" />
     </Style>
     <Style Selector="Border.titlebar">
       <Setter Property="Height" Value="34" />
@@ -50,9 +50,9 @@
       <Setter Property="Padding" Value="12,0,0,0" />
     </Style>
     <Style Selector="TextBlock.window-title">
-      <Setter Property="Foreground" Value="#8FC1FF" />
-      <Setter Property="FontFamily" Value="Noto Sans Mono" />
-      <Setter Property="FontSize" Value="11" />
+      <Setter Property="Foreground" Value="#CFD8E6" />
+      <Setter Property="FontFamily" Value="Noto Sans" />
+      <Setter Property="FontSize" Value="12" />
       <Setter Property="FontWeight" Value="Bold" />
       <Setter Property="LetterSpacing" Value="0.6" />
       <Setter Property="VerticalAlignment" Value="Center" />
@@ -324,7 +324,7 @@
                          HorizontalAlignment="Right" VerticalAlignment="Center" FontFamily="Noto Sans Mono" FontSize="9" />
             </Grid>
             <Grid Grid.Row="3" ColumnDefinitions="170,*">
-              <Border BorderBrush="#344B97FF" BorderThickness="0,1,1,0" Background="#281A1C20" Padding="8,6">
+              <Border BorderBrush="#344B97FF" BorderThickness="0,1,1,0" Background="#3D0F1114" Padding="8,6">
                 <ScrollViewer>
                   <StackPanel x:Name="TreePanel" Spacing="1" />
                 </ScrollViewer>
