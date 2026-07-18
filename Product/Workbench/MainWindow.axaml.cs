@@ -706,11 +706,26 @@ public sealed partial class MainWindow : Window
         }
     }
 
+    // HIG: always-on-top windows stay above everything after each activation.
+    private readonly HashSet<Border> _alwaysOnTop = new();
+
+    private void ReassertAlwaysOnTop()
+    {
+        foreach (var pinned in _alwaysOnTop)
+        {
+            if (pinned.IsVisible)
+            {
+                pinned.ZIndex = ++_topZ;
+            }
+        }
+    }
+
     private void ActivateWindow(Border window)
     {
         RecycleZIndices();
         window.IsVisible = true;
         window.ZIndex = ++_topZ;
+        ReassertAlwaysOnTop();
 
         foreach (var item in DesktopWindows())
         {
@@ -1065,9 +1080,26 @@ public sealed partial class MainWindow : Window
         {
             if (task.Tag is string name) OnDesktopClose(new Button { Tag = name }, new RoutedEventArgs());
         };
+        var pin = new MenuItem { Header = "Always on top" };
+        pin.Click += (_, _) =>
+        {
+            if (task.Tag is not string name || WindowByName(name) is not { } window)
+            {
+                return;
+            }
+
+            if (!_alwaysOnTop.Remove(window))
+            {
+                _alwaysOnTop.Add(window);
+            }
+
+            pin.Header = _alwaysOnTop.Contains(window) ? "✓ Always on top" : "Always on top";
+            ReassertAlwaysOnTop();
+        };
         flyout.Items.Add(show);
         flyout.Items.Add(minimize);
         flyout.Items.Add(close);
+        flyout.Items.Add(pin);
         task.ContextFlyout = flyout;
     }
 
@@ -1597,6 +1629,7 @@ public sealed partial class MainWindow : Window
             row.Child = grid;
 
             var captured = entry;
+            row.ContextFlyout = BuildFileContextMenu(captured);
             row.PointerPressed += (_, args) =>
             {
                 if (args.ClickCount >= 2)
@@ -1627,6 +1660,50 @@ public sealed partial class MainWindow : Window
         }
 
         ItemCount.Text = $"{entries.Length} item{(entries.Length == 1 ? string.Empty : "s")}";
+    }
+
+    // HIG: file rows carry a context menu (open, copy path, delete).
+    private MenuFlyout BuildFileContextMenu(Listing entry)
+    {
+        var flyout = new MenuFlyout();
+        var open = new MenuItem { Header = entry.IsDirectory ? "Open" : "View" };
+        open.Click += (_, _) =>
+        {
+            if (entry.IsDirectory)
+            {
+                Navigate(entry.FullPath, recordHistory: true);
+            }
+            else
+            {
+                OpenViewer(entry.FullPath);
+            }
+        };
+        var copyPath = new MenuItem { Header = "Copy path" };
+        copyPath.Click += async (_, _) =>
+        {
+            try
+            {
+                if (Clipboard is { } clipboard)
+                {
+                    var transfer = new DataTransfer();
+                    transfer.Add(DataTransferItem.CreateText(entry.FullPath));
+                    await clipboard.SetDataAsync(transfer);
+                }
+            }
+            catch
+            {
+            }
+        };
+        var delete = new MenuItem { Header = "Delete" };
+        delete.Click += (_, _) =>
+        {
+            _selectedPath = entry.FullPath;
+            DeleteSelected();
+        };
+        flyout.Items.Add(open);
+        flyout.Items.Add(copyPath);
+        flyout.Items.Add(delete);
+        return flyout;
     }
 
     private void CreateNewFolder()
