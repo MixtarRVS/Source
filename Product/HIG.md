@@ -49,3 +49,21 @@ zmianę TUTAJ (commit w tym pliku), nigdy wartość ad-hoc w kodzie.
 ## Dane
 - Zero atrap: każda liczba/nazwa na ekranie pochodzi z systemu albo elementu
   nie ma. Elementy "preview" są jawnie oznaczone banerem.
+
+## Backlog funkcjonalny Workbencha
+Źródło: pierwszy koncept pulpitu (FreeBSD-Mixtar-Theme/desktop-env/client,
+~95 funkcji w 21 kategoriach — pełny spis w js/ tamtego repo). Kolejność
+portowania:
+1. Snapping okien (krawędzie+narożniki) z podglądem; 2. resize okien w 8
+kierunkach (wymóg HIG wyżej); 3. karty w oknach; 4. persistencja pozycji
+okien i układu; 5. skróty klawiszowe konfigurowalne z TOML; 6. Spotlight
+(apki+pliki); 7. menedżer plików: resize/reorder kolumn, gumka zaznaczania,
+podgląd obrazów, kopiuj/wklej/rename/właściwości, szablony nowych plików;
+8. menedżer zadań (procesy+kill, CPU/RAM); 9. dock: przypinanie i
+drag-reorder; 10. tryb wydajności (globalne wyłączenie efektów).
+Dalej: Alt+Tab, pokaż pulpit, ikony pulpitu z siatką i zapisem, toasty
+powiadomień, widget pogody/kalendarza, panele sieci/baterii, menu zasilania
+z overlayami, ekran logowania (spec: login.html tamtego repo), Guru
+Meditation jako ekran błędu, sekwencja bootowania z logiem czasów,
+odkrywanie i launch aplikacji (APX zamiast .desktop), tapeta Aurora
+(po przejściu na GLES2), tryb mobilny/launcher — na końcu.
