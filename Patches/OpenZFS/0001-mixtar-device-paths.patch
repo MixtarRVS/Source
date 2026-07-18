@@ -1,0 +1,298 @@
+diff --git a/include/sys/fs/zfs.h b/include/sys/fs/zfs.h
+--- a/include/sys/fs/zfs.h
++++ b/include/sys/fs/zfs.h
+@@ -1419,13 +1419,13 @@
+ 
+ #define	ZVOL_DRIVER	"zvol"
+ #define	ZFS_DRIVER	"zfs"
+-#define	ZFS_DEV		"/dev/zfs"
+-#define	ZFS_DEVDIR	"/dev"
++#define	ZFS_DEV		"/System/Devices/zfs"
++#define	ZFS_DEVDIR	"/System/Devices"
+ 
+ #define	ZFS_SUPER_MAGIC	0x2fc12fc1
+ 
+ /* general zvol path */
+-#define	ZVOL_DIR		"/dev/zvol/"
++#define	ZVOL_DIR		"/System/Devices/zvol/"
+ 
+ #define	ZVOL_MAJOR		230
+ #define	ZVOL_MINOR_BITS		4
+diff --git a/include/libzutil.h b/include/libzutil.h
+--- a/include/libzutil.h
++++ b/include/libzutil.h
+@@ -114,9 +114,9 @@
+ /*
+  * Default device paths
+  */
+-#define	DISK_ROOT	"/dev"
+-#define	UDISK_ROOT	"/dev/disk"
+-#define	ZVOL_ROOT	"/dev/zvol"
++#define	DISK_ROOT	"/System/Devices"
++#define	UDISK_ROOT	"/System/Devices/disk"
++#define	ZVOL_ROOT	"/System/Devices/zvol"
+ 
+ _LIBZUTIL_H int zfs_append_partition(char *path, size_t max_len);
+ _LIBZUTIL_H int zfs_resolve_shortname(const char *name, char *path,
+diff --git a/include/sys/zfs_sysfs.h b/include/sys/zfs_sysfs.h
+--- a/include/sys/zfs_sysfs.h
++++ b/include/sys/zfs_sysfs.h
+@@ -50,8 +50,8 @@
+ #define	ZFS_SYSFS_KERNEL_FEATURES	"features.kernel"
+ #define	ZFS_SYSFS_POOL_FEATURES		"features.pool"
+ 
+-#define	ZFS_SYSFS_DIR			"/sys/module/zfs"
++#define	ZFS_SYSFS_DIR			"/System/Hardware/module/zfs"
+ /* Alternate location when ZFS is built as part of the kernel (rare) */
+-#define	ZFS_SYSFS_ALT_DIR		"/sys/fs/zfs"
++#define	ZFS_SYSFS_ALT_DIR		"/System/Hardware/fs/zfs"
+ 
+ #endif	/* _SYS_ZFS_SYSFS_H */
+diff --git a/include/os/linux/spl/sys/systeminfo.h b/include/os/linux/spl/sys/systeminfo.h
+--- a/include/os/linux/spl/sys/systeminfo.h
++++ b/include/os/linux/spl/sys/systeminfo.h
+@@ -30,7 +30,7 @@
+ 						/* hostid string */
+ 
+ /* Supplemental definitions for Linux. */
+-#define	HW_HOSTID_PATH		"/etc/hostid"   /* binary configuration file */
++#define	HW_HOSTID_PATH		"/System/Configuration/OpenZFS/hostid"   /* binary configuration file */
+ #define	HW_HOSTID_MASK		0xFFFFFFFF 	/* significant hostid bits */
+ 
+ #endif /* SPL_SYSTEMINFO_H */
+diff --git a/lib/libzutil/os/linux/zutil_device_path_os.c b/lib/libzutil/os/linux/zutil_device_path_os.c
+--- a/lib/libzutil/os/linux/zutil_device_path_os.c
++++ b/lib/libzutil/os/linux/zutil_device_path_os.c
+@@ -203,7 +203,7 @@
+  *
+  * For example:
+  *     dev:            "nvme0n1"
+- *     returns:        "/sys/bus/pci/slots/0"
++ *     returns:        "/System/Hardware/bus/pci/slots/0"
+  *
+  * 'dev' must be an NVMe device.
+  *
+@@ -229,7 +229,7 @@
+ 	if (strncmp("nvme", dev_name, 4) != 0)
+ 		return (NULL);
+ 
+-	(void) snprintf(buf, sizeof (buf), "/sys/block/%s/device/address",
++	(void) snprintf(buf, sizeof (buf), "/System/Hardware/block/%s/device/address",
+ 	    dev_name);
+ 
+ 	address1 = zfs_read_sysfs_file(buf);
+@@ -245,7 +245,7 @@
+ 	if (tmp2 != NULL)
+ 		*tmp2 = '\0';
+ 
+-	dp = opendir("/sys/bus/pci/slots/");
++	dp = opendir("/System/Hardware/bus/pci/slots/");
+ 	if (dp == NULL) {
+ 		free(address1);
+ 		return (NULL);
+@@ -258,13 +258,13 @@
+ 		/*
+ 		 * We only care about directory names that are a single number.
+ 		 * Sometimes there's other directories like
+-		 * "/sys/bus/pci/slots/0-3/" in there - skip those.
++		 * "/System/Hardware/bus/pci/slots/0-3/" in there - skip those.
+ 		 */
+ 		if (!zfs_isnumber(ep->d_name))
+ 			continue;
+ 
+ 		(void) snprintf(buf, sizeof (buf),
+-		    "/sys/bus/pci/slots/%s/address", ep->d_name);
++		    "/System/Hardware/bus/pci/slots/%s/address", ep->d_name);
+ 
+ 		address2 = zfs_read_sysfs_file(buf);
+ 		if (!address2)
+@@ -273,7 +273,7 @@
+ 		if (strcmp(address1, address2) == 0) {
+ 			/* Addresses match, we're all done */
+ 			free(address2);
+-			if (asprintf(&path, "/sys/bus/pci/slots/%s",
++			if (asprintf(&path, "/System/Hardware/bus/pci/slots/%s",
+ 			    ep->d_name) == -1) {
+ 				continue;
+ 			}
+@@ -295,12 +295,12 @@
+  *
+  * For example, disk "sda" in enclosure slot 1:
+  *     dev_name:       "sda"
+- *     returns:        "/sys/class/enclosure/1:0:3:0/Slot 1"
++ *     returns:        "/System/Hardware/class/enclosure/1:0:3:0/Slot 1"
+  *
+  * Or:
+  *
+  *      dev_name:   "nvme0n1"
+- *      returns:    "/sys/bus/pci/slots/0"
++ *      returns:    "/System/Hardware/bus/pci/slots/0"
+  *
+  * 'dev' must be a non-devicemapper device.
+  *
+@@ -328,7 +328,7 @@
+ 	if (tmp0 != NULL)
+ 		dev_name = tmp0 + 1;    /* +1 since we want the chr after '/' */
+ 
+-	tmpsize = asprintf(&tmp1, "/sys/block/%s/device", dev_name);
++	tmpsize = asprintf(&tmp1, "/System/Hardware/block/%s/device", dev_name);
+ 	if (tmpsize == -1 || tmp1 == NULL) {
+ 		tmp1 = NULL;
+ 		goto end;
+@@ -379,7 +379,7 @@
+ 
+ 		if (path != NULL)
+ 			free(path);
+-		if (asprintf(&path, "/sys/class/%s", tmp3) == -1) {
++		if (asprintf(&path, "/System/Hardware/class/%s", tmp3) == -1) {
+ 			/* If asprintf() fails, 'path' is undefined */
+ 			path = NULL;
+ 			break;
+@@ -452,7 +452,7 @@
+ 	else
+ 		dev_str = tmp;
+ 
+-	if (asprintf(&tmp, "/sys/block/%s/slaves/", dev_str) == -1) {
++	if (asprintf(&tmp, "/System/Hardware/block/%s/slaves/", dev_str) == -1) {
+ 		tmp = NULL;
+ 		goto end;
+ 	}
+diff --git a/lib/libspl/os/linux/zone.c b/lib/libspl/os/linux/zone.c
+--- a/lib/libspl/os/linux/zone.c
++++ b/lib/libspl/os/linux/zone.c
+@@ -40,7 +40,7 @@
+ 	char buf[128] = { '\0' };
+ 	char *cp;
+ 
+-	int c = snprintf(path, sizeof (path), "/proc/self/ns/user");
++	int c = snprintf(path, sizeof (path), "/System/Processes/self/ns/user");
+ 	/* This API doesn't have any error checking... */
+ 	if (c < 0 || c >= sizeof (path))
+ 		return (GLOBAL_ZONEID);
+diff --git a/lib/libspl/os/linux/gethostid.c b/lib/libspl/os/linux/gethostid.c
+--- a/lib/libspl/os/linux/gethostid.c
++++ b/lib/libspl/os/linux/gethostid.c
+@@ -44,7 +44,7 @@
+ 	if (env)
+ 		return (strtoull(env, NULL, 0));
+ 
+-	f = fopen("/proc/sys/kernel/spl/hostid", "re");
++	f = fopen("/System/Processes/sys/kernel/spl/hostid", "re");
+ 	if (!f)
+ 		return (0);
+ 
+@@ -69,7 +69,7 @@
+ 	 * See comments above hostid_read() in the SPL.
+ 	 */
+ 	if (hostid == 0) {
+-		int fd = open("/etc/hostid", O_RDONLY | O_CLOEXEC);
++		int fd = open("/System/Configuration/OpenZFS/hostid", O_RDONLY | O_CLOEXEC);
+ 		if (fd >= 0) {
+ 			if (read(fd, &system_hostid, sizeof (system_hostid))
+ 			    != sizeof (system_hostid))
+diff --git a/lib/libspl/os/linux/getexecname.c b/lib/libspl/os/linux/getexecname.c
+--- a/lib/libspl/os/linux/getexecname.c
++++ b/lib/libspl/os/linux/getexecname.c
+@@ -29,5 +29,5 @@
+ __attribute__((visibility("hidden"))) ssize_t
+ getexecname_impl(char *execname)
+ {
+-	return (readlink("/proc/self/exe", execname, PATH_MAX));
++	return (readlink("/System/Processes/self/exe", execname, PATH_MAX));
+ }
+diff --git a/lib/libspl/include/os/linux/sys/mnttab.h b/lib/libspl/include/os/linux/sys/mnttab.h
+--- a/lib/libspl/include/os/linux/sys/mnttab.h
++++ b/lib/libspl/include/os/linux/sys/mnttab.h
+@@ -40,7 +40,7 @@
+ #undef MNTTAB
+ #endif /* MNTTAB */
+ 
+-#define	MNTTAB		"/proc/self/mounts"
++#define	MNTTAB		"/System/Processes/self/mounts"
+ #define	MNT_LINE_MAX	4108
+ 
+ #define	MNT_TOOLONG	1	/* entry exceeds MNT_LINE_MAX */
+diff --git a/lib/libzfs_core/libzfs_core.c b/lib/libzfs_core/libzfs_core.c
+--- a/lib/libzfs_core/libzfs_core.c
++++ b/lib/libzfs_core/libzfs_core.c
+@@ -655,7 +655,7 @@
+ 	if (max == 0) {
+ 		max = 1048576; /* fs/pipe.c default */
+ 
+-		FILE *procf = fopen("/proc/sys/fs/pipe-max-size", "re");
++		FILE *procf = fopen("/System/Processes/sys/fs/pipe-max-size", "re");
+ 		if (procf != NULL) {
+ 			if (fscanf(procf, "%u", &max) <= 0) {
+ 				/* ignore error: max untouched if parse fails */
+diff --git a/lib/libzfs/os/linux/libzfs_util_os.c b/lib/libzfs/os/linux/libzfs_util_os.c
+--- a/lib/libzfs/os/linux/libzfs_util_os.c
++++ b/lib/libzfs/os/linux/libzfs_util_os.c
+@@ -88,7 +88,7 @@
+ 	if (access("/run/systemd/container", R_OK) == 0)
+ 		return (1);
+ 
+-	fd = open("/proc/1/cgroup", O_RDONLY);
++	fd = open("/System/Processes/1/cgroup", O_RDONLY);
+ 	if (fd == -1)
+ 		return (0);
+ 
+diff --git a/lib/libefi/rdwr_efi.c b/lib/libefi/rdwr_efi.c
+--- a/lib/libefi/rdwr_efi.c
++++ b/lib/libefi/rdwr_efi.c
+@@ -190,7 +190,7 @@
+ 	 * To handle this realpath(3) is used to resolve the block device
+ 	 * name from /proc/self/fd/<fd>.
+ 	 */
+-	(void) snprintf(path, sizeof (path), "/proc/self/fd/%d", fd);
++	(void) snprintf(path, sizeof (path), "/System/Processes/self/fd/%d", fd);
+ 	return (realpath(path, NULL));
+ }
+ 
+diff --git a/cmd/zfs/zfs_main.c b/cmd/zfs/zfs_main.c
+--- a/cmd/zfs/zfs_main.c
++++ b/cmd/zfs/zfs_main.c
+@@ -7774,7 +7774,7 @@
+ 			return (1);
+ 		}
+ 		(void) fprintf(stderr, gettext("warning: %s not in"
+-		    "/proc/self/mounts\n"), path);
++		    "/System/Processes/self/mounts\n"), path);
+ 		if ((ret = umount2(path, flags)) != 0)
+ 			(void) fprintf(stderr, gettext("%s: %s\n"), path,
+ 			    strerror(errno));
+diff --git a/cmd/zpool/zpool.d/dm-deps b/cmd/zpool/zpool.d/dm-deps
+--- a/cmd/zpool/zpool.d/dm-deps
++++ b/cmd/zpool/zpool.d/dm-deps
+@@ -19,10 +19,10 @@
+ 
+ dev="${dev##*/}"
+ val=""
+-if [ -d "/sys/class/block/$dev/slaves" ] ; then
++if [ -d "/System/Hardware/class/block/$dev/slaves" ] ; then
+ 	# ls -C: output in columns, no newlines, two spaces (change to one)
+ 	# shellcheck disable=SC2012
+-	val=$(ls -C "/sys/class/block/$dev/slaves" | tr -s '[:space:]' ' ')
++	val=$(ls -C "/System/Hardware/class/block/$dev/slaves" | tr -s '[:space:]' ' ')
+ fi
+ 
+ echo "dm-deps=$val"
+diff --git a/cmd/zpool/zpool.d/media b/cmd/zpool/zpool.d/media
+--- a/cmd/zpool/zpool.d/media
++++ b/cmd/zpool/zpool.d/media
+@@ -11,14 +11,14 @@
+ # shellcheck disable=SC2154
+ if [ -b "$VDEV_UPATH" ]; then
+ 	device="${VDEV_UPATH##*/}"
+-	read -r val 2>/dev/null < "/sys/block/$device/queue/rotational"
++	read -r val 2>/System/Devices/null < "/System/Hardware/block/$device/queue/rotational"
+ 	case "$val" in
+ 		0) MEDIA="ssd" ;;
+ 		1) MEDIA="hdd" ;;
+ 		*) MEDIA="invalid" ;;
+ 	esac
+ 
+-	vpd_pg83="/sys/block/$device/device/vpd_pg83"
++	vpd_pg83="/System/Hardware/block/$device/device/vpd_pg83"
+ 	if [ -f "$vpd_pg83" ]; then
+ 		if grep -q --binary "iqn." "$vpd_pg83"; then
+ 			MEDIA="iscsi"

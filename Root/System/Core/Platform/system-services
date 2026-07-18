@@ -1,0 +1,638 @@
+#!/System/Terminal/POSIX/sh
+set -eu
+
+readonly BB=/System/Core/BusyBox/busybox
+readonly NULL=/System/Devices/null
+readonly CONFIG=/System/Configuration/Platform/P2.config
+readonly PLATFORM_STATE=/System/State/Platform
+readonly PLATFORM_RUNTIME=/System/Runtime/Platform
+readonly TIME_STATE=/System/State/Time/Clock.config
+readonly LOG_STATE=/System/State/Logging/System.config
+readonly LOG_FILE=/System/Logs/System/messages
+readonly DEVICE_STATE=/System/State/Devices/Manager.config
+readonly VOLUME_STATE=/System/State/Volumes
+readonly VOLUME_RUNTIME=/System/Runtime/Volumes
+readonly NETWORK_STATE=/System/State/Network
+readonly NETWORK_RUNTIME=/System/Runtime/Network
+readonly RESOLVER=/System/Runtime/Network/resolv.conf
+readonly ZFS_STATE=/System/State/OpenZFS/Tuning.config
+
+config_value() {
+  section="$1"
+  key="$2"
+  fallback="$3"
+  value="$($BB awk -v wanted="[$section]" -v wanted_key="$key" '
+    function trim(value) {
+      gsub(/^[ \t]+|[ \t]+$/, "", value)
+      return value
+    }
+    /^[ \t]*\[/ {
+      header = trim($0)
+      active = (header == wanted)
+      next
+    }
+    active {
+      line = $0
+      sub(/[ \t]*#.*/, "", line)
+      separator = index(line, "=")
+      if (!separator) next
+      current = trim(substr(line, 1, separator - 1))
+      if (current != wanted_key) next
+      result = trim(substr(line, separator + 1))
+      if (result ~ /^".*"$/) result = substr(result, 2, length(result) - 2)
+      print result
+      exit
+    }
+  ' "$CONFIG")"
+  if [ -n "$value" ]; then
+    printf '%s\n' "$value"
+  else
+    printf '%s\n' "$fallback"
+  fi
+}
+
+positive_integer() {
+  case "$1" in
+    ''|*[!0-9]*) printf '%s\n' "$2" ;;
+    *) printf '%s\n' "$1" ;;
+  esac
+}
+
+blkid_value() {
+  key="$1"
+  device="$2"
+  $BB blkid "$device" 2>"$NULL" | \
+    $BB sed -n "s/.*${key}=\"\([^\"]*\)\".*/\1/p"
+}
+
+log_event() {
+  timestamp="$($BB date +%s 2>"$NULL" || printf 0)"
+  printf '%s MixtarRVS: %s\n' "$timestamp" "$*" >>"$LOG_FILE" 2>"$NULL" || true
+  printf 'MixtarRVS: %s\n' "$*"
+}
+
+ensure_directories() {
+  $BB mkdir -p \
+    "$PLATFORM_STATE" "$PLATFORM_RUNTIME" \
+    /System/State/Time /System/Runtime/Time \
+    /System/State/Logging /System/Runtime/Logging \
+    /System/State/Devices /System/Runtime/Devices \
+    "$VOLUME_STATE" "$VOLUME_RUNTIME" /Volumes \
+    "$NETWORK_STATE" "$NETWORK_RUNTIME" \
+    /System/State/OpenZFS /System/Logs/System
+}
+
+time_start() {
+  rtc_mode="$(config_value time rtc utc)"
+  if [ "$rtc_mode" = utc ]; then
+    $BB hwclock -s -u 2>"$NULL" || true
+  else
+    $BB hwclock -s -l 2>"$NULL" || true
+  fi
+
+  now="$($BB date +%s)"
+  previous=0
+  if [ -f "$TIME_STATE" ]; then
+    previous="$($BB awk -F= '/^shutdown_epoch[ \t]*=/ {gsub(/[ \t]/, "", $2); print $2; exit}' "$TIME_STATE")"
+    previous="$(positive_integer "$previous" 0)"
+  fi
+  if [ "$previous" -gt "$now" ]; then
+    $BB date -u -s "@$previous" >"$NULL" 2>&1 || true
+    now="$($BB date +%s)"
+  fi
+  printf '%s\n' "$now" >/System/Runtime/Time/boot_epoch
+  $BB cat >"$TIME_STATE" <<EOF
+schema = 1
+ready = true
+rtc = "$rtc_mode"
+boot_epoch = $now
+shutdown_epoch = $previous
+EOF
+  $BB chmod 0600 "$TIME_STATE"
+  log_event "system clock ready ($rtc_mode)"
+}
+
+time_stop() {
+  now="$($BB date +%s)"
+  boot=0
+  if [ -f /System/Runtime/Time/boot_epoch ]; then
+    boot="$($BB cat /System/Runtime/Time/boot_epoch)"
+    boot="$(positive_integer "$boot" 0)"
+  fi
+  rtc_mode="$(config_value time rtc utc)"
+  $BB cat >"$TIME_STATE" <<EOF
+schema = 1
+ready = true
+rtc = "$rtc_mode"
+boot_epoch = $boot
+shutdown_epoch = $now
+EOF
+  $BB chmod 0600 "$TIME_STATE"
+  if [ "$rtc_mode" = utc ]; then
+    $BB hwclock -w -u 2>"$NULL" || true
+  else
+    $BB hwclock -w -l 2>"$NULL" || true
+  fi
+}
+
+logging_start() {
+  size="$(positive_integer "$(config_value logging max_size_kib 1024)" 1024)"
+  rotations="$(positive_integer "$(config_value logging rotations 7)" 7)"
+  if ! $BB pidof syslogd >"$NULL" 2>&1; then
+    $BB syslogd -O "$LOG_FILE" -s "$size" -b "$rotations"
+  fi
+  if ! $BB pidof klogd >"$NULL" 2>&1; then
+    $BB klogd 2>"$NULL" || true
+  fi
+  $BB sleep 1
+  $BB cat >"$LOG_STATE" <<EOF
+schema = 1
+ready = true
+file = "$LOG_FILE"
+max_size_kib = $size
+rotations = $rotations
+EOF
+  log_event 'persistent logging ready'
+}
+
+logging_stop() {
+  $BB logger -t MixtarRVS 'persistent logging stopping' 2>"$NULL" || true
+  $BB killall klogd 2>"$NULL" || true
+  $BB killall syslogd 2>"$NULL" || true
+}
+
+devices_start() {
+  helper=/System/Core/Platform/device-event
+  if [ -w /System/Processes/sys/kernel/hotplug ]; then
+    printf '%s\n' "$helper" >/System/Processes/sys/kernel/hotplug
+  fi
+  if ! $BB mdev -s 2>>"$LOG_FILE"; then
+    $BB cat >"$DEVICE_STATE" <<EOF
+schema = 1
+ready = false
+manager = "mdev"
+hotplug_helper = "$helper"
+error = "initial device scan failed"
+EOF
+    log_event 'device manager scan failed'
+    return 1
+  fi
+  $BB cat >"$DEVICE_STATE" <<EOF
+schema = 1
+ready = true
+manager = "mdev"
+hotplug_helper = "$helper"
+EOF
+  log_event 'device manager ready'
+}
+
+write_volume_status() {
+  count="$1"
+  ready=false
+  [ "$count" -gt 0 ] && ready=true
+  now="$($BB date +%s)"
+  $BB cat >"$VOLUME_STATE/Status.config" <<EOF
+schema = 1
+ready = $ready
+mounted_count = $count
+scan_epoch = $now
+EOF
+}
+
+write_volume_entry() {
+  name="$1"
+  device="$2"
+  target="$3"
+  filesystem="$4"
+  mode="$5"
+  $BB cat >"$VOLUME_STATE/$name.config" <<EOF
+schema = 1
+device = "$device"
+target = "$target"
+filesystem = "$filesystem"
+mode = "$mode"
+mounted = true
+EOF
+  printf '%s\n' "$target" >"$VOLUME_RUNTIME/$name.target"
+}
+
+volumes_scan() {
+  enabled="$(config_value volumes automount true)"
+  if [ "$enabled" != true ]; then
+    write_volume_status 0
+    return 0
+  fi
+
+  allowed="$(config_value volumes filesystems 'vfat ext2 ext3 ext4 xfs btrfs')"
+  read_only="$(config_value volumes read_only true)"
+  $BB rm -f "$VOLUME_STATE"/*.config 2>"$NULL" || true
+  count=0
+
+  for sys_device in /System/Hardware/class/block/*; do
+    [ -e "$sys_device" ] || continue
+    name="${sys_device##*/}"
+    case "$name" in
+      loop*|ram*|zram*|dm-*) continue ;;
+    esac
+    [ -f "$sys_device/partition" ] || continue
+    device="/System/Devices/$name"
+    [ -b "$device" ] || continue
+
+    current="$($BB awk -v source="$device" '$1 == source {print $2; exit}' /System/Processes/mounts)"
+    if [ -n "$current" ]; then
+      case "$current" in
+        /Volumes/*)
+          filesystem="$($BB awk -v source="$device" '$1 == source {print $3; exit}' /System/Processes/mounts)"
+          write_volume_entry "$name" "$device" "$current" "$filesystem" existing
+          count=$((count + 1))
+          ;;
+      esac
+      continue
+    fi
+
+    filesystem="$(blkid_value TYPE "$device" || true)"
+    if [ -n "$filesystem" ]; then
+      case " $allowed " in
+        *" $filesystem "*) candidates="$filesystem" ;;
+        *) continue ;;
+      esac
+    else
+      candidates="$allowed"
+    fi
+
+    label="$(blkid_value LABEL "$device" || true)"
+    label="$(printf '%s' "$label" | $BB tr -cd 'A-Za-z0-9._-')"
+    [ -n "$label" ] || label="$name"
+    target="/Volumes/$label"
+
+    $BB mkdir -p "$target"
+
+    mode=read-write
+    options=nosuid,nodev,noexec
+    if [ "$read_only" = true ]; then
+      mode=read-only
+      options=ro,nosuid,nodev,noexec
+    fi
+    mounted_filesystem=''
+    for candidate in $candidates; do
+      if $BB mount -t "$candidate" -o "$options" "$device" "$target" 2>"$NULL"; then
+        mounted_filesystem="$candidate"
+        break
+      fi
+    done
+    if [ -n "$mounted_filesystem" ]; then
+      write_volume_entry "$name" "$device" "$target" "$mounted_filesystem" "$mode"
+      count=$((count + 1))
+      log_event "volume $name mounted at $target"
+    else
+      $BB rmdir "$target" 2>"$NULL" || true
+    fi
+  done
+
+  write_volume_status "$count"
+  log_event "volume scan ready ($count mounted)"
+}
+
+volumes_stop() {
+  for record in "$VOLUME_RUNTIME"/*.target; do
+    [ -f "$record" ] || continue
+    target="$($BB cat "$record")"
+    case "$target" in
+      /Volumes/*) $BB umount "$target" 2>"$NULL" || true ;;
+    esac
+    $BB rm -f "$record"
+  done
+}
+
+network_write_offline() {
+  interface="$1"
+  reason="$2"
+  $BB cat >"$NETWORK_STATE/Primary.config" <<EOF
+schema = 1
+ready = false
+state = "offline"
+interface = "$interface"
+reason = "$reason"
+dns = "offline"
+EOF
+}
+
+network_select_interface() {
+  requested="$(config_value network interface auto)"
+  if [ "$requested" != auto ]; then
+    [ -e "/System/Hardware/class/net/$requested" ] && printf '%s\n' "$requested"
+    return 0
+  fi
+  for candidate in /System/Hardware/class/net/*; do
+    [ -e "$candidate" ] || continue
+    interface="${candidate##*/}"
+    [ "$interface" = lo ] && continue
+    printf '%s\n' "$interface"
+    return 0
+  done
+}
+
+network_wait_for_carrier() {
+  interface="$1"
+  timeout="$2"
+  carrier="/System/Hardware/class/net/$interface/carrier"
+  [ -r "$carrier" ] || return 0
+
+  elapsed=0
+  while [ "$elapsed" -lt "$timeout" ]; do
+    [ "$($BB cat "$carrier" 2>"$NULL" || true)" = 1 ] && return 0
+    $BB sleep 1
+    elapsed=$((elapsed + 1))
+  done
+  return 1
+}
+
+resolver_write() {
+  dns_servers="$1"
+  search_domain="$2"
+  temporary="$NETWORK_RUNTIME/resolv.conf.new"
+  : >"$temporary"
+  for server in $dns_servers; do
+    printf 'nameserver %s\n' "$server" >>"$temporary"
+  done
+  if [ -n "$search_domain" ]; then
+    printf 'search %s\n' "$search_domain" >>"$temporary"
+  fi
+  $BB mv "$temporary" "$RESOLVER"
+  $BB chmod 0644 "$RESOLVER"
+}
+
+dhcp_event() {
+  action="$1"
+  interface="${interface:-}"
+  [ -n "$interface" ] || return 0
+
+  case "$action" in
+    deconfig)
+      $BB ifconfig "$interface" 0.0.0.0 up 2>"$NULL" || true
+      network_write_offline "$interface" deconfigured
+      ;;
+    bound|renew)
+      $BB ifconfig "$interface" "${ip:?missing DHCP address}" \
+        netmask "${subnet:-255.255.255.0}" up
+      $BB route del default 2>"$NULL" || true
+      for gateway in ${router:-}; do
+        $BB route add default gw "$gateway" dev "$interface"
+        break
+      done
+      resolver_write "${dns:-}" "${domain:-}"
+      now="$($BB date +%s)"
+      $BB cat >"$NETWORK_STATE/Primary.config" <<EOF
+schema = 1
+ready = true
+state = "bound"
+interface = "$interface"
+address = "${ip:-}"
+subnet = "${subnet:-}"
+gateway = "${router:-}"
+dns_servers = "${dns:-}"
+dns = "configured"
+lease_seconds = "${lease:-}"
+updated_epoch = $now
+EOF
+      log_event "DHCP $action on $interface (${ip:-unknown})"
+      ;;
+  esac
+}
+
+network_start() {
+  mode="$(config_value network mode dhcp)"
+  interface="$(network_select_interface)"
+  if [ "$mode" = disabled ]; then
+    network_write_offline "${interface:-none}" disabled
+    return 0
+  fi
+  if [ -z "$interface" ]; then
+    network_write_offline none no-interface
+    log_event 'network offline (no interface)'
+    return 0
+  fi
+
+  # Runtime DNS state never survives reboot; a persisted DHCP result must not
+  # let this boot skip acquiring a fresh lease and rebuilding the resolver.
+  $BB rm -f "$NETWORK_STATE/Primary.config" "$RESOLVER"
+  $BB ifconfig lo 127.0.0.1 up
+  $BB ifconfig "$interface" up
+  if [ "$mode" = static ]; then
+    address="$(config_value network address '')"
+    netmask="$(config_value network netmask 255.255.255.0)"
+    gateway="$(config_value network gateway '')"
+    dns_servers="$(config_value network dns '')"
+    [ -n "$address" ] || {
+      network_write_offline "$interface" missing-static-address
+      return 0
+    }
+    $BB ifconfig "$interface" "$address" netmask "$netmask" up
+    $BB route del default 2>"$NULL" || true
+    [ -n "$gateway" ] && $BB route add default gw "$gateway" dev "$interface"
+    resolver_write "$dns_servers" ''
+    $BB cat >"$NETWORK_STATE/Primary.config" <<EOF
+schema = 1
+ready = true
+state = "static"
+interface = "$interface"
+address = "$address"
+netmask = "$netmask"
+gateway = "$gateway"
+dns_servers = "$dns_servers"
+dns = "configured"
+EOF
+  else
+    timeout="$(positive_integer "$(config_value network timeout_seconds 45)" 45)"
+    link_timeout="$(positive_integer "$(config_value network link_timeout_seconds 12)" 12)"
+    if ! network_wait_for_carrier "$interface" "$link_timeout"; then
+      log_event "network carrier not confirmed on $interface; attempting DHCP"
+    fi
+
+    pidfile="$NETWORK_RUNTIME/$interface.udhcpc.pid"
+    launcher="$NETWORK_RUNTIME/$interface.launcher.pid"
+    logfile="$NETWORK_RUNTIME/$interface.udhcpc.log"
+    : >"$logfile"
+    $BB udhcpc -f -i "$interface" -p "$pidfile" \
+      -s /System/Core/Platform/dhcp-event -t 3 -T 2 -A 2 \
+      >>"$logfile" 2>&1 &
+    printf '%s\n' "$!" >"$launcher"
+
+    elapsed=0
+    while [ "$elapsed" -lt "$timeout" ]; do
+      if [ -f "$NETWORK_STATE/Primary.config" ] && \
+        $BB grep -q 'state = "bound"' "$NETWORK_STATE/Primary.config"; then
+        break
+      fi
+      $BB sleep 1
+      elapsed=$((elapsed + 1))
+    done
+    if [ ! -f "$NETWORK_STATE/Primary.config" ] || \
+      ! $BB grep -q 'state = "bound"' "$NETWORK_STATE/Primary.config"; then
+      network_write_offline "$interface" dhcp-timeout
+      log_event "network offline ($interface DHCP timeout)"
+      return 0
+    fi
+  fi
+
+  if [ -s "$RESOLVER" ] && $BB grep -q '^nameserver ' "$RESOLVER"; then
+    dns_probe=temporarily-unavailable
+    if $BB nslookup localhost >"$NULL" 2>&1; then
+      dns_probe=passed
+    fi
+    $BB sed -i 's/dns = "configured"/dns = "ready"/' \
+      "$NETWORK_STATE/Primary.config"
+    printf 'dns_probe = "%s"\n' "$dns_probe" >>"$NETWORK_STATE/Primary.config"
+    log_event "network and DNS ready ($interface, probe $dns_probe)"
+  else
+    log_event "network ready but resolver configuration is missing ($interface)"
+  fi
+}
+
+network_stop() {
+  for pidfile in "$NETWORK_RUNTIME"/*.pid; do
+    [ -f "$pidfile" ] || continue
+    pid="$($BB cat "$pidfile" 2>"$NULL" || true)"
+    case "$pid" in
+      ''|*[!0-9]*) ;;
+      *) kill "$pid" 2>"$NULL" || true ;;
+    esac
+    $BB rm -f "$pidfile"
+  done
+}
+
+zfs_tune() {
+  memory_mib="$($BB awk '/^MemTotal:/ {print int($2 / 1024); exit}' /System/Processes/meminfo)"
+  memory_mib="$(positive_integer "$memory_mib" 1024)"
+  cpus="$($BB grep -c '^processor' /System/Processes/cpuinfo 2>"$NULL" || true)"
+  cpus="$(positive_integer "$cpus" 1)"
+
+  percent="$(positive_integer "$(config_value openzfs arc_max_percent 50)" 50)"
+  cap_mib="$(positive_integer "$(config_value openzfs arc_cap_mib 16384)" 16384)"
+  reserve_mib="$(positive_integer "$(config_value openzfs reserve_mib 512)" 512)"
+  minimum_mib="$(positive_integer "$(config_value openzfs arc_min_mib 64)" 64)"
+  if [ "$memory_mib" -le 2048 ] && [ "$percent" -gt 25 ]; then
+    percent=25
+  elif [ "$memory_mib" -le 4096 ] && [ "$percent" -gt 37 ]; then
+    percent=37
+  fi
+
+  arc_max_mib=$((memory_mib * percent / 100))
+  [ "$arc_max_mib" -gt "$cap_mib" ] && arc_max_mib="$cap_mib"
+  available_mib=$((memory_mib - reserve_mib))
+  [ "$available_mib" -lt 128 ] && available_mib=128
+  [ "$arc_max_mib" -gt "$available_mib" ] && arc_max_mib="$available_mib"
+  [ "$arc_max_mib" -lt 128 ] && arc_max_mib=128
+  [ "$minimum_mib" -gt $((arc_max_mib / 2)) ] && minimum_mib=$((arc_max_mib / 2))
+  [ "$minimum_mib" -lt 32 ] && minimum_mib=32
+
+  storage_class="$(config_value openzfs storage_class auto)"
+  if [ "$storage_class" = auto ]; then
+    storage_class=unknown
+    for rotational in /System/Hardware/class/block/*/queue/rotational; do
+      [ -f "$rotational" ] || continue
+      value="$($BB cat "$rotational")"
+      if [ "$value" = 1 ]; then storage_class=rotational; else storage_class=solid-state; fi
+      break
+    done
+  fi
+
+  arc_max_bytes=$((arc_max_mib * 1024 * 1024))
+  arc_min_bytes=$((minimum_mib * 1024 * 1024))
+  parameter_root=/System/Hardware/module/zfs/parameters
+  applied=true
+  if ! printf '%s\n' "$arc_max_bytes" >"$parameter_root/zfs_arc_max" 2>"$NULL"; then applied=false; fi
+  if ! printf '%s\n' "$arc_min_bytes" >"$parameter_root/zfs_arc_min" 2>"$NULL"; then applied=false; fi
+  prefetch=0
+  [ "$memory_mib" -lt 2048 ] && prefetch=1
+  if [ -w "$parameter_root/zfs_prefetch_disable" ]; then
+    printf '%s\n' "$prefetch" >"$parameter_root/zfs_prefetch_disable" 2>"$NULL" || true
+  fi
+
+  effective_max="$($BB cat "$parameter_root/zfs_arc_max" 2>"$NULL" || printf 0)"
+  effective_min="$($BB cat "$parameter_root/zfs_arc_min" 2>"$NULL" || printf 0)"
+  now="$($BB date +%s)"
+  $BB cat >"$ZFS_STATE" <<EOF
+schema = 1
+applied = $applied
+policy = "adaptive"
+memory_mib = $memory_mib
+cpu_count = $cpus
+storage_class = "$storage_class"
+arc_max_percent = $percent
+arc_max_bytes = $effective_max
+arc_min_bytes = $effective_min
+reserve_mib = $reserve_mib
+prefetch_disabled = $prefetch
+updated_epoch = $now
+EOF
+  log_event "OpenZFS tuned (ARC ${arc_max_mib} MiB, $storage_class)"
+}
+
+platform_status_write() {
+  network=offline
+  volumes=none
+  [ -f "$NETWORK_STATE/Primary.config" ] && \
+    network="$($BB awk -F= '/^state[ \t]*=/ {gsub(/[ \t\"]/, "", $2); print $2; exit}' "$NETWORK_STATE/Primary.config")"
+  [ -f "$VOLUME_STATE/Status.config" ] && \
+    volumes="$($BB awk -F= '/^mounted_count[ \t]*=/ {gsub(/[ \t]/, "", $2); print $2; exit}' "$VOLUME_STATE/Status.config")"
+  now="$($BB date +%s)"
+  $BB cat >"$PLATFORM_STATE/P2.config" <<EOF
+schema = 1
+ready = true
+time = "ready"
+logging = "ready"
+devices = "ready"
+volumes = "$volumes"
+network = "$network"
+openzfs = "tuned"
+updated_epoch = $now
+EOF
+}
+
+platform_start() {
+  ensure_directories
+  time_start
+  logging_start
+  devices_start
+  volumes_scan
+  zfs_tune
+  network_start
+  platform_status_write
+  log_event 'P2 platform services ready'
+}
+
+platform_stop() {
+  log_event 'P2 platform services stopping'
+  network_stop
+  volumes_stop
+  time_stop
+  logging_stop
+}
+
+hotplug_event() {
+  $BB mdev 2>"$NULL" || true
+  case "${ACTION:-}" in
+    add|remove) volumes_scan ;;
+  esac
+}
+
+case "${1:-}" in
+  start) platform_start ;;
+  stop) platform_stop ;;
+  status) platform_status_write ;;
+  log)
+    shift
+    log_event "$*"
+    ;;
+  volumes) volumes_scan ;;
+  hotplug) hotplug_event ;;
+  dhcp)
+    shift
+    dhcp_event "${1:-}"
+    ;;
+  *)
+    printf 'Usage: %s {start|stop|status|volumes|hotplug|dhcp}\n' "$0" >&2
+    exit 2
+    ;;
+esac

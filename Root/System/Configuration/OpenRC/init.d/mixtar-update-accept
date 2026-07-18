@@ -1,0 +1,27 @@
+#!/System/Init/openrc-run
+description="Accept a booted Mixtar release slot"
+
+depend() {
+  need zfs-root-proof
+  before mixtar-platform mixtar-console
+}
+
+value() {
+  key=$1
+  file=$2
+  /System/Commands/sed -n "s/^${key} = \"\([^\"]*\)\"$/\1/p" "$file"
+}
+
+start() {
+  transaction=/System/State/Update/Transaction.config
+  active=/System/Configuration/Release/Active.config
+  [ -f "$transaction" ] && [ -f "$active" ] || return 0
+  candidate=$(value candidate_dataset "$transaction")
+  dataset=$(value dataset "$active")
+  slot=$(value slot "$active")
+  [ -n "$candidate" ] && [ "$candidate" = "$dataset" ] || return 0
+  /System/Commands/mkdir -p /System/State/Update
+  /System/Commands/printf '%s\n' accepted >/System/State/Update/Accepted
+  /System/Commands/sync
+  /System/Commands/printf 'MixtarRVS: update slot accepted %s\n' "$slot"
+}

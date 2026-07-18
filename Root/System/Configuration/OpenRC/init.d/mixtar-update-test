@@ -1,0 +1,51 @@
+#!/System/Init/openrc-run
+description="Run the isolated Mixtar update acceptance path"
+
+depend() {
+  need zfs-root-proof
+  before mixtar-platform mixtar-console
+}
+
+blkid_value() {
+  key=$1
+  device=$2
+  /System/Commands/blkid "$device" 2>/System/Devices/null | \
+    /System/Commands/sed -n "s/.*${key}=\"\([^\"]*\)\".*/\1/p"
+}
+
+find_update_volume() {
+  for device in \
+    /System/Devices/vd* \
+    /System/Devices/sd* \
+    /System/Devices/nvme*n*; do
+    [ -b "$device" ] || continue
+    label=$(blkid_value LABEL "$device" || true)
+    [ "$label" = MIXTARUPD ] && {
+      printf '%s\n' "$device"
+      return 0
+    }
+  done
+  return 1
+}
+
+start() {
+  /System/Commands/grep -qw 'mixtar.p3.update=1' /System/Processes/cmdline || return 0
+  ebegin "Testing a signed Mixtar update"
+  device=$(find_update_volume) || {
+    printf '%s\n' 'MixtarRVS: update rejected: MIXTARUPD volume was not found'
+    /System/Commands/poweroff -f
+    return 1
+  }
+  /System/Commands/mkdir -p /Volumes/Update
+  /System/Commands/mount -t vfat "$device" /Volumes/Update
+  if /System/Core/Update/mixtar-update /Volumes/Update; then
+    result=0
+  else
+    printf '%s\n' 'MixtarRVS: corrupted update safely rejected'
+    result=1
+  fi
+  /System/Commands/umount /Volumes/Update || true
+  /System/Commands/sync
+  eend "$result"
+  /System/Commands/poweroff -f
+}

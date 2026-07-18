@@ -1,8 +1,0 @@
-# Mixtar Toolkit pwd behavior cases.
-# Compare the Mixtar-built translated pwd against FreeBSD /bin/pwd.
-
-pwd
-pwd -P
-pwd -L
-PWD=/tmp pwd -L
-pwd unexpected-arg

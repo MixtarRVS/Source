@@ -1,0 +1,2 @@
+#!/System/Terminal/POSIX/sh
+exec /System/Core/Platform/system-services dhcp "$@"

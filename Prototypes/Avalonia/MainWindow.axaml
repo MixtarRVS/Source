@@ -1,0 +1,489 @@
+<Window
+    x:Class="MixtarRVS.AvaloniaPreview.MainWindow"
+    xmlns="https://github.com/avaloniaui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    Title="MixtarRVS - Avalonia Preview"
+    Width="1600"
+    Height="900"
+    MinWidth="1000"
+    MinHeight="620"
+    Background="#020713"
+    Foreground="#DCEAFF"
+    FontFamily="Segoe UI"
+    WindowStartupLocation="CenterScreen"
+    WindowDecorations="None"
+    ExtendClientAreaToDecorationsHint="True"
+    KeyDown="OnWindowKeyDown">
+
+  <Window.Resources>
+    <SolidColorBrush x:Key="PanelBrush" Color="#E605142C" />
+    <SolidColorBrush x:Key="PanelSoftBrush" Color="#D9081D3D" />
+    <SolidColorBrush x:Key="StrokeBrush" Color="#574897FF" />
+    <SolidColorBrush x:Key="StrokeStrongBrush" Color="#A357A4FF" />
+    <SolidColorBrush x:Key="AccentBrush" Color="#18B9FF" />
+    <SolidColorBrush x:Key="TextBrush" Color="#DCEAFF" />
+    <SolidColorBrush x:Key="SoftBrush" Color="#91B7E8" />
+    <SolidColorBrush x:Key="MutedBrush" Color="#668AB9" />
+    <SolidColorBrush x:Key="MonoBrush" Color="#9FC5F4" />
+  </Window.Resources>
+
+  <Window.Styles>
+    <Style Selector="Border.desktop-window">
+      <Setter Property="Background" Value="{StaticResource PanelBrush}" />
+      <Setter Property="BorderBrush" Value="{StaticResource StrokeBrush}" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="9" />
+      <Setter Property="ClipToBounds" Value="True" />
+      <Setter Property="BoxShadow" Value="0 22 56 0 #B8000000" />
+    </Style>
+    <Style Selector="Border.desktop-window.active">
+      <Setter Property="BorderBrush" Value="{StaticResource StrokeStrongBrush}" />
+      <Setter Property="BoxShadow" Value="0 28 68 0 #D0000000, 0 0 16 0 #302E78FF" />
+    </Style>
+    <Style Selector="Border.titlebar">
+      <Setter Property="Height" Value="34" />
+      <Setter Property="Background" Value="#16FFFFFF" />
+      <Setter Property="BorderBrush" Value="#344997FF" />
+      <Setter Property="BorderThickness" Value="0,0,0,1" />
+      <Setter Property="Padding" Value="12,0" />
+    </Style>
+    <Style Selector="TextBlock.window-title">
+      <Setter Property="Foreground" Value="#8FC1FF" />
+      <Setter Property="FontFamily" Value="Cascadia Mono, Consolas" />
+      <Setter Property="FontSize" Value="11" />
+      <Setter Property="FontWeight" Value="Bold" />
+      <Setter Property="LetterSpacing" Value="0.6" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+    <Style Selector="Button.window-dot">
+      <Setter Property="Width" Value="16" />
+      <Setter Property="Height" Value="16" />
+      <Setter Property="MinWidth" Value="16" />
+      <Setter Property="MinHeight" Value="16" />
+      <Setter Property="Padding" Value="0" />
+      <Setter Property="CornerRadius" Value="8" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="Foreground" Value="#B0020812" />
+      <Setter Property="FontSize" Value="9" />
+      <Setter Property="FontWeight" Value="Bold" />
+      <Setter Property="HorizontalContentAlignment" Value="Center" />
+      <Setter Property="VerticalContentAlignment" Value="Center" />
+    </Style>
+    <Style Selector="Button.window-dot.min"><Setter Property="Background" Value="#FFC65C" /></Style>
+    <Style Selector="Button.window-dot.max"><Setter Property="Background" Value="#27EE91" /></Style>
+    <Style Selector="Button.window-dot.close"><Setter Property="Background" Value="#FF5C7B" /></Style>
+    <Style Selector="Button.tool">
+      <Setter Property="Height" Value="28" />
+      <Setter Property="Padding" Value="10,0" />
+      <Setter Property="Background" Value="#B20B2C60" />
+      <Setter Property="BorderBrush" Value="#845396FF" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="5" />
+      <Setter Property="Foreground" Value="{StaticResource TextBrush}" />
+      <Setter Property="FontSize" Value="11" />
+    </Style>
+    <Style Selector="Button.tool:pointerover"><Setter Property="BorderBrush" Value="{StaticResource AccentBrush}" /></Style>
+    <Style Selector="Button.tree">
+      <Setter Property="Height" Value="27" />
+      <Setter Property="HorizontalContentAlignment" Value="Left" />
+      <Setter Property="Padding" Value="9,0" />
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="CornerRadius" Value="4" />
+      <Setter Property="Foreground" Value="#C2DBFF" />
+      <Setter Property="FontSize" Value="11" />
+    </Style>
+    <Style Selector="Button.tree:pointerover"><Setter Property="Background" Value="#293A7EE6" /></Style>
+    <Style Selector="Button.task">
+      <Setter Property="Height" Value="31" />
+      <Setter Property="MinWidth" Value="92" />
+      <Setter Property="Padding" Value="10,0" />
+      <Setter Property="HorizontalContentAlignment" Value="Left" />
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderBrush" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="6" />
+      <Setter Property="Foreground" Value="#A9C4EC" />
+      <Setter Property="FontSize" Value="11" />
+    </Style>
+    <Style Selector="Button.task.active">
+      <Setter Property="Background" Value="#363568DB" />
+      <Setter Property="BorderBrush" Value="#704C97FF" />
+      <Setter Property="Foreground" Value="White" />
+    </Style>
+    <Style Selector="Button.task.minimized"><Setter Property="Opacity" Value="0.55" /></Style>
+    <Style Selector="Button.start">
+      <Setter Property="Height" Value="34" />
+      <Setter Property="Padding" Value="14,0" />
+      <Setter Property="Background" Value="#0B65D8" />
+      <Setter Property="BorderBrush" Value="#5EA8FF" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="7" />
+      <Setter Property="Foreground" Value="White" />
+      <Setter Property="FontWeight" Value="Bold" />
+    </Style>
+    <Style Selector="Button.hud-item">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="Padding" Value="8,0" />
+      <Setter Property="Foreground" Value="{StaticResource SoftBrush}" />
+      <Setter Property="FontSize" Value="11" />
+    </Style>
+    <Style Selector="Button.hud-item:pointerover"><Setter Property="Foreground" Value="White" /></Style>
+    <Style Selector="Button.map-node">
+      <Setter Property="Width" Value="12" />
+      <Setter Property="Height" Value="12" />
+      <Setter Property="MinWidth" Value="12" />
+      <Setter Property="MinHeight" Value="12" />
+      <Setter Property="Padding" Value="0" />
+      <Setter Property="CornerRadius" Value="6" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="Background" Value="#6B94C9" />
+    </Style>
+    <Style Selector="Button.map-node.local"><Setter Property="Background" Value="#FFC65C" /></Style>
+    <Style Selector="Button.map-node.selected"><Setter Property="Background" Value="White" /></Style>
+    <Style Selector="Border.card">
+      <Setter Property="Background" Value="#C4081E41" />
+      <Setter Property="BorderBrush" Value="#12FFFFFF" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="7" />
+    </Style>
+    <Style Selector="Border.file-row">
+      <Setter Property="MinHeight" Value="30" />
+      <Setter Property="Padding" Value="10,0" />
+      <Setter Property="BorderBrush" Value="#0EFFFFFF" />
+      <Setter Property="BorderThickness" Value="0,0,0,1" />
+      <Setter Property="Background" Value="Transparent" />
+    </Style>
+    <Style Selector="Border.file-row:pointerover"><Setter Property="Background" Value="#273580DB" /></Style>
+    <Style Selector="Border.file-row.selected">
+      <Setter Property="Background" Value="#473580DB" />
+      <Setter Property="BorderBrush" Value="{StaticResource AccentBrush}" />
+      <Setter Property="BorderThickness" Value="3,0,0,1" />
+    </Style>
+    <Style Selector="TextBox">
+      <Setter Property="Background" Value="#80000000" />
+      <Setter Property="BorderBrush" Value="#425FA2FF" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="5" />
+      <Setter Property="Foreground" Value="{StaticResource TextBrush}" />
+      <Setter Property="CaretBrush" Value="White" />
+      <Setter Property="SelectionBrush" Value="#703580DB" />
+      <Setter Property="FontSize" Value="11" />
+    </Style>
+  </Window.Styles>
+
+  <Grid ClipToBounds="True">
+    <Viewbox Stretch="Uniform">
+      <Grid Width="1600" Height="900" ClipToBounds="True">
+        <Border Background="#020713" />
+
+        <Ellipse Width="900" Height="620" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,-330,-120,0" IsHitTestVisible="False">
+          <Ellipse.Fill>
+            <RadialGradientBrush>
+              <GradientStop Color="#7A1C5DAE" Offset="0" />
+              <GradientStop Color="#001C5DAE" Offset="1" />
+            </RadialGradientBrush>
+          </Ellipse.Fill>
+        </Ellipse>
+        <Ellipse Width="560" Height="560" HorizontalAlignment="Left" VerticalAlignment="Bottom" Margin="-280,0,0,-250" IsHitTestVisible="False">
+          <Ellipse.Fill>
+            <RadialGradientBrush>
+              <GradientStop Color="#4A00BEFF" Offset="0" />
+              <GradientStop Color="#0000BEFF" Offset="1" />
+            </RadialGradientBrush>
+          </Ellipse.Fill>
+        </Ellipse>
+        <Canvas x:Name="GridLines" Width="1600" Height="900" IsHitTestVisible="False" Opacity="0.8" />
+
+        <Canvas x:Name="DesktopCanvas" Width="1600" Height="900">
+
+          <!-- Terminal -->
+          <Border x:Name="TerminalWindow" Classes="desktop-window active" Width="470" Height="270"
+                  Canvas.Left="28" Canvas.Top="58" ZIndex="20" PointerPressed="FocusDesktopWindow">
+            <Grid RowDefinitions="34,*">
+              <Border Classes="titlebar" Tag="TerminalWindow"
+                      PointerPressed="BeginDesktopWindowDrag" PointerMoved="ContinueDesktopWindowDrag" PointerReleased="EndDesktopWindowDrag">
+                <Grid ColumnDefinitions="*,Auto">
+                  <TextBlock Classes="window-title" Text="TERMINAL - ZSH.APX" />
+                  <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                    <Button Classes="window-dot min" Tag="TerminalWindow" Content="-" Click="OnDesktopMinimize" />
+                    <Button Classes="window-dot max" Tag="TerminalWindow" Content="□" Click="OnDesktopMaximize" />
+                    <Button Classes="window-dot close" Tag="TerminalWindow" Content="x" Click="OnDesktopClose" />
+                  </StackPanel>
+                </Grid>
+              </Border>
+              <Grid Grid.Row="1" RowDefinitions="*,34" Background="#F2010711">
+                <ScrollViewer x:Name="TerminalScroll" Margin="14,12,14,2">
+                  <StackPanel x:Name="TerminalLines" Spacing="3">
+                    <TextBlock FontFamily="Cascadia Mono, Consolas" FontSize="11">
+                      <Run Foreground="#27EE91" FontWeight="Bold">root@mixtar:/#</Run><Run Foreground="White"> sysinfo</Run>
+                    </TextBlock>
+                    <TextBlock Text="MixtarRVS OS: 2.2 (Codename: Address Classic)" Foreground="#91B7E8" FontFamily="Cascadia Mono, Consolas" FontSize="11" />
+                    <TextBlock Text="Design Auth : Uplink map, clean root, Server-class explorer" Foreground="#91B7E8" FontFamily="Cascadia Mono, Consolas" FontSize="11" />
+                    <TextBlock Text="Kernel      : Mixtar Core / Generic Driver Provider" Foreground="#91B7E8" FontFamily="Cascadia Mono, Consolas" FontSize="11" />
+                    <TextBlock Text="Shell       : zsh.apx via /System/Runtime/Executor" Foreground="#91B7E8" FontFamily="Cascadia Mono, Consolas" FontSize="11" />
+                    <TextBlock Text="Config      : /System/Configuration/mixtarrvs.db" Foreground="#91B7E8" FontFamily="Cascadia Mono, Consolas" FontSize="11" />
+                  </StackPanel>
+                </ScrollViewer>
+                <Grid Grid.Row="1" Margin="14,0,14,6" ColumnDefinitions="Auto,*">
+                  <TextBlock x:Name="TerminalPrompt" Text="root@mixtar:/System#" Foreground="#27EE91" FontWeight="Bold"
+                             FontFamily="Cascadia Mono, Consolas" FontSize="11" VerticalAlignment="Center" />
+                  <TextBox x:Name="TerminalInput" Grid.Column="1" Margin="7,0,0,0" Padding="3,0" Background="Transparent"
+                           BorderThickness="0" FontFamily="Cascadia Mono, Consolas" KeyDown="OnTerminalKeyDown" />
+                </Grid>
+              </Grid>
+            </Grid>
+          </Border>
+
+          <!-- Network Inspector -->
+          <Border x:Name="NetworkWindow" Classes="desktop-window" Width="370" Height="360"
+                  Canvas.Left="510" Canvas.Top="68" ZIndex="12" PointerPressed="FocusDesktopWindow">
+            <Grid RowDefinitions="34,*">
+              <Border Classes="titlebar" Tag="NetworkWindow"
+                      PointerPressed="BeginDesktopWindowDrag" PointerMoved="ContinueDesktopWindowDrag" PointerReleased="EndDesktopWindowDrag">
+                <Grid ColumnDefinitions="*,Auto">
+                  <TextBlock Classes="window-title" Text="NETWORK INSPECTOR" />
+                  <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                    <Button Classes="window-dot min" Tag="NetworkWindow" Content="-" Click="OnDesktopMinimize" />
+                    <Button Classes="window-dot max" Tag="NetworkWindow" Content="□" Click="OnDesktopMaximize" />
+                    <Button Classes="window-dot close" Tag="NetworkWindow" Content="x" Click="OnDesktopClose" />
+                  </StackPanel>
+                </Grid>
+              </Border>
+              <Grid Grid.Row="1" RowDefinitions="180,Auto,*" Margin="11" RowSpacing="10">
+                <Border Classes="card" Background="#F0020711">
+                  <Canvas Width="344" Height="176">
+                    <Line StartPoint="38,78" EndPoint="125,116" Stroke="#416FA8E8" StrokeThickness="1" />
+                    <Line StartPoint="125,116" EndPoint="218,66" Stroke="#416FA8E8" StrokeThickness="1" />
+                    <Line StartPoint="218,66" EndPoint="320,126" Stroke="#416FA8E8" StrokeThickness="1" />
+                    <Line StartPoint="38,78" EndPoint="218,66" Stroke="#244B79B6" StrokeThickness="1" />
+                    <Button Classes="map-node local" Tag="local" Canvas.Left="32" Canvas.Top="72" Click="OnNetworkNode" />
+                    <Button Classes="map-node" Tag="relay" Canvas.Left="119" Canvas.Top="110" Click="OnNetworkNode" />
+                    <Button Classes="map-node selected" Tag="vault" Canvas.Left="212" Canvas.Top="60" Click="OnNetworkNode" />
+                    <Button Classes="map-node" Tag="edge" Canvas.Left="314" Canvas.Top="120" Click="OnNetworkNode" />
+                  </Canvas>
+                </Border>
+                <Border Grid.Row="1" Classes="card" Padding="10,8">
+                  <Grid ColumnDefinitions="82,*" RowDefinitions="Auto,Auto,Auto,Auto" RowSpacing="3">
+                    <TextBlock Text="TARGET" Foreground="#8EB6E9" FontSize="10" />
+                    <TextBlock x:Name="NodeName" Grid.Column="1" Text="vault.mix" FontSize="10" />
+                    <TextBlock Grid.Row="1" Text="IP ADDRESS" Foreground="#8EB6E9" FontSize="10" />
+                    <TextBlock x:Name="NodeIp" Grid.Row="1" Grid.Column="1" Text="192.0.2.77" FontSize="10" />
+                    <TextBlock Grid.Row="2" Text="LOCATION" Foreground="#8EB6E9" FontSize="10" />
+                    <TextBlock x:Name="NodeLocation" Grid.Row="2" Grid.Column="1" Text="Reykjavik / pinned relay" FontSize="10" />
+                    <TextBlock Grid.Row="3" Text="STATUS" Foreground="#8EB6E9" FontSize="10" />
+                    <TextBlock Grid.Row="3" Grid.Column="1" Text="Pinned key verified" Foreground="#27EE91" FontSize="10" />
+                  </Grid>
+                </Border>
+                <StackPanel Grid.Row="2" Orientation="Horizontal" Spacing="7">
+                  <Button Classes="tool" Tag="trace" Content="Trace Route" Click="OnAction" />
+                  <Button Classes="tool" Tag="recon" Content="Recon Profile" Click="OnAction" />
+                  <Button Classes="tool" Tag="ssh" Content="SSH Connect" Click="OnAction" />
+                </StackPanel>
+              </Grid>
+            </Grid>
+          </Border>
+
+          <!-- Files -->
+          <Border x:Name="FilesWindow" Classes="desktop-window" Width="640" Height="318"
+                  Canvas.Left="220" Canvas.Top="332" ZIndex="16" PointerPressed="FocusDesktopWindow">
+            <Grid RowDefinitions="34,44,35,*,24">
+              <Border Classes="titlebar" Tag="FilesWindow"
+                      PointerPressed="BeginDesktopWindowDrag" PointerMoved="ContinueDesktopWindowDrag" PointerReleased="EndDesktopWindowDrag">
+                <Grid ColumnDefinitions="*,Auto">
+                  <TextBlock x:Name="FilesTitle" Classes="window-title" Text="FILES - /SYSTEM" />
+                  <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                    <Button Classes="window-dot min" Tag="FilesWindow" Content="-" Click="OnDesktopMinimize" />
+                    <Button Classes="window-dot max" Tag="FilesWindow" Content="□" Click="OnDesktopMaximize" />
+                    <Button Classes="window-dot close" Tag="FilesWindow" Content="x" Click="OnDesktopClose" />
+                  </StackPanel>
+                </Grid>
+              </Border>
+              <Grid Grid.Row="1" ColumnDefinitions="78,*,170" Margin="9,7" ColumnSpacing="6">
+                <StackPanel Orientation="Horizontal" Spacing="4">
+                  <Button Classes="tool" Width="24" Padding="0" Tag="back" Content="&lt;" Click="OnAction" />
+                  <Button Classes="tool" Width="24" Padding="0" Tag="forward" Content="&gt;" Click="OnAction" />
+                  <Button Classes="tool" Width="24" Padding="0" Tag="up" Content="^" Click="OnAction" />
+                </StackPanel>
+                <Grid Grid.Column="1">
+                  <Border x:Name="Breadcrumb" Background="#D30A2854" BorderBrush="#5A5FA2FF" BorderThickness="1"
+                          CornerRadius="5" Padding="8,0" PointerPressed="OnAddressPressed">
+                    <TextBlock x:Name="BreadcrumbText" Text="⌂  MixtarRVS   >   ⚙  System" VerticalAlignment="Center"
+                               FontFamily="Cascadia Mono, Consolas" FontSize="10" TextTrimming="CharacterEllipsis" />
+                  </Border>
+                  <TextBox x:Name="AddressBox" IsVisible="False" Text="MIXTARROOT:/System" Padding="8,0"
+                           FontFamily="Cascadia Mono, Consolas" KeyDown="OnAddressKeyDown" LostFocus="OnAddressLostFocus" />
+                </Grid>
+                <TextBox x:Name="FileSearch" Grid.Column="2" PlaceholderText="Search /System" Padding="8,0" TextChanged="OnFileSearchChanged" />
+              </Grid>
+              <Grid Grid.Row="2" ColumnDefinitions="Auto,Auto,*" Margin="9,3,9,4" ColumnSpacing="6">
+                <Button Classes="tool" Tag="reload" Content="Refresh" Click="OnAction" />
+                <Button Grid.Column="1" Classes="tool" Tag="root" Content="Clean Root" Click="OnAction" />
+                <TextBlock x:Name="PathHint" Grid.Column="2" Text="MIXTARROOT:/System" Foreground="#668AB9"
+                           HorizontalAlignment="Right" VerticalAlignment="Center" FontFamily="Cascadia Mono, Consolas" FontSize="9" />
+              </Grid>
+              <Grid Grid.Row="3" ColumnDefinitions="170,*">
+                <Border BorderBrush="#344B97FF" BorderThickness="0,1,1,0" Background="#28030D1C" Padding="8,6">
+                  <ScrollViewer>
+                    <StackPanel Spacing="1">
+                      <TextBlock Text="ROOT" Margin="7,3" Foreground="#7EAFE8" FontFamily="Cascadia Mono, Consolas" FontSize="9" FontWeight="Bold" />
+                      <Button Classes="tree" Tag="/" Content="⌂  / Root" Click="OnTreePath" />
+                      <Button Classes="tree" Tag="/Applications" Content="◇  Applications" Click="OnTreePath" />
+                      <Button Classes="tree" Tag="/System" Content="⚙  System" Click="OnTreePath" />
+                      <Button Classes="tree" Tag="/Users" Content="●  Users" Click="OnTreePath" />
+                      <Button Classes="tree" Tag="/Volumes" Content="▣  Volumes" Click="OnTreePath" />
+                      <Button Classes="tree" Tag="/Temporary" Content="◇  Temporary" Click="OnTreePath" />
+                      <TextBlock Text="SYSTEM" Margin="7,9,7,3" Foreground="#7EAFE8" FontFamily="Cascadia Mono, Consolas" FontSize="9" FontWeight="Bold" />
+                      <Button Classes="tree" Tag="/System/Runtime" Content="   ◈  Runtime" Click="OnTreePath" />
+                      <Button Classes="tree" Tag="/System/Logs" Content="   ≡  Logs" Click="OnTreePath" />
+                    </StackPanel>
+                  </ScrollViewer>
+                </Border>
+                <Grid Grid.Column="1" RowDefinitions="28,*">
+                  <Border Background="#E6071936" Padding="10,0">
+                    <Grid ColumnDefinitions="190,74,45,72,*">
+                      <TextBlock Text="Name" Foreground="#8BBCFF" FontFamily="Cascadia Mono, Consolas" FontSize="9" VerticalAlignment="Center" />
+                      <TextBlock Grid.Column="1" Text="Type" Foreground="#8BBCFF" FontFamily="Cascadia Mono, Consolas" FontSize="9" VerticalAlignment="Center" />
+                      <TextBlock Grid.Column="2" Text="Items" Foreground="#8BBCFF" FontFamily="Cascadia Mono, Consolas" FontSize="9" VerticalAlignment="Center" />
+                      <TextBlock Grid.Column="3" Text="Modified" Foreground="#8BBCFF" FontFamily="Cascadia Mono, Consolas" FontSize="9" VerticalAlignment="Center" />
+                      <TextBlock Grid.Column="4" Text="Role" Foreground="#8BBCFF" FontFamily="Cascadia Mono, Consolas" FontSize="9" VerticalAlignment="Center" />
+                    </Grid>
+                  </Border>
+                  <ScrollViewer Grid.Row="1">
+                    <StackPanel x:Name="FileRows" />
+                  </ScrollViewer>
+                </Grid>
+              </Grid>
+              <Border Grid.Row="4" Background="#52020812" Padding="9,0">
+                <Grid ColumnDefinitions="*,Auto">
+                  <TextBlock x:Name="ItemCount" Text="10 items" Foreground="#7FAEE6" FontFamily="Cascadia Mono, Consolas" FontSize="9" VerticalAlignment="Center" />
+                  <TextBlock x:Name="SelectionStatus" Grid.Column="1" Text="No selection" Foreground="#7FAEE6"
+                             FontFamily="Cascadia Mono, Consolas" FontSize="9" VerticalAlignment="Center" />
+                </Grid>
+              </Border>
+            </Grid>
+          </Border>
+
+          <!-- Runtime -->
+          <Border x:Name="RuntimeWindow" Classes="desktop-window" Width="240" Height="195"
+                  Canvas.Left="855" Canvas.Top="346" ZIndex="14" PointerPressed="FocusDesktopWindow">
+            <Grid RowDefinitions="34,*">
+              <Border Classes="titlebar" Tag="RuntimeWindow"
+                      PointerPressed="BeginDesktopWindowDrag" PointerMoved="ContinueDesktopWindowDrag" PointerReleased="EndDesktopWindowDrag">
+                <Grid ColumnDefinitions="*,Auto">
+                  <TextBlock Classes="window-title" Text="RUNTIME MONITOR" />
+                  <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                    <Button Classes="window-dot min" Tag="RuntimeWindow" Content="-" Click="OnDesktopMinimize" />
+                    <Button Classes="window-dot close" Tag="RuntimeWindow" Content="x" Click="OnDesktopClose" />
+                  </StackPanel>
+                </Grid>
+              </Border>
+              <StackPanel Grid.Row="1" Margin="12,10" Spacing="8">
+                <TextBlock Text="/SYSTEM/RUNTIME" Foreground="#8FC1FF" FontFamily="Cascadia Mono, Consolas" FontSize="9" FontWeight="Bold" />
+                <Grid ColumnDefinitions="50,*,32"><TextBlock Text="CPU" FontSize="9" /><Border Grid.Column="1" Height="6" Background="#17FFFFFF" CornerRadius="3" VerticalAlignment="Center"><Border Width="28" HorizontalAlignment="Left" Background="#18B9FF" CornerRadius="3" /></Border><TextBlock Grid.Column="2" Text="14%" FontSize="9" HorizontalAlignment="Right" /></Grid>
+                <Grid ColumnDefinitions="50,*,32"><TextBlock Text="Memory" FontSize="9" /><Border Grid.Column="1" Height="6" Background="#17FFFFFF" CornerRadius="3" VerticalAlignment="Center"><Border Width="62" HorizontalAlignment="Left" Background="#18B9FF" CornerRadius="3" /></Border><TextBlock Grid.Column="2" Text="31%" FontSize="9" HorizontalAlignment="Right" /></Grid>
+                <Grid ColumnDefinitions="50,*,32"><TextBlock Text="APX" FontSize="9" /><Border Grid.Column="1" Height="6" Background="#17FFFFFF" CornerRadius="3" VerticalAlignment="Center"><Border Width="84" HorizontalAlignment="Left" Background="#18B9FF" CornerRadius="3" /></Border><TextBlock Grid.Column="2" Text="6" FontSize="9" HorizontalAlignment="Right" /></Grid>
+                <Grid ColumnDefinitions="50,*,32"><TextBlock Text="NET" FontSize="9" /><Border Grid.Column="1" Height="6" Background="#17FFFFFF" CornerRadius="3" VerticalAlignment="Center"><Border Width="45" HorizontalAlignment="Left" Background="#18B9FF" CornerRadius="3" /></Border><TextBlock Grid.Column="2" Text="7" FontSize="9" HorizontalAlignment="Right" /></Grid>
+                <Border Classes="card" Padding="8,6">
+                  <TextBlock Text="Executor heartbeat OK&#10;Config policy loaded&#10;Native root clean" Foreground="#91B7E8"
+                             FontFamily="Cascadia Mono, Consolas" FontSize="8" LineHeight="11" />
+                </Border>
+              </StackPanel>
+            </Grid>
+          </Border>
+        </Canvas>
+
+        <!-- HUD -->
+        <Border x:Name="Hud" Height="40" VerticalAlignment="Top" ZIndex="100"
+                Background="#F5061125" BorderBrush="#484796FF" BorderThickness="0,0,0,1"
+                PointerPressed="OnHudPointerPressed">
+          <Grid ColumnDefinitions="*,Auto" Margin="12,0">
+            <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Spacing="8">
+              <Button Classes="hud-item" Tag="start" Click="OnAction" Padding="0,0,8,0">
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                  <Border Width="17" Height="17" CornerRadius="5" Background="#0B70DF" BorderBrush="#18B9FF" BorderThickness="1" />
+                  <TextBlock Text="MixtarRVS" Foreground="#7DBDFF" FontWeight="Bold" FontSize="12" VerticalAlignment="Center" />
+                </StackPanel>
+              </Button>
+              <Button Classes="hud-item" Tag="files" Content="Files" Click="OnAction" />
+              <Button Classes="hud-item" Content="View" />
+              <Button Classes="hud-item" Content="Tools" />
+              <Button Classes="hud-item" Content="Sessions" />
+              <Button Classes="hud-item" Content="Help" />
+            </StackPanel>
+            <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center" Spacing="14">
+              <TextBlock Text="● APX Core" Foreground="#9ED8C6" FontFamily="Cascadia Mono, Consolas" FontSize="10" />
+              <TextBlock Text="● SEC" Foreground="#FFD880" FontFamily="Cascadia Mono, Consolas" FontSize="10" />
+              <TextBlock Text="● NET" Foreground="#6DCEFF" FontFamily="Cascadia Mono, Consolas" FontSize="10" />
+              <Border BorderBrush="#20FFFFFF" BorderThickness="1,0,0,0" Padding="14,0,0,0">
+                <TextBlock x:Name="ClockText" Text="--:--:--" Foreground="#C4DCFF" FontFamily="Cascadia Mono, Consolas" FontSize="10" />
+              </Border>
+            </StackPanel>
+          </Grid>
+        </Border>
+
+        <!-- Start menu -->
+        <Border x:Name="StartMenu" IsVisible="False" Width="430" Height="390" HorizontalAlignment="Left" VerticalAlignment="Bottom"
+                Margin="10,0,0,56" ZIndex="130" Background="#F0051630" BorderBrush="{StaticResource StrokeBrush}"
+                BorderThickness="1" CornerRadius="11" BoxShadow="0 24 68 0 #D0000000">
+          <Grid RowDefinitions="54,*">
+            <TextBox Margin="13,11" PlaceholderText="Search applications and commands" Padding="10,0" />
+            <Grid Grid.Row="1" ColumnDefinitions="*,*" Margin="13,7,13,13" ColumnSpacing="13">
+              <StackPanel Spacing="4">
+                <TextBlock Text="APPLICATIONS" Foreground="#8EBDFF" FontFamily="Cascadia Mono, Consolas" FontSize="9" FontWeight="Bold" Margin="3,0,0,4" />
+                <Button Classes="tree" Tag="files" Content="▣  Files Explorer" Click="OnAction" />
+                <Button Classes="tree" Tag="terminal" Content=">_  Terminal" Click="OnAction" />
+                <Button Classes="tree" Tag="network" Content="◇  Network Inspector" Click="OnAction" />
+                <Button Classes="tree" Tag="runtime" Content="◈  Runtime Monitor" Click="OnAction" />
+                <Button Classes="tree" Tag="apx" Content="◇  APX Bundles" Click="OnAction" />
+              </StackPanel>
+              <StackPanel Grid.Column="1" Spacing="4">
+                <TextBlock Text="SYSTEM" Foreground="#8EBDFF" FontFamily="Cascadia Mono, Consolas" FontSize="9" FontWeight="Bold" Margin="3,0,0,4" />
+                <Button Classes="tree" Tag="root" Content="⌂  Clean Root" Click="OnAction" />
+                <Button Classes="tree" Tag="trace" Content="◇  Trace Route" Click="OnAction" />
+                <Button Classes="tree" Tag="recon" Content="◇  Recon Profile" Click="OnAction" />
+                <Button Classes="tree" Tag="verify" Content="✓  Core Verify" Click="OnAction" />
+                <Button Classes="tree" Tag="reboot" Content="↻  Controlled Reboot" Click="OnAction" />
+              </StackPanel>
+            </Grid>
+          </Grid>
+        </Border>
+
+        <!-- Command palette -->
+        <Border x:Name="CommandPalette" IsVisible="False" Width="620" HorizontalAlignment="Center" VerticalAlignment="Top"
+                Margin="0,78,0,0" ZIndex="150" Background="#F5051630" BorderBrush="{StaticResource StrokeStrongBrush}"
+                BorderThickness="1" CornerRadius="11" Padding="13" BoxShadow="0 26 76 0 #E0000000">
+          <StackPanel Spacing="8">
+            <TextBox x:Name="PaletteInput" PlaceholderText="Type a command..." Padding="10,0" KeyDown="OnPaletteKeyDown" />
+            <Grid ColumnDefinitions="*,Auto"><TextBlock Text="Files Explorer" /><TextBlock Grid.Column="1" Text="files" Foreground="#7FB2ED" FontFamily="Cascadia Mono, Consolas" /></Grid>
+            <Grid ColumnDefinitions="*,Auto"><TextBlock Text="Terminal" /><TextBlock Grid.Column="1" Text="terminal" Foreground="#7FB2ED" FontFamily="Cascadia Mono, Consolas" /></Grid>
+            <Grid ColumnDefinitions="*,Auto"><TextBlock Text="Network Inspector" /><TextBlock Grid.Column="1" Text="network" Foreground="#7FB2ED" FontFamily="Cascadia Mono, Consolas" /></Grid>
+            <Grid ColumnDefinitions="*,Auto"><TextBlock Text="Runtime Monitor" /><TextBlock Grid.Column="1" Text="runtime" Foreground="#7FB2ED" FontFamily="Cascadia Mono, Consolas" /></Grid>
+          </StackPanel>
+        </Border>
+
+        <!-- Taskbar -->
+        <Border Height="48" VerticalAlignment="Bottom" ZIndex="140" Background="#F0040E1F"
+                BorderBrush="#4C4796FF" BorderThickness="0,1,0,0">
+          <Grid ColumnDefinitions="Auto,1,*,Auto" Margin="8,0" ColumnSpacing="8">
+            <Button Grid.Column="0" Classes="start" Tag="start" Click="OnAction" Content="▰  Start" />
+            <Border Grid.Column="1" Width="1" Height="24" Background="#20FFFFFF" />
+            <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+              <Button x:Name="TerminalTask" Classes="task active" Tag="TerminalWindow" Content="▣  Terminal" Click="OnTaskClick" />
+              <Button x:Name="NetworkTask" Classes="task" Tag="NetworkWindow" Content="◇  Network Inspector" Click="OnTaskClick" />
+              <Button x:Name="FilesTask" Classes="task" Tag="FilesWindow" Content="▣  Files" Click="OnTaskClick" />
+              <Button x:Name="RuntimeTask" Classes="task" Tag="RuntimeWindow" Content="◈  Runtime Monitor" Click="OnTaskClick" />
+            </StackPanel>
+            <StackPanel Grid.Column="3" Orientation="Horizontal" Spacing="12" VerticalAlignment="Center">
+              <TextBlock Text="⌘K" Foreground="#91B7E8" FontFamily="Cascadia Mono, Consolas" FontSize="9" />
+              <TextBlock Text="⌁" Foreground="#91B7E8" />
+              <TextBlock Text="▮" Foreground="#91B7E8" />
+              <Button Width="30" Height="30" Padding="0" Background="Transparent" BorderThickness="0" Content="⏻" Foreground="#DCEAFF" Click="OnPowerClick" />
+            </StackPanel>
+          </Grid>
+        </Border>
+      </Grid>
+    </Viewbox>
+  </Grid>
+</Window>

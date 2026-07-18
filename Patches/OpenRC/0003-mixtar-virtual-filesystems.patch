@@ -1,0 +1,1229 @@
+diff --git a/sh/binfmt.sh.in b/sh/binfmt.sh.in
+index d062523..73c38f1 100644
+--- a/sh/binfmt.sh.in
++++ b/sh/binfmt.sh.in
+@@ -31,9 +31,9 @@ apply_file() {
+ 		esac
+ 
+ 		local reg=${line#*:}
+-		[ -e /proc/sys/fs/binfmt_misc/${reg%%:*} ] && echo -1 > /proc/sys/fs/binfmt_misc/${reg%%:*}
++		[ -e /System/Processes/sys/fs/binfmt_misc/${reg%%:*} ] && echo -1 > /System/Processes/sys/fs/binfmt_misc/${reg%%:*}
+ 
+-		echo "${line}" > /proc/sys/fs/binfmt_misc/register
++		echo "${line}" > /System/Processes/sys/fs/binfmt_misc/register
+ 		rc=$?
+ 		if [ $rc -ne 0 ]; then
+ 			printf "binfmt: invalid entry on line %d of \`%s'\n" \
+@@ -44,7 +44,7 @@ apply_file() {
+ 	return $rc
+ }
+ 
+-[ -e /proc/sys/fs/binfmt_misc/register ] || exit 0
++[ -e /System/Processes/sys/fs/binfmt_misc/register ] || exit 0
+ error=0
+ if [ $# -gt 0 ]; then
+ 	while [ $# -gt 0 ]; do
+@@ -54,15 +54,15 @@ if [ $# -gt 0 ]; then
+ else
+ 	# The hardcoding of these paths is intentional; we are following the
+ 	# systemd spec.
+-	binfmt_dirs='/usr/lib/binfmt.d/ /usr/local/lib/binfmt.d/ /run/binfmt.d/ /etc/binfmt.d/'
++	binfmt_dirs='/System/Configuration/Binfmt/ /System/Configuration/Binfmt/ /System/Runtime/binfmt.d/ /System/Configuration/Binfmt/'
+ 	binfmt_basenames=''
+ 	binfmt_d=''
+ 
+ 	# Build a list of sorted unique basenames
+ 	# directories declared later in the binfmt_d list will override earlier
+ 	# directories, on a per file basename basis.
+-	# `/run/binfmt.d/foo.conf' supersedes `/usr/lib/binfmt.d/foo.conf'.
+-	# `/run/binfmt.d/foo.conf' will always be read after `/etc/binfmt.d/bar.conf'
++	# `/System/Runtime/binfmt.d/foo.conf' supersedes `/System/Configuration/Binfmt/foo.conf'.
++	# `/System/Runtime/binfmt.d/foo.conf' will always be read after `/System/Configuration/Binfmt/bar.conf'
+ 	for d in ${binfmt_dirs} ; do
+ 		[ -d $d ] && for f in ${d}/*.conf ; do
+ 			case "${f##*/}" in
+@@ -83,7 +83,7 @@ else
+ 	done
+ 
+ 	# loop through the gathered fragments, sorted globally by filename.
+-	# `/run/binfmt.d/foo.conf' will always be read after `/etc/binfmt.d/bar.conf'
++	# `/System/Runtime/binfmt.d/foo.conf' will always be read after `/System/Configuration/Binfmt/bar.conf'
+ 	for FILE in $binfmt_d ; do
+ 		apply_file "$FILE"
+ 	done
+diff --git a/sh/cgroup-release-agent.sh.in b/sh/cgroup-release-agent.sh.in
+index 0a6ec17..c94bf80 100644
+--- a/sh/cgroup-release-agent.sh.in
++++ b/sh/cgroup-release-agent.sh.in
+@@ -12,7 +12,7 @@
+ # This file may not be copied, modified, propagated, or distributed
+ #    except according to the terms contained in the LICENSE file.
+ 
+-cgroup=/sys/fs/cgroup/openrc
++cgroup=/System/Hardware/fs/cgroup/openrc
+ PATH=/bin:/usr/bin:/sbin:/usr/sbin
+ if [ -d ${cgroup}/"$1" ]; then
+ 	rmdir ${cgroup}/"$1"
+diff --git a/sh/init-early.sh.Linux.in b/sh/init-early.sh.Linux.in
+index db0c1aa..82b5e20 100644
+--- a/sh/init-early.sh.Linux.in
++++ b/sh/init-early.sh.Linux.in
+@@ -9,7 +9,7 @@
+ # This file may not be copied, modified, propagated, or distributed
+ #    except according to the terms contained in the LICENSE file.
+ 
+-: ${CONSOLE:=/dev/console}
++: ${CONSOLE:=/System/Devices/console}
+ : ${RC_LIBEXECDIR:=@LIBEXECDIR@}
+ : ${RC_CACHEDIR:=/var/cache/rc}
+ 
+@@ -35,25 +35,25 @@ else
+ fi
+ 
+ # Set the SELinux label on console before everything so we dont lose output
+-[ -x /sbin/restorecon ] && /sbin/restorecon -F /dev/console
++[ -x /sbin/restorecon ] && /sbin/restorecon -F /System/Devices/console
+ 
+ # Try and set a font and as early as we can
+ if service_present "$RC_DEFAULTLEVEL" consolefont ||
+    service_present "$RC_BOOTLEVEL" consolefont; then
+-	printf "\033%s" "$termencoding" >"$CONSOLE" 2>/dev/null
++	printf "\033%s" "$termencoding" >"$CONSOLE" 2>/System/Devices/null
+ 	if [ -r "$RC_CACHEDIR"/console/font ] && \
+-		command -v setfont > /dev/null 2>&1; then
++		command -v setfont > /System/Devices/null 2>&1; then
+ 		[ -c "$CONSOLE" ] && cons="-C $CONSOLE"
+-		setfont $cons "$RC_CACHEDIR"/console/font 2>/dev/null
++		setfont $cons "$RC_CACHEDIR"/console/font 2>/System/Devices/null
+ 	fi
+ fi
+ 
+ # Try and set a keyboard map as early as possible
+ if service_present "$RC_DEFAULTLEVEL" keymaps ||
+    service_present "$RC_BOOTLEVEL" keymaps; then
+-	kbd_mode $kmode -C "$CONSOLE" 2>/dev/null
++	kbd_mode $kmode -C "$CONSOLE" 2>/System/Devices/null
+ 	if [ -r "$RC_CACHEDIR"/console/keymap ]; then
+-		loadkeys -q "$RC_CACHEDIR"/console/keymap 2>/dev/null
++		loadkeys -q "$RC_CACHEDIR"/console/keymap 2>/System/Devices/null
+ 	fi
+ fi
+ 
+diff --git a/sh/init.sh.BSD.in b/sh/init.sh.BSD.in
+index b64b8b5..0927e42 100644
+--- a/sh/init.sh.BSD.in
++++ b/sh/init.sh.BSD.in
+@@ -19,11 +19,11 @@ mount_svcdir()
+ {
+ 	if ! fstabinfo --mount "$RC_SVCDIR"; then
+ 		if ! mount -t tmpfs -o rw,noexec,nosuid none \
+-			"$RC_SVCDIR" 2>/dev/null
++			"$RC_SVCDIR" 2>/System/Devices/null
+ 		then
+ 			mdconfig -a -t malloc -s "${rc_svcsize:-1024}"k -u 0
+-			newfs -b 4096 -i 1024 -n /dev/md0
+-			mount -o rw,noexec,nosuid /dev/md0 "$RC_SVCDIR"
++			newfs -b 4096 -i 1024 -n /System/Devices/md0
++			mount -o rw,noexec,nosuid /System/Devices/md0 "$RC_SVCDIR"
+ 		fi
+ 	fi
+ }
+@@ -38,7 +38,7 @@ fi
+ 
+ # Disable devd until we need it
+ if [ -z "$RC_SYS" -a "$RC_UNAME" = "FreeBSD" ]; then
+-	sysctl hw.bus.devctl_disable=1 >/dev/null
++	sysctl hw.bus.devctl_disable=1 >/System/Devices/null
+ fi
+ 
+ # mount $RC_SVCDIR as something we can write to if it's not rw
+@@ -58,7 +58,7 @@ esac
+ retval=$?
+ 
+ if [ -d "$RC_CACHEDIR" ]; then
+-	cp -pr "$RC_CACHEDIR"/* "$RC_SVCDIR" 2>/dev/null
++	cp -pr "$RC_CACHEDIR"/* "$RC_SVCDIR" 2>/System/Devices/null
+ fi
+ 
+ echo sysinit >"$RC_SVCDIR"/softlevel
+diff --git a/sh/init.sh.GNU.in b/sh/init.sh.GNU.in
+index 83461ee..b1f8efd 100644
+--- a/sh/init.sh.GNU.in
++++ b/sh/init.sh.GNU.in
+@@ -9,9 +9,9 @@
+ # This file may not be copied, modified, propagated, or distributed
+ #    except according to the terms contained in the LICENSE file.
+ 
+-if [ ! -d /run ]; then
+-    ebegin "Creating /run"
+-    mkdir -p /run
++if [ ! -d /System/Runtime ]; then
++    ebegin "Creating /System/Runtime"
++    mkdir -p /System/Runtime
+     eend $?
+ fi
+ 
+@@ -19,10 +19,10 @@ if [ -L $RC_SVCDIR ]; then
+     rm $RC_SVCDIR
+ fi
+ 
+-if ! mountinfo -q /run; then
+-    ebegin "Mounting /run"
+-    if ! fstabinfo --mount /run; then
+-        mount -t tmpfs -o mode=0755,no-suid,size=10% tmpfs /run
++if ! mountinfo -q /System/Runtime; then
++    ebegin "Mounting /System/Runtime"
++    if ! fstabinfo --mount /System/Runtime; then
++        mount -t tmpfs -o mode=0755,no-suid,size=10% tmpfs /System/Runtime
+         if [ $? != 0 ]; then
+             eerror "Unable to mount tmpfs on /run."
+             eerror "Can't continue."
+@@ -37,7 +37,7 @@ mkdir -p $RC_SVCDIR
+ eend $?
+ 
+ if [ -d "$RC_CACHEDIR" ]; then
+-	cp -pr "$RC_CACHEDIR"/* "$RC_SVCDIR" 2>/dev/null
++	cp -pr "$RC_CACHEDIR"/* "$RC_SVCDIR" 2>/System/Devices/null
+ fi
+ 
+ echo sysinit >"$RC_SVCDIR"/softlevel
+diff --git a/sh/init.sh.Linux.in b/sh/init.sh.Linux.in
+index 33823a2..3b00435 100644
+--- a/sh/init.sh.Linux.in
++++ b/sh/init.sh.Linux.in
+@@ -12,7 +12,7 @@ if [ -d "@SYSCONFDIR@/rc.conf.d" ]; then
+ fi
+ 
+ # check for md5sum, and probably /usr too
+-if command -v md5sum >/dev/null; then
++if command -v md5sum >/System/Devices/null; then
+ 	got_md5sum=true
+ else
+ 	eerror "md5sum is missing, which suggests /usr is not mounted"
+@@ -21,59 +21,59 @@ else
+ 	got_md5sum=false
+ fi
+ 
+-# By default VServer already has /proc mounted, but OpenVZ does not!
+-# However, some of our users have an old proc image in /proc
++# By default VServer already has /System/Processes mounted, but OpenVZ does not!
++# However, some of our users have an old proc image in /System/Processes
+ # NFC how they managed that, but the end result means we have to test if
+-# /proc actually works or not. We do this by comparing two reads of
+-# /proc/self/environ for which we have set the variable VAR to two
++# /System/Processes actually works or not. We do this by comparing two reads of
++# /System/Processes/self/environ for which we have set the variable VAR to two
+ # different values. If the comparison comes back equal, we know that
+-# /proc is not working.
++# /System/Processes is not working.
+ mountproc=true
+-f=/proc/self/environ
++f=/System/Processes/self/environ
+ if [ -e $f ]; then
+ 	if $got_md5sum && [ "$(VAR=a md5sum $f)" = "$(VAR=b md5sum $f)" ]; then
+-		eerror "You have cruft in /proc that should be deleted"
++		eerror "You have cruft in /System/Processes that should be deleted"
+ 	else
+ 		# If they don't have md5sum, this will fail in pretty ways if
+-		# /proc isn't really mounted.  Oh well, their system is busted
++		# /System/Processes isn't really mounted.  Oh well, their system is busted
+ 		# anyway, and they get to keep the pieces.
+-		einfo "/proc is already mounted"
++		einfo "/System/Processes is already mounted"
+ 		mountproc=false
+ 	fi
+ fi
+ unset f
+ 
+ if $mountproc; then
+-	ebegin "Mounting /proc"
+-	if ! fstabinfo --mount /proc; then
+-		mount -n -t proc -o noexec,nosuid,nodev proc /proc
++	ebegin "Mounting /System/Processes"
++	if ! fstabinfo --mount /System/Processes; then
++		mount -n -t proc -o noexec,nosuid,nodev proc /System/Processes
+ 	fi
+ 	eend $?
+ fi
+ 
+-# /run is a new directory for storing volatile runtime data.
+-# Read more about /run at https://lwn.net/Articles/436012
++# /System/Runtime is a new directory for storing volatile runtime data.
++# Read more about /System/Runtime at https://lwn.net/Articles/436012
+ sys="$(openrc --sys)"
+ 
+-if [ ! -d /run ]; then
++if [ ! -d /System/Runtime ]; then
+ 	if [ "$sys" = VSERVER ]; then
+-		if [ -e /run ]; then
+-		rm -rf /run
++		if [ -e /System/Runtime ]; then
++		rm -rf /System/Runtime
+ 		fi
+-		mkdir /run
++		mkdir /System/Runtime
+ 	else
+-		eerror "The /run directory does not exist. Unable to continue."
++		eerror "The /System/Runtime directory does not exist. Unable to continue."
+ 		return 1
+ 	fi
+ fi
+ 
+ if [ "$sys" = VSERVER ]; then
+-	rm -rf /run/*
+-elif ! mountinfo -q /run; then
+-	ebegin "Mounting /run"
++	rm -rf /System/Runtime/*
++elif ! mountinfo -q /System/Runtime; then
++	ebegin "Mounting /System/Runtime"
+ 	run_mount_opts="mode=0755,nosuid,nodev,nr_inodes=800k,size=20%,strictatime"
+-	if ! fstabinfo --mount /run; then
+-		if ! mount -t tmpfs -o ${run_mount_opts} tmpfs /run; then
++	if ! fstabinfo --mount /System/Runtime; then
++		if ! mount -t tmpfs -o ${run_mount_opts} tmpfs /System/Runtime; then
+ 			eerror "Unable to mount tmpfs on /run."
+ 			eerror "Can't continue."
+ 			exit 1
+@@ -83,22 +83,22 @@ elif ! mountinfo -q /run; then
+ fi
+ 
+ checkpath -d "$RC_SVCDIR"
+-checkpath -d -m 0775 -o root:@UUCP_GROUP@ /run/lock
++checkpath -d -m 0775 -o root:@UUCP_GROUP@ /System/Runtime/lock
+ 
+ # Try to mount xenfs as early as possible, otherwise rc_sys() will always
+ # return RC_SYS_XENU and will think that we are in a domU while it's not.
+-if grep -Eq "[[:space:]]+xenfs$" /proc/filesystems; then
++if grep -Eq "[[:space:]]+xenfs$" /System/Processes/filesystems; then
+ 	ebegin "Mounting xenfs"
+-	if ! fstabinfo --mount /proc/xen; then
+-		mount -n -t xenfs xenfs /proc/xen -o nosuid,nodev,noexec
++	if ! fstabinfo --mount /System/Processes/xen; then
++		mount -n -t xenfs xenfs /System/Processes/xen -o nosuid,nodev,noexec
+ 	fi
+ 	eend $?
+ fi
+ 
+ if [ -d "$RC_CACHEDIR" ]; then
+-	cp -pr "$RC_CACHEDIR"/* "$RC_SVCDIR" 2>/dev/null
++	cp -pr "$RC_CACHEDIR"/* "$RC_SVCDIR" 2>/System/Devices/null
+ fi
+ 
+ echo sysinit >"$RC_SVCDIR"/softlevel
+-[ -x /sbin/restorecon ] && /sbin/restorecon -rF /run
++[ -x /sbin/restorecon ] && /sbin/restorecon -rF /System/Runtime
+ exit 0
+diff --git a/sh/openrc-run.sh.in b/sh/openrc-run.sh.in
+index 50fc54c..2b24e09 100644
+--- a/sh/openrc-run.sh.in
++++ b/sh/openrc-run.sh.in
+@@ -290,8 +290,8 @@ if yesno "${rc_verbose:-$RC_VERBOSE}"; then
+ fi
+ 
+ _setup_cgroup() {
+-	grep -qs /sys/fs/cgroup /proc/1/mountinfo || return
+-	[ -w /sys/fs/cgroup ] || {
++	grep -qs /System/Hardware/fs/cgroup /System/Processes/1/mountinfo || return
++	[ -w /System/Hardware/fs/cgroup ] || {
+ 		yesno "$RC_USER_SERVICES" || eerror "No permission to apply cgroup settings"
+ 		return
+ 	}
+diff --git a/sh/openrc-user.sh.in b/sh/openrc-user.sh.in
+index 5493516..24f050b 100644
+--- a/sh/openrc-user.sh.in
++++ b/sh/openrc-user.sh.in
+@@ -29,14 +29,14 @@ done
+ 
+ case $1 in
+ 	start)
+-		cp -pr "$cachedir"/* "$svcdir" 2>/dev/null
++		cp -pr "$cachedir"/* "$svcdir" 2>/System/Devices/null
+ 		openrc --user boot || exit 1
+ 		rc-environ --user -0n -r boot > "$userdir/environ" || ewarn "failed to export boot environment"
+ 		printf '\n' >&3
+ 		exec openrc --user "${rc_default_runlevel:-default}"
+ 		;;
+ 	stop)
+-		cp -pr "$svcdir"/dep* "$svcdir/init.d" "$svcdir/conf.d" "$cachedir" 2>/dev/null
++		cp -pr "$svcdir"/dep* "$svcdir/init.d" "$svcdir/conf.d" "$cachedir" 2>/System/Devices/null
+ 		exec openrc --user shutdown
+ 		;;
+ 	*) logger -p daemon.err "no argument given to $0" && exit 1
+diff --git a/sh/rc-cgroup.sh b/sh/rc-cgroup.sh
+index f10e328..b622f6c 100644
+--- a/sh/rc-cgroup.sh
++++ b/sh/rc-cgroup.sh
+@@ -19,7 +19,7 @@ cgroup_find_path()
+ 	IFS=":"
+ 	while read -r _ name dir; do
+ 		[ "$name" = "$1" ] && result="$dir"
+-	done < /proc/1/cgroup
++	done < /System/Processes/1/cgroup
+ 	IFS="$OIFS"
+ 	printf "%s" "${result}"
+ }
+@@ -37,7 +37,7 @@ cgroup_get_pids()
+ 	if [ -n "${cgroup_procs}" ]; then
+ 		cgroup_procs="${cgroup_procs}/openrc.${RC_SVCNAME}/cgroup.procs"
+ 	else
+-		cgroup_procs="/sys/fs/cgroup/openrc/${RC_SVCNAME}/tasks"
++		cgroup_procs="/System/Hardware/fs/cgroup/openrc/${RC_SVCNAME}/tasks"
+ 	fi
+ 	[ -f "${cgroup_procs}" ] || return 0
+ 	while read -r p; do
+@@ -49,19 +49,19 @@ cgroup_get_pids()
+ 
+ cgroup_running()
+ {
+-	[ -d "/sys/fs/cgroup/unified/${RC_SVCNAME}" ] ||
+-			[ -d "/sys/fs/cgroup/${RC_SVCNAME}" ] ||
+-			[ -d "/sys/fs/cgroup/openrc/${RC_SVCNAME}" ]
++	[ -d "/System/Hardware/fs/cgroup/unified/${RC_SVCNAME}" ] ||
++			[ -d "/System/Hardware/fs/cgroup/${RC_SVCNAME}" ] ||
++			[ -d "/System/Hardware/fs/cgroup/openrc/${RC_SVCNAME}" ]
+ }
+ 
+ cgroup_set_values()
+ {
+-	[ -n "$1" ] && [ -n "$2" ] && [ -d "/sys/fs/cgroup/$1" ] || return 0
++	[ -n "$1" ] && [ -n "$2" ] && [ -d "/System/Hardware/fs/cgroup/$1" ] || return 0
+ 
+ 	local controller h
+ 	controller="$1"
+ 	h=$(cgroup_find_path "$1")
+-	cgroup="/sys/fs/cgroup/${1}${h}openrc_${RC_SVCNAME}"
++	cgroup="/System/Hardware/fs/cgroup/${1}${h}openrc_${RC_SVCNAME}"
+ 	[ -d "$cgroup" ] || mkdir -p "$cgroup"
+ 
+ 	set -- $2
+@@ -104,11 +104,11 @@ cgroup_add_service()
+     # it prevents from unwanted inheriting of the user
+     # cgroups. But may lead to a problems where that inheriting
+     # is needed.
+-	for d in /sys/fs/cgroup/* ; do
++	for d in /System/Hardware/fs/cgroup/* ; do
+ 		[ -w "${d}"/tasks ] && printf "%d" 0 > "${d}"/tasks
+ 	done
+ 
+-	openrc_cgroup=/sys/fs/cgroup/openrc
++	openrc_cgroup=/System/Hardware/fs/cgroup/openrc
+ 	if [ -d "$openrc_cgroup" ]; then
+ 		cgroup="$openrc_cgroup/$RC_SVCNAME"
+ 		mkdir -p "$cgroup"
+@@ -153,10 +153,10 @@ cgroup_set_limits()
+ 
+ cgroup2_find_path()
+ {
+-	if grep -qw cgroup2 /proc/filesystems; then
++	if grep -qw cgroup2 /System/Processes/filesystems; then
+ 		case "${rc_cgroup_mode:-unified}" in
+-			hybrid) printf "/sys/fs/cgroup/unified" ;;
+-			unified) printf "/sys/fs/cgroup" ;;
++			hybrid) printf "/System/Hardware/fs/cgroup/unified" ;;
++			unified) printf "/System/Hardware/fs/cgroup" ;;
+ 		esac
+ 	fi
+ 		return 0
+@@ -222,11 +222,11 @@ cgroup_fallback_cleanup() {
+ 	local loops=0
+ 	cgroup_get_pids
+ 	if [ -n "${cgroup_pids}" ]; then
+-		kill -s CONT ${cgroup_pids} 2> /dev/null
+-		kill -s "${stopsig:-TERM}" ${cgroup_pids} 2> /dev/null
++		kill -s CONT ${cgroup_pids} 2> /System/Devices/null
++		kill -s "${stopsig:-TERM}" ${cgroup_pids} 2> /System/Devices/null
+ 		yesno "${rc_send_sighup:-no}" &&
+-			kill -s HUP ${cgroup_pids} 2> /dev/null
+-		kill -s "${stopsig:-TERM}" ${cgroup_pids} 2> /dev/null
++			kill -s HUP ${cgroup_pids} 2> /System/Devices/null
++		kill -s "${stopsig:-TERM}" ${cgroup_pids} 2> /System/Devices/null
+ 		cgroup_get_pids
+ 		while [ -n "${cgroup_pids}" ] &&
+ 			[ "${loops}" -lt "${rc_timeout_stopsec:-90}" ]; do
+@@ -235,7 +235,7 @@ cgroup_fallback_cleanup() {
+ 			cgroup_get_pids
+ 		done
+ 		if [ -n "${cgroup_pids}" ] && yesno "${rc_send_sigkill:-yes}"; then
+-			kill -s KILL ${cgroup_pids} 2> /dev/null
++			kill -s KILL ${cgroup_pids} 2> /System/Devices/null
+ 		fi
+ 	fi
+ 	eend $?
+diff --git a/sh/rc-functions.sh b/sh/rc-functions.sh
+index fec6339..fe4fccb 100644
+--- a/sh/rc-functions.sh
++++ b/sh/rc-functions.sh
+@@ -25,15 +25,15 @@ is_net_fs()
+ is_union_fs()
+ {
+ 	[ ! -x /sbin/unionctl ] && return 1
+-	unionctl "$1" --list >/dev/null 2>&1
++	unionctl "$1" --list >/System/Devices/null 2>&1
+ }
+ 
+ get_bootparam()
+ {
+ 	local match="$1"
+-	[ -z "$match" -o ! -r /proc/cmdline ] && return 1
++	[ -z "$match" -o ! -r /System/Processes/cmdline ] && return 1
+ 
+-	set -- $(cat /proc/cmdline)
++	set -- $(cat /System/Processes/cmdline)
+ 	while [ -n "$1" ]; do
+ 		[ "$1" = "$match" ] && return 0
+ 		case "$1" in
+@@ -54,8 +54,8 @@ get_bootparam()
+ get_bootparam_value()
+ {
+ 	local match="$1" which_value="$2" sep="$3" result value
+-	if [ -n "$match" -a -r /proc/cmdline ]; then
+-		set -- $(cat /proc/cmdline)
++	if [ -n "$match" -a -r /System/Processes/cmdline ]; then
++		set -- $(cat /System/Processes/cmdline)
+ 		while [ -n "$1" ]; do
+ 			case "$1" in
+ 				$match=*)
+diff --git a/sh/runit.sh b/sh/runit.sh
+index d4e37f3..aa96e0b 100644
+--- a/sh/runit.sh
++++ b/sh/runit.sh
+@@ -23,7 +23,7 @@ runit_start()
+ 	local i=0 retval=1
+ 	# it can take upto 5 seconds for runsv to start
+ 	while [ $i -lt 6 ] ; do
+-		if sv start "${service_link}" > /dev/null 2>&1; then
++		if sv start "${service_link}" > /System/Devices/null 2>&1; then
+ 			retval=0
+ 			break
+ 		fi
+@@ -46,7 +46,7 @@ runit_stop()
+ 	fi
+ 	service_link="${RC_SVCDIR}/sv/${service_path##*/}"
+ 	ebegin "Stopping ${name:-$RC_SVCNAME}"
+-	sv stop "${service_link}" > /dev/null 2>&1 &&
++	sv stop "${service_link}" > /System/Devices/null 2>&1 &&
+ 	rm "${service_link}"
+ 	eend $? "Failed to stop ${name:-$RC_SVCNAME}"
+ }
+diff --git a/sh/s6-svscanboot.sh.in b/sh/s6-svscanboot.sh.in
+index c18e75d..013f1ea 100644
+--- a/sh/s6-svscanboot.sh.in
++++ b/sh/s6-svscanboot.sh.in
+@@ -7,7 +7,7 @@ execlineb=`command -v execlineb`
+ mkdir -p "$logdir"
+ mkdir -p -m 02755 "$scandir/s6-svscan-log"
+ echo 3 > "$scandir/s6-svscan-log/notification-fd"
+-mkfifo -m 0600 "$scandir/s6-svscan-log/fifo" 2>/dev/null || :
++mkfifo -m 0600 "$scandir/s6-svscan-log/fifo" 2>/System/Devices/null || :
+ cat > "$scandir/s6-svscan-log/run" <<EOF
+ #!$execlineb -S1
+ fdmove -c 1 2
+@@ -19,4 +19,4 @@ chmod 0755 "$scandir/s6-svscan-log/run"
+ 
+ exec redirfd -wnb 1 "$scandir/s6-svscan-log/fifo" \
+ fdmove -c 2 1 \
+-s6-svscan -X3 -d4 -- "$scandir" 0</dev/null 3>/dev/console
++s6-svscan -X3 -d4 -- "$scandir" 0</System/Devices/null 3>/System/Devices/console
+diff --git a/sh/s6.sh b/sh/s6.sh
+index 7117ba3..647e83e 100644
+--- a/sh/s6.sh
++++ b/sh/s6.sh
+@@ -34,11 +34,11 @@ _s6_set_variables() {
+ }
+ 
+ _s6_available() {
+-	s6-svscanctl -- "$_scandir" 2>/dev/null
++	s6-svscanctl -- "$_scandir" 2>/System/Devices/null
+ }
+ 
+ _execline_available() {
+-	test -n "$_execlineb" && "$_execlineb" -Pc 'exit 0' 2>/dev/null
++	test -n "$_execlineb" && "$_execlineb" -Pc 'exit 0' 2>/System/Devices/null
+ }
+ 
+ _s6_sanity_checks() {
+@@ -215,7 +215,7 @@ s6_stop() {
+ 
+ s6_status() {
+ 	_s6_set_variables
+-	if s6-svok "$_service" 2>/dev/null ; then
++	if s6-svok "$_service" 2>/System/Devices/null ; then
+ 		s6-svstat -- "$_service"
+ 	else
+ 		_status
+diff --git a/src/kill_all/kill_all.c b/src/kill_all/kill_all.c
+index b041019..f92b6b7 100644
+--- a/src/kill_all/kill_all.c
++++ b/src/kill_all/kill_all.c
+@@ -54,11 +54,11 @@ static int mount_proc(void)
+ {
+ 	pid_t rc;
+ 	int status;
+-	const char *argv[] = { "mount", "-t", "proc", "proc", "/proc", NULL };
++	const char *argv[] = { "mount", "-t", "proc", "proc", "/System/Processes", NULL };
+ 	struct exec_result res;
+ 	struct exec_args args = exec_init(argv);
+ 
+-	if (access("/proc/version", F_OK) == 0)
++	if (access("/System/Processes/version", F_OK) == 0)
+ 		return 0;
+ 
+ 	res = do_exec(&args);
+@@ -72,8 +72,8 @@ static int mount_proc(void)
+ 	if (rc != res.pid || !WIFEXITED(status) || WEXITSTATUS(status) != 0)
+ 		syslog(LOG_ERR, "mount returned non-zero exit status");
+ 
+-	if (access("/proc/version", F_OK) != 0) {
+-		syslog(LOG_ERR, "Could not mount /proc");
++	if (access("/System/Processes/version", F_OK) != 0) {
++		syslog(LOG_ERR, "Could not mount /System/Processes");
+ 		return -1;
+ 	}
+ 	return 0;
+@@ -93,7 +93,7 @@ static bool is_user_process(pid_t pid)
+ 			user_process = false;
+ 			continue;
+ 		}
+-		xasprintf(&path, "/proc/%d/status", pid);
++		xasprintf(&path, "/System/Processes/%d/status", pid);
+ 		fp = fopen(path, "r");
+ 		free(path);
+ 		/*
+@@ -119,7 +119,7 @@ static bool is_user_process(pid_t pid)
+ 		}
+ 		fclose(fp);
+ 		if (temp_pid == -1) {
+-			syslog(LOG_ERR, "Unable to read pid from /proc/%d/status", pid);
++			syslog(LOG_ERR, "Unable to read pid from /System/Processes/%d/status", pid);
+ 			user_process = false;
+ 			continue;
+ 		}
+@@ -143,19 +143,19 @@ static int signal_processes(int sig, RC_STRINGLIST *omits, bool dryrun)
+ 	sigemptyset(&oldsigs);
+ 	sigprocmask(SIG_SETMASK, &signals, &oldsigs);
+ 	/*
+-	 * Open the /proc directory.
+-	 * CWD must be /proc to avoid problems if / is affected by the killing
++	 * Open the /System/Processes directory.
++	 * CWD must be /System/Processes to avoid problems if / is affected by the killing
+ 	 * (i.e. depends on fuse).
+ 	 */
+-	if (chdir("/proc") == -1) {
+-		syslog(LOG_ERR, "chdir /proc failed");
++	if (chdir("/System/Processes") == -1) {
++		syslog(LOG_ERR, "chdir /System/Processes failed");
+ 		sigprocmask(SIG_SETMASK, &oldsigs, NULL);
+ 		kill(-1, SIGCONT);
+ 		return -1;
+ 	}
+ 	dir = opendir(".");
+ 	if (!dir) {
+-		syslog(LOG_ERR, "cannot opendir(/proc)");
++		syslog(LOG_ERR, "cannot opendir(/System/Processes)");
+ 		sigprocmask(SIG_SETMASK, &oldsigs, NULL);
+ 		kill(-1, SIGCONT);
+ 		return -1;
+@@ -246,7 +246,7 @@ int main(int argc, char **argv)
+ 	openlog(applet, LOG_CONS|LOG_PID, LOG_DAEMON);
+ 	if (mount_proc() != 0) {
+ 		rc_stringlist_free(omits);
+-		eerrorx("Unable to mount /proc file system");
++		eerrorx("Unable to mount /System/Processes file system");
+ 	}
+ 	signal_processes(sig, omits, dryrun);
+ 	rc_stringlist_free(omits);
+diff --git a/src/librc/librc-daemon.c b/src/librc/librc-daemon.c
+index 1902875..fa1a3cf 100644
+--- a/src/librc/librc-daemon.c
++++ b/src/librc/librc-daemon.c
+@@ -42,7 +42,7 @@ pid_is_exec(pid_t pid, const char *exec)
+ 	bool retval = false;
+ 
+ 	exec = basename_c(exec);
+-	xasprintf(&buffer, "/proc/%d/stat", pid);
++	xasprintf(&buffer, "/System/Processes/%d/stat", pid);
+ 	if ((fp = fopen(buffer, "r"))) {
+ 		while ((c = getc(fp)) != EOF && c != '(')
+ 			;
+@@ -67,7 +67,7 @@ pid_is_argv(pid_t pid, const char *const *argv)
+ 	char *p;
+ 	ssize_t bytes;
+ 
+-	xasprintf(&cmdline, "/proc/%u/cmdline", pid);
++	xasprintf(&cmdline, "/System/Processes/%u/cmdline", pid);
+ 	if ((fd = open(cmdline, O_RDONLY)) < 0) {
+ 		free(cmdline);
+ 		return false;
+@@ -112,7 +112,7 @@ rc_find_pids(const char *exec, const char *const *argv, uid_t uid, pid_t pid)
+ 	RC_PIDLIST *pids = NULL;
+ 	RC_PID *pi;
+ 
+-	if ((procdir = opendir("/proc")) == NULL)
++	if ((procdir = opendir("/System/Processes")) == NULL)
+ 		return NULL;
+ 
+ 	/*
+@@ -132,12 +132,12 @@ rc_find_pids(const char *exec, const char *const *argv, uid_t uid, pid_t pid)
+ 	}
+ 
+ 	/*
+-	If /proc/self/status contains EnvID: 0, then we are an OpenVZ host,
++	If /System/Processes/self/status contains EnvID: 0, then we are an OpenVZ host,
+ 	and we will need to filter out processes that are inside containers
+ 	from our list of pids.
+ 	*/
+ 
+-	if ((fp = fopen("/proc/self/status", "r"))) {
++	if ((fp = fopen("/System/Processes/self/status", "r"))) {
+ 		while (xgetline(&line, &len, fp) != -1) {
+ 			if (strncmp(line, "envID:\t0", 8) == 0) {
+ 				openvz_host = true;
+@@ -147,7 +147,7 @@ rc_find_pids(const char *exec, const char *const *argv, uid_t uid, pid_t pid)
+ 		fclose(fp);
+ 	}
+ 
+-	if ((rc = readlink("/proc/self/ns/pid", my_ns, sizeof(my_ns)-1)) <= 0)
++	if ((rc = readlink("/System/Processes/self/ns/pid", my_ns, sizeof(my_ns)-1)) <= 0)
+ 		my_ns[0] = '\0';
+ 
+ 	while ((entry = readdir(procdir)) != NULL) {
+@@ -157,14 +157,14 @@ rc_find_pids(const char *exec, const char *const *argv, uid_t uid, pid_t pid)
+ 			continue;
+ 		if (pid != 0 && pid != p)
+ 			continue;
+-		xasprintf(&buffer, "/proc/%d/ns/pid", p);
++		xasprintf(&buffer, "/System/Processes/%d/ns/pid", p);
+ 		if ((rc = readlink(buffer, proc_ns, sizeof(proc_ns)-1)) <= 0)
+ 			proc_ns[0] = '\0';
+ 		free(buffer);
+ 		if (pid == 0 && strlen(my_ns) && strlen (proc_ns) && strcmp(my_ns, proc_ns))
+ 			continue;
+ 		if (uid) {
+-			xasprintf(&buffer, "/proc/%d", p);
++			xasprintf(&buffer, "/System/Processes/%d", p);
+ 			if (stat(buffer, &sb) != 0 || sb.st_uid != uid) {
+ 				free(buffer);
+ 				continue;
+@@ -178,7 +178,7 @@ rc_find_pids(const char *exec, const char *const *argv, uid_t uid, pid_t pid)
+ 			continue;
+ 		/* If this is an OpenVZ host, filter out container processes */
+ 		if (openvz_host) {
+-			xasprintf(&buffer, "/proc/%d/status", p);
++			xasprintf(&buffer, "/System/Processes/%d/status", p);
+ 			fp = fopen(buffer, "r");
+ 			free(buffer);
+ 			if (!fp)
+diff --git a/src/librc/librc-misc.c b/src/librc/librc-misc.c
+index 5094465..3f1f3bc 100644
+--- a/src/librc/librc-misc.c
++++ b/src/librc/librc-misc.c
+@@ -110,7 +110,7 @@ rc_proc_getent(const char *ent RC_UNUSED)
+ 	char *proc = NULL, *p, *value = NULL, *save;
+ 	size_t i, len;
+ 
+-	if (!(fp = fopen("/proc/cmdline", "r")))
++	if (!(fp = fopen("/System/Processes/cmdline", "r")))
+ 		return NULL;
+ 
+ 	i = 0;
+diff --git a/src/librc/librc.c b/src/librc/librc.c
+index c062bc9..f133660 100644
+--- a/src/librc/librc.c
++++ b/src/librc/librc.c
+@@ -200,7 +200,7 @@ file_regex(const char *file, const char *regex)
+ 
+ 	while ((len = xgetline(&line, &size, fp)) != -1) {
+ 		char *str = line;
+-		/* some /proc files have \0 separated content so we have to
++		/* some /System/Processes files have \0 separated content so we have to
+ 		   loop through the 'line' */
+ 		do {
+ 			if (regexec(&re, str, 0, NULL, 0) == 0)
+@@ -259,7 +259,7 @@ detect_container(const char *systype RC_UNUSED)
+ 		if (jailed == 1)
+ 			return RC_SYS_JAIL;
+ 
+-	if (access("/var/run/.containerenv", F_OK) == 0)
++	if (access("/System/Runtime/.containerenv", F_OK) == 0)
+ 		return RC_SYS_PODMAN;
+ #endif
+ 
+@@ -286,34 +286,34 @@ detect_container(const char *systype RC_UNUSED)
+ 		if (strcmp(systype, RC_SYS_WSL) == 0)
+ 			return RC_SYS_WSL;
+ 	}
+-	if (file_regex("/proc/cpuinfo", "UML"))
++	if (file_regex("/System/Processes/cpuinfo", "UML"))
+ 		return RC_SYS_UML;
+-	else if (file_regex("/proc/self/status",
++	else if (file_regex("/System/Processes/self/status",
+ 		"(s_context|VxID):[[:space:]]*[1-9]"))
+ 		return RC_SYS_VSERVER;
+-	else if (access("/proc/vz/veinfo", F_OK) == 0 && access("/proc/vz/version", F_OK) != 0)
++	else if (access("/System/Processes/vz/veinfo", F_OK) == 0 && access("/System/Processes/vz/version", F_OK) != 0)
+ 		return RC_SYS_OPENVZ;
+-	else if (file_regex("/proc/self/status",
++	else if (file_regex("/System/Processes/self/status",
+ 		"envID:[[:space:]]*[1-9]"))
+ 		return RC_SYS_OPENVZ; /* old test */
+-	else if (file_regex("/proc/1/environ", "container=lxc"))
++	else if (file_regex("/System/Processes/1/environ", "container=lxc"))
+ 		return RC_SYS_LXC;
+-	else if (file_regex("/proc/1/environ", "container=rkt"))
++	else if (file_regex("/System/Processes/1/environ", "container=rkt"))
+ 		return RC_SYS_RKT;
+-	else if (file_regex("/proc/1/environ", "container=systemd-nspawn"))
++	else if (file_regex("/System/Processes/1/environ", "container=systemd-nspawn"))
+ 		return RC_SYS_SYSTEMD_NSPAWN;
+-	else if (access("/run/.containerenv", F_OK) == 0)
++	else if (access("/System/Runtime/.containerenv", F_OK) == 0)
+ 		return RC_SYS_PODMAN;
+ 	else if (access("/.dockerenv", F_OK) == 0)
+ 		return RC_SYS_DOCKER;
+ 	/* old test, I'm not sure when this was valid. */
+-	else if (file_regex("/proc/1/environ", "container=docker"))
++	else if (file_regex("/System/Processes/1/environ", "container=docker"))
+ 		return RC_SYS_DOCKER;
+-	else if (file_regex("/proc/sys/kernel/osrelease", "microsoft"))
++	else if (file_regex("/System/Processes/sys/kernel/osrelease", "microsoft"))
+ 		return RC_SYS_WSL;
+ 	else if (getenv("WSL_DISTRO_NAME"))
+ 		return RC_SYS_WSL;
+-	else if (access("/proc/sys/fs/binfmt_misc/WSLInterop", F_OK) == 0)
++	else if (access("/System/Processes/sys/fs/binfmt_misc/WSLInterop", F_OK) == 0)
+ 		return RC_SYS_WSL;
+ #endif
+ 
+@@ -347,8 +347,8 @@ detect_vm(const char *systype RC_UNUSED)
+ 		if (strcmp(systype, RC_SYS_XENU) == 0)
+ 			return RC_SYS_XENU;
+ 	}
+-	if (access("/proc/xen", F_OK) == 0) {
+-		if (file_regex("/proc/xen/capabilities", "control_d"))
++	if (access("/System/Processes/xen", F_OK) == 0) {
++		if (file_regex("/System/Processes/xen/capabilities", "control_d"))
+ 			return RC_SYS_XEN0;
+ 		return RC_SYS_XENU;
+ 	}
+diff --git a/src/librc/rc.h.in b/src/librc/rc.h.in
+index 42b559c..a67fb28 100644
+--- a/src/librc/rc.h.in
++++ b/src/librc/rc.h.in
+@@ -488,7 +488,7 @@ bool rc_newer_than(const char *, const char *, time_t *, char *);
+  * @return true if source is older than target, otherwise false */
+ bool rc_older_than(const char *, const char *, time_t *, char *);
+ 
+-/*! Read variables/values from /proc/cmdline
++/*! Read variables/values from /System/Processes/cmdline
+  * @param value
+  * @return pointer to the value, otherwise NULL */
+ char *rc_proc_getent(const char *);
+diff --git a/src/mountinfo/mountinfo.c b/src/mountinfo/mountinfo.c
+index 8c86216..f3504ec 100644
+--- a/src/mountinfo/mountinfo.c
++++ b/src/mountinfo/mountinfo.c
+@@ -54,7 +54,7 @@
+ #include "helpers.h"
+ 
+ const char *applet = NULL;
+-const char *procmounts = "/proc/mounts";
++const char *procmounts = "/System/Processes/mounts";
+ const char *extraopts = "[mount1] [mount2] ...";
+ const char getoptstring[] = "f:F:n:N:o:O:p:P:iste:E:" getoptstring_COMMON;
+ const struct option longopts[] = {
+diff --git a/src/on_ac_power/on_ac_power b/src/on_ac_power/on_ac_power
+index a4c1cf9..30087a9 100644
+--- a/src/on_ac_power/on_ac_power
++++ b/src/on_ac_power/on_ac_power
+@@ -12,31 +12,31 @@
+ # This file may not be copied, modified, propagated, or distributed
+ #    except according to the terms contained in the LICENSE file.
+ 
+-if [ -f /proc/acpi/ac_adapter/*/state ]; then
+-	cat /proc/acpi/ac_adapter/*/state | while read line; do
++if [ -f /System/Processes/acpi/ac_adapter/*/state ]; then
++	cat /System/Processes/acpi/ac_adapter/*/state | while read line; do
+ 		case "$line" in
+ 		"state:"*"off-line") exit 128;;
+ 		esac
+ 	done
+-elif [ -d /sys/class/power_supply ]; then
+-	for dir in /sys/class/power_supply/*/; do
++elif [ -d /System/Hardware/class/power_supply ]; then
++	for dir in /System/Hardware/class/power_supply/*/; do
+ 		[ "$(cat "${dir}/type")" != "Mains" ] && continue
+ 		[ "$(cat "${dir}/online")" = 0 ] && exit 128
+ 	done
+-elif [ -f /proc/pmu/info ]; then
+-	cat /proc/pmu/info | while read line; do
++elif [ -f /System/Processes/pmu/info ]; then
++	cat /System/Processes/pmu/info | while read line; do
+ 		case "$line" in
+ 		"AC Power"*": 0") exit 128;;
+ 		esac
+ 	done
+-elif command -v envstat >/dev/null 2>&1; then
++elif command -v envstat >/System/Devices/null 2>&1; then
+ 	# NetBSD has envstat
+-	envstat -d acpiacad0 2>/dev/null | while read line; do
++	envstat -d acpiacad0 2>/System/Devices/null | while read line; do
+ 		case "$line" in
+ 		"connected:"*"OFF") exit 128;;
+ 		esac
+ 	done
+-elif sysctl -q hw.acpi.acline >/dev/null 2>/dev/null; then
++elif sysctl -q hw.acpi.acline >/System/Devices/null 2>/System/Devices/null; then
+ 	case $(sysctl -n hw.acpi.acline) in
+ 	0) exit 1;;
+ 	*) exit 0;;
+diff --git a/src/openrc-init/openrc-init.c b/src/openrc-init/openrc-init.c
+index fefabf7..4a898fa 100644
+--- a/src/openrc-init/openrc-init.c
++++ b/src/openrc-init/openrc-init.c
+@@ -316,7 +316,7 @@ int main(int argc, char **argv)
+ 				if (enforce > 0) {
+ 					/*
+ 					 * SELinux in enforcing mode but load_policy failed
+-					 * At this point, we probably can't open /dev/console,
++					 * At this point, we probably can't open /System/Devices/console,
+ 					 * so log() won't work
+ 					 */
+ 					fprintf(stderr,"Unable to load SELinux Policy.\n");
+diff --git a/src/openrc-shutdown/broadcast.c b/src/openrc-shutdown/broadcast.c
+index f506354..cb116b1 100644
+--- a/src/openrc-shutdown/broadcast.c
++++ b/src/openrc-shutdown/broadcast.c
+@@ -32,7 +32,7 @@
+ #include "helpers.h"
+ 
+ #ifndef _PATH_DEV
+-# define _PATH_DEV	"/dev/"
++# define _PATH_DEV	"/System/Devices/"
+ #endif
+ 
+ 
+diff --git a/src/openrc-shutdown/openrc-shutdown.c b/src/openrc-shutdown/openrc-shutdown.c
+index 8ffe5a7..a40f9ea 100644
+--- a/src/openrc-shutdown/openrc-shutdown.c
++++ b/src/openrc-shutdown/openrc-shutdown.c
+@@ -84,7 +84,7 @@ const char *exclusive = "Select one of "
+ 	"--cancel, --halt, --kexec, --poweroff, --reexec, --reboot, --single or \n"
+ 	"--write-only";
+ const char *nologin_file = RC_SYSCONFDIR"/nologin";
+-const char *shutdown_pid = "/run/openrc-shutdown.pid";
++const char *shutdown_pid = "/System/Runtime/openrc-shutdown.pid";
+ 
+ static bool do_cancel = false;
+ static bool do_dryrun = false;
+@@ -333,7 +333,7 @@ int main(int argc, char **argv)
+ 	unlink(nologin_file);
+ 	unlink(shutdown_pid);
+ 	if (do_halt) {
+-		if (access("/run/initctl", F_OK) == 0) {
++		if (access("/System/Runtime/initctl", F_OK) == 0) {
+ 			sysvinit_setenv("INIT_HALT", "HALT");
+ 			sysvinit_runlevel('0');
+ 		} else
+@@ -341,18 +341,18 @@ int main(int argc, char **argv)
+ 	} else if (do_kexec)
+ 		send_cmd("kexec");
+ 	else if (do_poweroff) {
+-		if (access("/run/initctl", F_OK) == 0) {
++		if (access("/System/Runtime/initctl", F_OK) == 0) {
+ 			sysvinit_setenv("INIT_HALT", "POWEROFF");
+ 			sysvinit_runlevel('0');
+ 		} else
+ 			send_cmd("poweroff");
+ 	} else if (do_reboot) {
+-		if (access("/run/initctl", F_OK) == 0)
++		if (access("/System/Runtime/initctl", F_OK) == 0)
+ 			sysvinit_runlevel('6');
+ 		else
+ 			send_cmd("reboot");
+ 	} else if (do_single) {
+-		if (access("/run/initctl", F_OK) == 0)
++		if (access("/System/Runtime/initctl", F_OK) == 0)
+ 			sysvinit_runlevel('S');
+ 		else
+ 			send_cmd("single");
+diff --git a/src/openrc-shutdown/sysvinit.c b/src/openrc-shutdown/sysvinit.c
+index 3adf5ec..9589a36 100644
+--- a/src/openrc-shutdown/sysvinit.c
++++ b/src/openrc-shutdown/sysvinit.c
+@@ -33,7 +33,7 @@ static void sysvinit_send_cmd(struct init_request *request)
+ 	size_t bytes;
+ 	ssize_t r;
+ 
+-	fd = open("/run/initctl", O_WRONLY|O_NONBLOCK|O_CLOEXEC|O_NOCTTY);
++	fd = open("/System/Runtime/initctl", O_WRONLY|O_NONBLOCK|O_CLOEXEC|O_NOCTTY);
+ 	if (fd < 0) {
+ 		if (errno != ENOENT)
+ 			eerror("Failed to open initctl fifo: %s", strerror(errno));
+@@ -46,7 +46,7 @@ static void sysvinit_send_cmd(struct init_request *request)
+ 		if (r < 0) {
+ 			if ((errno == EAGAIN) || (errno == EINTR))
+ 				continue;
+-			eerror("Failed to write to /run/initctl: %s", strerror(errno));
++			eerror("Failed to write to /System/Runtime/initctl: %s", strerror(errno));
+ 			return;
+ 		}
+ 		p += r;
+diff --git a/src/openrc-shutdown/sysvinit.h b/src/openrc-shutdown/sysvinit.h
+index c3b0929..68b4050 100644
+--- a/src/openrc-shutdown/sysvinit.h
++++ b/src/openrc-shutdown/sysvinit.h
+@@ -1,5 +1,5 @@
+ /*
+- * sysvinit.h	- Interface to communicate with sysvinit via /run/initctl.
++ * sysvinit.h	- Interface to communicate with sysvinit via /System/Runtime/initctl.
+  */
+ 
+ /*
+diff --git a/src/openrc/rc.c b/src/openrc/rc.c
+index d989efb..dc0ae8e 100644
+--- a/src/openrc/rc.c
++++ b/src/openrc/rc.c
+@@ -514,7 +514,7 @@ do_sysinit(void)
+ 	setenv("RC_RUNLEVEL", RC_LEVEL_SYSINIT, 1);
+ 	run_program(INITSH);
+ 
+-	/* init may have mounted /proc so we can now detect or real
++	/* init may have mounted /System/Processes so we can now detect or real
+ 	 * sys */
+ 	if ((sys = rc_sys()))
+ 		setenv("RC_SYS", sys, 1);
+diff --git a/src/rc-sstat/rc-sstat b/src/rc-sstat/rc-sstat
+index 4f91e53..2fbdb79 100644
+--- a/src/rc-sstat/rc-sstat
++++ b/src/rc-sstat/rc-sstat
+@@ -10,8 +10,8 @@
+ #    except according to the terms contained in the LICENSE file.
+ 
+ # Define variables
+-scandir="/run/openrc/s6-scan"
+-statfile=/dev/shm/s6-svstat.${USER}
++scandir="/System/Runtime/openrc/s6-scan"
++statfile=/System/Devices/shm/s6-svstat.${USER}
+ 
+ color_red='\E[01;31m'
+ color_green='\E[32m'
+@@ -53,7 +53,7 @@ if [ ! -d $scandir ]; then
+ fi
+ 
+ # Make sure s6-svscan is running
+-if ! pgrep s6-svscan >/dev/null ; then
++if ! pgrep s6-svscan >/System/Devices/null ; then
+ 	printf "s6-svscan is not running\n"
+ 	exit 1
+ fi
+@@ -64,7 +64,7 @@ if [ -z $TERM -o $TERM = "dumb" ]; then
+ fi
+ 
+ # Gather list of candidate services s6-supervise may be supervising
+-# filter for folders and symlinks at /run/openrc/s6-scan/* omitting output starting with '.'
++# filter for folders and symlinks at /System/Runtime/openrc/s6-scan/* omitting output starting with '.'
+ services="$(find $scandir -maxdepth 1 -mindepth 1 \( -type d -or -type l \) | awk -F'/' '{ if ( $NF !~ "^\\." ) print $NF}')"
+ if [ -z "$services" ]; then
+ 	printf "s6 found no services configured for supervision\n"
+@@ -73,7 +73,7 @@ fi
+ 
+ # Gather status for each service from s6-svstat
+ # write to tmp file in memory for non I/O bound repetitive access
+-rm -f $statfile 2>/dev/null
++rm -f $statfile 2>/System/Devices/null
+ for service in $services ; do
+ 	echo "$service $(s6-svstat ${scandir}/${service})" >> $statfile
+ done
+@@ -142,7 +142,7 @@ do
+ done
+ 
+ # Cleanup
+-rm -f $statfile 2>/dev/null
++rm -f $statfile 2>/System/Devices/null
+ 
+ printf "\n\n"
+ 
+diff --git a/src/seedrng/seedrng.c b/src/seedrng/seedrng.c
+index ca68105..fdc6d17 100644
+--- a/src/seedrng/seedrng.c
++++ b/src/seedrng/seedrng.c
+@@ -325,7 +325,7 @@ static size_t determine_optimal_seed_len(void)
+ {
+ 	size_t ret = 0;
+ 	char poolsize_str[11] = { 0 };
+-	int fd = open("/proc/sys/kernel/random/poolsize", O_RDONLY);
++	int fd = open("/System/Processes/sys/kernel/random/poolsize", O_RDONLY);
+ 
+ 	if (fd < 0 || read_full(fd, poolsize_str, sizeof(poolsize_str) - 1) < 0) {
+ 		ewarn("%s: Unable to determine pool size, falling back to %u bits: %s",
+@@ -354,7 +354,7 @@ static int read_new_seed(uint8_t *seed, size_t len, bool *is_creditable)
+ 		return 0;
+ 	} else if (ret < 0 && errno == ENOSYS) {
+ 		struct pollfd random_fd = {
+-			.fd = open("/dev/random", O_RDONLY),
++			.fd = open("/System/Devices/random", O_RDONLY),
+ 			.events = POLLIN
+ 		};
+ 		if (random_fd.fd < 0)
+@@ -363,7 +363,7 @@ static int read_new_seed(uint8_t *seed, size_t len, bool *is_creditable)
+ 		close(random_fd.fd);
+ 	} else if (getrandom_full(seed, len, GRND_INSECURE) == (ssize_t)len)
+ 		return 0;
+-	urandom_fd = open("/dev/urandom", O_RDONLY);
++	urandom_fd = open("/System/Devices/urandom", O_RDONLY);
+ 	if (urandom_fd < 0)
+ 		return -1;
+ 	ret = read_full(urandom_fd, seed, len);
+@@ -394,7 +394,7 @@ static int seed_rng(uint8_t *seed, size_t len, bool credit)
+ 	}
+ 	memcpy(req.buffer, seed, len);
+ 
+-	random_fd = open("/dev/urandom", O_RDONLY);
++	random_fd = open("/System/Devices/urandom", O_RDONLY);
+ 	if (random_fd < 0)
+ 		return -1;
+ 	ret = ioctl(random_fd, RNDADDENTROPY, &req);
+diff --git a/src/shared/initreq.h b/src/shared/initreq.h
+index 9b158a6..7b24f23 100644
+--- a/src/shared/initreq.h
++++ b/src/shared/initreq.h
+@@ -1,5 +1,5 @@
+ /*
+- * initreq.h	- Interface to communicate with sysvinit via /run/initctl.
++ * initreq.h	- Interface to communicate with sysvinit via /System/Runtime/initctl.
+  */
+ 
+ /*
+@@ -39,7 +39,7 @@
+  */
+ struct init_request_bsd {
+ 	char	gen_id[8];		/* Beats me.. telnetd uses "fe" */
+-	char	tty_id[16];		/* Tty name minus /dev/tty      */
++	char	tty_id[16];		/* Tty name minus /System/Devices/tty      */
+ 	char	host[64];	/* Hostname                     */
+ 	char	term_type[16];		/* Terminal type                */
+ 	int	signal;			/* Signal to send               */
+diff --git a/src/shared/rc_exec.c b/src/shared/rc_exec.c
+index 815229e..0b4fa1f 100644
+--- a/src/shared/rc_exec.c
++++ b/src/shared/rc_exec.c
+@@ -31,7 +31,7 @@ static int devnull(void)
+ 	if (devnullfd < 0)
+ 		devnullfd = open("/System/Devices/null", O_RDWR | O_CLOEXEC);
+ 	if (devnullfd < 0) {
+-		fprintf(stderr, "Failed to open /dev/null: %s", strerror(errno));
++		fprintf(stderr, "Failed to open /System/Devices/null: %s", strerror(errno));
+ 		_exit(1);
+ 	}
+ 	return devnullfd;
+diff --git a/src/shared/rc_exec.h b/src/shared/rc_exec.h
+index ac3da32..ea70383 100644
+--- a/src/shared/rc_exec.h
++++ b/src/shared/rc_exec.h
+@@ -27,7 +27,7 @@ enum {
+ 	EXEC_NO_REDIRECT = -1,
+ 	/* make a pipe and redirect to it */
+ 	EXEC_MKPIPE = -2,
+-	/* redirect to /dev/null */
++	/* redirect to /System/Devices/null */
+ 	EXEC_DEVNULL = -3,
+ };
+ 
+diff --git a/src/start-stop-daemon/start-stop-daemon.c b/src/start-stop-daemon/start-stop-daemon.c
+index f139d0d..0467ed6 100644
+--- a/src/start-stop-daemon/start-stop-daemon.c
++++ b/src/start-stop-daemon/start-stop-daemon.c
+@@ -895,10 +895,10 @@ int main(int argc, char **argv)
+ 		umask(numask);
+ 
+ #ifdef TIOCNOTTY
+-		tty_fd = open("/dev/tty", O_RDWR);
++		tty_fd = open("/System/Devices/tty", O_RDWR);
+ #endif
+ 
+-		devnull_fd = open("/dev/null", O_RDWR);
++		devnull_fd = open("/System/Devices/null", O_RDWR);
+ 
+ 		/* Must call setsid() before setting autogroup nicelevel
+ 		 * but after opening tty_fd. */
+@@ -910,7 +910,7 @@ int main(int argc, char **argv)
+ 				    applet, nicelevel,
+ 				    strerror(errno));
+ 			/* Open in "r+" mode to avoid creating if non-existent. */
+-			fp = fopen("/proc/self/autogroup", "r+");
++			fp = fopen("/System/Processes/self/autogroup", "r+");
+ 			if (fp) {
+ 				fprintf(fp, "%d\n", nicelevel);
+ 				fclose(fp);
+@@ -925,7 +925,7 @@ int main(int argc, char **argv)
+ 			    ionicec, ioniced, strerror(errno));
+ 
+ 		if (oom_score_adj != INT_MIN) {
+-			fp = fopen("/proc/self/oom_score_adj", "w");
++			fp = fopen("/System/Processes/self/oom_score_adj", "w");
+ 			if (!fp)
+ 				eerrorx("%s: oom_score_adj %d: %s", applet,
+ 				    oom_score_adj, strerror(errno));
+diff --git a/src/supervise-daemon/supervise-daemon.c b/src/supervise-daemon/supervise-daemon.c
+index e20aa99..7b7535a 100644
+--- a/src/supervise-daemon/supervise-daemon.c
++++ b/src/supervise-daemon/supervise-daemon.c
+@@ -409,7 +409,7 @@ RC_NORETURN static void child_process(char *exec, char **argv)
+ 			eerrorx("%s: setpriority %d: %s", applet, nicelevel,
+ 					strerror(errno));
+ 		/* Open in "r+" mode to avoid creating if non-existent. */
+-		fp = fopen("/proc/self/autogroup", "r+");
++		fp = fopen("/System/Processes/self/autogroup", "r+");
+ 		if (fp) {
+ 			fprintf(fp, "%d\n", nicelevel);
+ 			fclose(fp);
+@@ -423,7 +423,7 @@ RC_NORETURN static void child_process(char *exec, char **argv)
+ 				strerror(errno));
+ 
+ 	if (oom_score_adj != INT_MIN) {
+-		fp = fopen("/proc/self/oom_score_adj", "w");
++		fp = fopen("/System/Processes/self/oom_score_adj", "w");
+ 		if (!fp)
+ 			eerrorx("%s: oom_score_adj %d: %s", applet,
+ 			    oom_score_adj, strerror(errno));
+@@ -1143,7 +1143,7 @@ int main(int argc, char **argv)
+ 
+ 	umask(numask);
+ 	if (!pidfile)
+-		xasprintf(&pidfile, "%s/supervise-%s.pid", rc_is_user() ? getenv("XDG_RUNTIME_DIR") : "/var/run", svcname);
++		xasprintf(&pidfile, "%s/supervise-%s.pid", rc_is_user() ? getenv("XDG_RUNTIME_DIR") : "/System/Runtime", svcname);
+ 	xasprintf(&fifopath, "%s/supervise-%s.ctl", rc_svcdir(), svcname);
+ 	if (mkfifo(fifopath, 0600) == -1 && errno != EEXIST)
+ 		eerrorx("%s: unable to create control fifo: %s",
+@@ -1272,9 +1272,9 @@ int main(int argc, char **argv)
+ 			exit(notify_wait(applet, notify) ? EXIT_SUCCESS : EXIT_FAILURE);
+ 
+ #ifdef TIOCNOTTY
+-		tty_fd = open("/dev/tty", O_RDWR);
++		tty_fd = open("/System/Devices/tty", O_RDWR);
+ #endif
+-		devnull_fd = open("/dev/null", O_RDWR);
++		devnull_fd = open("/System/Devices/null", O_RDWR);
+ 		dup2(devnull_fd, STDIN_FILENO);
+ 		dup2(devnull_fd, STDOUT_FILENO);
+ 		dup2(devnull_fd, STDERR_FILENO);
+diff --git a/src/sysv-initctl/initctl.c b/src/sysv-initctl/initctl.c
+index 8340a2a..80c627f 100644
+--- a/src/sysv-initctl/initctl.c
++++ b/src/sysv-initctl/initctl.c
+@@ -73,12 +73,12 @@ int main(void) {
+ 	int fifo;
+ 
+ 	openlog("sysv-initctl", 0, LOG_DAEMON);
+-	if (mkfifo("/run/initctl", 0600) == -1 && errno != EEXIST) {
++	if (mkfifo("/System/Runtime/initctl", 0600) == -1 && errno != EEXIST) {
+ 		syslog(LOG_ERR, "mkfifo: %s", strerror(errno));
+ 		return 1;
+ 	}
+-	symlink("/run/initctl", "/dev/initctl");
+-	if ((fifo = open("/run/initctl", O_RDONLY | O_NONBLOCK)) == -1) {
++	symlink("/System/Runtime/initctl", "/System/Devices/initctl");
++	if ((fifo = open("/System/Runtime/initctl", O_RDONLY | O_NONBLOCK)) == -1) {
+ 		syslog(LOG_ERR, "open: %s", strerror(errno));
+ 		return 1;
+ 	}

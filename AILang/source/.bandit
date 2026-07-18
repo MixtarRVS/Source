@@ -1,3 +1,0 @@
-[bandit]
-# Exclude false positives for token names being flagged as passwords
-skips = B105

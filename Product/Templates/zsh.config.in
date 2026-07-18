@@ -1,0 +1,17 @@
+schema = 1
+
+[application]
+id = "org.mixtar.Terminal.ZSH"
+name = "Z shell"
+version = "@ZSH_VERSION@"
+publisher = "org.mixtar"
+description = "Interactive Z shell for MixtarRVS"
+
+[entry.terminal]
+kind = "native"
+path = "Program/zsh"
+arguments = []
+
+[capabilities]
+required = []
+optional = []

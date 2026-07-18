@@ -1,0 +1,44 @@
+#!/System/Terminal/POSIX/sh
+set -eu
+
+BUSYBOX=/System/Core/BusyBox/busybox
+ACCOUNTS=/System/State/Accounts
+COMPLETE=$ACCOUNTS/initialized
+
+[ -f "$COMPLETE" ] && exit 0
+
+umask 077
+"$BUSYBOX" mkdir -p "$ACCOUNTS" /Users/root
+
+if [ ! -f "$ACCOUNTS/passwd" ]; then
+	"$BUSYBOX" printf '%s\n' \
+		'root:x:0:0:Mixtar administrator:/Users/root:/System/Core/Platform/user-shell' \
+		>"$ACCOUNTS/passwd"
+	"$BUSYBOX" printf '%s\n' 'root:!:0:0:99999:7:::' \
+		>"$ACCOUNTS/shadow"
+	"$BUSYBOX" printf '%s\n' \
+		'root:x:0:' \
+		'wheel:x:10:root' \
+		>"$ACCOUNTS/group"
+	"$BUSYBOX" printf '%s\n' \
+		'root:!::' \
+		'wheel:!::root' \
+		>"$ACCOUNTS/gshadow"
+fi
+
+"$BUSYBOX" chmod 0644 "$ACCOUNTS/passwd" "$ACCOUNTS/group"
+"$BUSYBOX" chmod 0600 "$ACCOUNTS/shadow" "$ACCOUNTS/gshadow"
+"$BUSYBOX" chown 0:0 /Users/root
+"$BUSYBOX" chmod 0700 /Users/root
+
+"$BUSYBOX" printf '\nMixtarRVS: set the password for the first administrator.\n'
+"$BUSYBOX" printf 'MixtarRVS has no default password.\n\n'
+if ! "$BUSYBOX" passwd root; then
+	"$BUSYBOX" printf '%s\n' 'MixtarRVS: password setup failed'
+	exit 1
+fi
+
+"$BUSYBOX" printf '%s\n' complete >"$COMPLETE"
+"$BUSYBOX" chmod 0600 "$COMPLETE"
+"$BUSYBOX" sync
+"$BUSYBOX" printf '%s\n' 'MixtarRVS: first account ready'

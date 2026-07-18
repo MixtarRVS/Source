@@ -1,0 +1,64 @@
+diff -ruN a/udev_device.c b/udev_device.c
+--- a/udev_device.c	2026-07-18 00:09:22.138470249 +0200
++++ b/udev_device.c	2026-07-18 00:09:22.158470247 +0200
+@@ -366,7 +366,7 @@
+         line[strlen(line) - 1] = '\0';
+ 
+         if (strncmp(line, "DEVNAME=", 8) == 0) {
+-            snprintf(devnode, sizeof(devnode), "/dev/%s", line + 8);
++            snprintf(devnode, sizeof(devnode), "/System/Devices/%s", line + 8);
+             udev_list_entry_add(&udev_device->properties, "DEVNAME", devnode, 0);
+         }
+         else if ((pos = strchr(line, '='))) {
+@@ -609,10 +609,10 @@
+ 
+     switch (type) {
+     case 'c':
+-        snprintf(path, sizeof(path), "/sys/dev/char/%u:%u", major(devnum), minor(devnum));
++        snprintf(path, sizeof(path), "/System/Hardware/dev/char/%u:%u", major(devnum), minor(devnum));
+         break;
+     case 'b':
+-        snprintf(path, sizeof(path), "/sys/dev/block/%u:%u", major(devnum), minor(devnum));
++        snprintf(path, sizeof(path), "/System/Hardware/dev/block/%u:%u", major(devnum), minor(devnum));
+         break;
+     default:
+         return NULL;
+@@ -623,7 +623,7 @@
+ 
+ struct udev_device *udev_device_new_from_subsystem_sysname(struct udev *udev, const char *subsystem, const char *sysname)
+ {
+-    const char *fmt[] = { "/sys/bus/%s/devices/%s", "/sys/class/%s/%s", NULL };
++    const char *fmt[] = { "/System/Hardware/bus/%s/devices/%s", "/System/Hardware/class/%s/%s", NULL };
+     char path[PATH_MAX];
+     int i;
+ 
+@@ -665,7 +665,7 @@
+ 
+     for (end = buf + len; buf < end; buf += strlen(buf) + 1) {
+        if (strncmp(buf, "DEVPATH=", 8) == 0) {
+-            snprintf(syspath, sizeof(syspath), "/sys%s", buf + 8);
++            snprintf(syspath, sizeof(syspath), "/System/Hardware%s", buf + 8);
+             udev_list_entry_add(&udev_device->properties, "SYSPATH", syspath, 0);
+             udev_list_entry_add(&udev_device->properties, "DEVPATH", buf + 8, 0);
+ 
+@@ -682,7 +682,7 @@
+             cnt++;
+         }
+         else if (strncmp(buf, "DEVNAME=", 8) == 0) {
+-            snprintf(devnode, sizeof(devnode), "/dev/%s", buf + 8);
++            snprintf(devnode, sizeof(devnode), "/System/Devices/%s", buf + 8);
+             udev_list_entry_add(&udev_device->properties, "DEVNAME", devnode, 0);
+         }
+         else {
+diff -ruN a/udev_enumerate.c b/udev_enumerate.c
+--- a/udev_enumerate.c	2026-07-18 00:09:22.142470251 +0200
++++ b/udev_enumerate.c	2026-07-18 00:09:22.158470247 +0200
+@@ -278,7 +278,7 @@
+ 
+ int udev_enumerate_scan_devices(struct udev_enumerate *udev_enumerate)
+ {
+-    const char *path[] = { "/sys/dev/block", "/sys/dev/char", NULL };
++    const char *path[] = { "/System/Hardware/dev/block", "/System/Hardware/dev/char", NULL };
+     int i;
+ 
+     if (!udev_enumerate) {

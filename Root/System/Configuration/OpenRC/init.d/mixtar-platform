@@ -1,0 +1,19 @@
+#!/System/Init/openrc-run
+description="Start native Mixtar P2 platform services"
+
+ depend() {
+  need zfs-root-proof
+  before mixtar-console
+}
+
+start() {
+  ebegin "Starting Mixtar platform services"
+  /System/Core/Platform/system-services start
+  eend $?
+}
+
+stop() {
+  ebegin "Stopping Mixtar platform services"
+  /System/Core/Platform/system-services stop
+  eend $?
+}

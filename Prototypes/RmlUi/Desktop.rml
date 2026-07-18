@@ -1,0 +1,162 @@
+<rml>
+<head>
+    <title>Mixtar Desktop Prototype</title>
+    <link type="text/rcss" href="Desktop.rcss" />
+</head>
+<body data-model="desktop">
+    <div id="desktop">
+        <div id="ambient-light"></div>
+        <div id="grid-horizontal"></div>
+        <div id="grid-vertical"></div>
+
+        <div id="top-bar">
+            <div id="top-left">
+                <div id="brand-mark"></div>
+                <span id="brand-name">Mixtar</span>
+                <div id="main-menu">
+                    <span>Files</span>
+                    <span>View</span>
+                    <span>Tools</span>
+                    <span>Sessions</span>
+                    <span>Help</span>
+                </div>
+            </div>
+            <div id="system-status">
+                <span><i class="status-dot green"></i>APX Core</span>
+                <span><i class="status-dot yellow"></i>SEC</span>
+                <span><i class="status-dot blue"></i>NET</span>
+                <span id="clock">{{clock}}</span>
+            </div>
+        </div>
+
+        <div id="workspace">
+            <div id="terminal-window"
+                 class="window"
+                 data-class-active="terminal_active"
+                 data-class-hidden="terminal_hidden"
+                 data-class-maximized="terminal_maximized"
+                 data-event-mousedown="focus('terminal')">
+                <div class="title-bar">
+                    <span class="window-title">TERMINAL - ZSH.APX</span>
+                    <div class="window-controls">
+                        <button class="minimize" data-event-click="minimize('terminal')">-</button>
+                        <button class="maximize" data-event-click="maximize('terminal')">+</button>
+                        <button class="close" data-event-click="close('terminal')">x</button>
+                    </div>
+                </div>
+                <div class="terminal-content">
+                    <div><span class="prompt">Administrator@mixtar:/</span> <span class="command">system info</span></div>
+                    <div class="terminal-output">Mixtar M1 - native system session</div>
+                    <div class="terminal-output">Kernel: Linux with OpenZFS support</div>
+                    <div class="terminal-output">Shell: zsh.apx through /System/Runtime/Executor</div>
+                    <div class="terminal-output">UI: MWM + RmlUi prototype</div>
+                    <div class="prompt-line"><span class="prompt">Administrator@mixtar:/System&gt;</span><span class="caret"></span></div>
+                </div>
+            </div>
+
+            <div id="files-window"
+                 class="window"
+                 data-class-active="files_active"
+                 data-class-hidden="files_hidden"
+                 data-class-maximized="files_maximized"
+                 data-event-mousedown="focus('files')">
+                <div class="title-bar">
+                    <span class="window-title">FILES - /SYSTEM</span>
+                    <div class="window-controls">
+                        <button class="minimize" data-event-click="minimize('files')">-</button>
+                        <button class="maximize" data-event-click="maximize('files')">+</button>
+                        <button class="close" data-event-click="close('files')">x</button>
+                    </div>
+                </div>
+                <div class="files-toolbar">
+                    <button class="nav-button">&lt;</button>
+                    <button class="nav-button">&gt;</button>
+                    <button class="nav-button">^</button>
+                    <div class="address-bar">Mixtar:/System</div>
+                    <div class="search-box">Search /System</div>
+                </div>
+                <div class="files-body">
+                    <div class="files-sidebar">
+                        <span class="section-label">ROOT</span>
+                        <button>Root</button>
+                        <button>Applications</button>
+                        <button class="selected">System</button>
+                        <button>Users</button>
+                        <button>Volumes</button>
+                        <button>Temporary</button>
+                    </div>
+                    <div class="file-table">
+                        <div class="file-row file-header">
+                            <span class="file-name">Name</span>
+                            <span class="file-type">Type</span>
+                            <span class="file-count">Items</span>
+                            <span class="file-modified">Modified</span>
+                        </div>
+                        <div class="file-row"><span class="file-name folder">Tools</span><span class="file-type">Directory</span><span class="file-count">24</span><span class="file-modified">Today</span></div>
+                        <div class="file-row"><span class="file-name folder">Shells</span><span class="file-type">Directory</span><span class="file-count">6</span><span class="file-modified">Today</span></div>
+                        <div class="file-row"><span class="file-name folder">Libraries</span><span class="file-type">Directory</span><span class="file-count">132</span><span class="file-modified">Today</span></div>
+                        <div class="file-row"><span class="file-name folder">Configuration</span><span class="file-type">Directory</span><span class="file-count">18</span><span class="file-modified">Yesterday</span></div>
+                        <div class="file-row"><span class="file-name folder">Resources</span><span class="file-type">Directory</span><span class="file-count">42</span><span class="file-modified">Today</span></div>
+                        <div class="file-row"><span class="file-name">Runtime</span><span class="file-type">Service</span><span class="file-count">11</span><span class="file-modified">Live</span></div>
+                    </div>
+                </div>
+                <div class="status-bar"><span>6 items</span><span>No selection</span></div>
+            </div>
+
+            <div id="runtime-window"
+                 class="window"
+                 data-class-active="runtime_active"
+                 data-class-hidden="runtime_hidden"
+                 data-class-maximized="runtime_maximized"
+                 data-event-mousedown="focus('runtime')">
+                <div class="title-bar">
+                    <span class="window-title">RUNTIME MONITOR</span>
+                    <div class="window-controls">
+                        <button class="minimize" data-event-click="minimize('runtime')">-</button>
+                        <button class="maximize" data-event-click="maximize('runtime')">+</button>
+                        <button class="close" data-event-click="close('runtime')">x</button>
+                    </div>
+                </div>
+                <div class="runtime-content">
+                    <span class="section-label">/SYSTEM/RUNTIME</span>
+                    <div class="meter"><span>CPU</span><div class="meter-track"><i style="width: 14%;"></i></div><span>14%</span></div>
+                    <div class="meter"><span>Memory</span><div class="meter-track"><i style="width: 31%;"></i></div><span>31%</span></div>
+                    <div class="meter"><span>APX</span><div class="meter-track"><i style="width: 46%;"></i></div><span>6</span></div>
+                    <div class="meter"><span>NET</span><div class="meter-track"><i style="width: 37%;"></i></div><span>7</span></div>
+                    <div class="runtime-message">Executor heartbeat OK<br />Idle redraw disabled<br />Native root clean</div>
+                </div>
+            </div>
+        </div>
+
+        <div id="start-menu" data-class-open="start_open">
+            <div class="start-search">Search applications, files and settings</div>
+            <div class="start-columns">
+                <div class="start-column">
+                    <span class="section-label">APPLICATIONS</span>
+                    <button data-event-click="activate('files')">Files</button>
+                    <button data-event-click="activate('terminal')">Terminal</button>
+                    <button data-event-click="activate('runtime')">Runtime Monitor</button>
+                </div>
+                <div class="start-column">
+                    <span class="section-label">SYSTEM</span>
+                    <button>Configuration</button>
+                    <button>Session</button>
+                    <button>Power</button>
+                </div>
+            </div>
+        </div>
+
+        <div id="task-bar">
+            <button id="start-button" data-event-click="toggle_start()"><i></i>Start</button>
+            <div class="task-separator"></div>
+            <button class="task" data-class-active="terminal_active" data-event-click="activate('terminal')">Terminal</button>
+            <button class="task" data-class-active="files_active" data-event-click="activate('files')">Files</button>
+            <button class="task" data-class-active="runtime_active" data-event-click="activate('runtime')">Runtime Monitor</button>
+            <div id="task-spacer"></div>
+            <span class="tray-item">VOL</span>
+            <span class="tray-item">NET</span>
+            <span class="tray-item">PWR</span>
+        </div>
+    </div>
+</body>
+</rml>

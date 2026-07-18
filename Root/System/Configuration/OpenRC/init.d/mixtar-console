@@ -1,0 +1,38 @@
+#!/System/Init/openrc-run
+description="Start authenticated Mixtar consoles"
+
+depend() {
+	need zsh-proof
+}
+
+start_getty() {
+	device=$1
+	terminal=$2
+	speed=$3
+	term=$4
+	setup=$5
+	[ -c "$device" ] || return 0
+
+	(
+		if [ "$setup" = yes ]; then
+			until /System/Core/Platform/first-account; do
+				/System/Core/BusyBox/busybox sleep 2
+			done
+		fi
+
+		while :; do
+			/System/Core/BusyBox/busybox getty \
+				-L -l /System/Core/Platform/login \
+				"$speed" "$terminal" "$term"
+			/System/Core/BusyBox/busybox sleep 1
+		done
+	) <"$device" >"$device" 2>&1 &
+}
+
+start() {
+	ebegin "Starting authenticated Mixtar consoles"
+	printf '%s\n' 'MixtarRVS: login console ready'
+	start_getty /System/Devices/console console 115200 vt100 yes
+	start_getty /System/Devices/tty1 tty1 0 linux no
+	eend 0
+}

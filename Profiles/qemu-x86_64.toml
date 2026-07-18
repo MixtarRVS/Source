@@ -1,0 +1,67 @@
+[system]
+name = "MixtarRVS"
+version = "M1"
+
+[target]
+architecture = "x86_64"
+machine = "qemu"
+
+[layout]
+source = "Root"
+allowed_roots = [
+    "Applications",
+    "System",
+    "Temporary",
+    "Users",
+    "Volumes",
+]
+
+[boot]
+efi = "/System/EFI/BOOT/BOOTX64.EFI"
+init = "/System/Init/MixtarRVS"
+kernel_directory = "/System/Kernel/Linux"
+console = "/System/Devices/console"
+
+[filesystem]
+type = "openzfs"
+
+[requirements]
+bootable = true
+require_efi = true
+require_init = true
+require_kernel = true
+
+[volumes.efi]
+mountpoint = "/System/EFI"
+size_mib = 64
+label = "MIXTARRVS"
+
+[volumes.root]
+size_mib = 1024
+label = "MIXTARROOT"
+typecode = "bf01"
+pool = "mixtar"
+dataset = "mixtar/ROOT/M1-A"
+ashift = 12
+compression = "lz4"
+
+[uki]
+enabled = false
+command_line = "init=/System/Init/MixtarRVS"
+
+[[filesystem.nodes]]
+path = "/System/Devices/console"
+type = "character"
+major = 5
+minor = 1
+mode = "0600"
+uid = 0
+gid = 0
+
+[output]
+directory = "Output"
+
+[product]
+mode = "console"
+graphical = false
+graphical_overlay = "Product/Root"

@@ -1,0 +1,103 @@
+diff -ruN a/xf86drm.c b/xf86drm.c
+--- a/xf86drm.c	2026-07-18 00:30:51.150220796 +0200
++++ b/xf86drm.c	2026-07-18 00:30:51.158220795 +0200
+@@ -3327,7 +3327,7 @@
+     char path[64];
+     struct stat sbuf;
+ 
+-    snprintf(path, sizeof(path), "/sys/dev/char/%d:%d/device/drm",
++    snprintf(path, sizeof(path), "/System/Hardware/dev/char/%d:%d/device/drm",
+              maj, min);
+     return stat(path, &sbuf) == 0;
+ #elif defined(__FreeBSD__)
+@@ -3434,7 +3434,7 @@
+     if (!drmNodeIsDRM(maj, min) || !S_ISCHR(sbuf.st_mode))
+         return NULL;
+ 
+-    snprintf(buf, sizeof(buf), "/sys/dev/char/%d:%d/device/drm", maj, min);
++    snprintf(buf, sizeof(buf), "/System/Hardware/dev/char/%d:%d/device/drm", maj, min);
+ 
+     sysdir = opendir(buf);
+     if (!sysdir)
+@@ -3625,7 +3625,7 @@
+     char real_path[PATH_MAX + 1] = "";
+     int subsystem_type;
+ 
+-    snprintf(path, sizeof(path), "/sys/dev/char/%d:%d/device", maj, min);
++    snprintf(path, sizeof(path), "/System/Hardware/dev/char/%d:%d/device", maj, min);
+ 
+     subsystem_type = get_subsystem_type(path);
+     /* Try to get the parent (underlying) device type */
+@@ -3653,7 +3653,7 @@
+ {
+     char path[PATH_MAX + 1], *term;
+ 
+-    snprintf(path, sizeof(path), "/sys/dev/char/%d:%d/device", maj, min);
++    snprintf(path, sizeof(path), "/System/Hardware/dev/char/%d:%d/device", maj, min);
+     if (!realpath(path, pci_path)) {
+         strcpy(pci_path, path);
+         return;
+@@ -4140,7 +4140,7 @@
+     char *value, *tmp_path, *slash;
+     bool usb_device, usb_interface;
+ 
+-    snprintf(path, len, "/sys/dev/char/%d:%d/device", maj, min);
++    snprintf(path, len, "/System/Hardware/dev/char/%d:%d/device", maj, min);
+ 
+     value = sysfs_uevent_get(path, "DEVTYPE");
+     if (!value)
+@@ -4295,7 +4295,7 @@
+ #ifdef __linux__
+     char path[PATH_MAX + 1], *name, *tmp_name;
+ 
+-    snprintf(path, sizeof(path), "/sys/dev/char/%d:%d/device", maj, min);
++    snprintf(path, sizeof(path), "/System/Hardware/dev/char/%d:%d/device", maj, min);
+ 
+     name = sysfs_uevent_get(path, "OF_FULLNAME");
+     tmp_name = name;
+@@ -4332,7 +4332,7 @@
+     unsigned int count, i;
+     int err;
+ 
+-    snprintf(path, sizeof(path), "/sys/dev/char/%d:%d/device", maj, min);
++    snprintf(path, sizeof(path), "/System/Hardware/dev/char/%d:%d/device", maj, min);
+ 
+     value = sysfs_uevent_get(path, "OF_COMPATIBLE_N");
+     if (value) {
+@@ -4472,7 +4472,7 @@
+     char real_path[PATH_MAX + 1] = "";
+     char *name;
+ 
+-    snprintf(path, sizeof(path), "/sys/dev/char/%d:%d/device", maj, min);
++    snprintf(path, sizeof(path), "/System/Hardware/dev/char/%d:%d/device", maj, min);
+ 
+     if (!realpath(path, real_path))
+         return -errno;
+@@ -4929,13 +4929,13 @@
+     if (!drmNodeIsDRM(maj, min) || !S_ISCHR(sbuf.st_mode))
+         return NULL;
+ 
+-    snprintf(path, sizeof(path), "/sys/dev/char/%d:%d", maj, min);
++    snprintf(path, sizeof(path), "/System/Hardware/dev/char/%d:%d", maj, min);
+ 
+     value = sysfs_uevent_get(path, "DEVNAME");
+     if (!value)
+         return NULL;
+ 
+-    snprintf(path, sizeof(path), "/dev/%s", value);
++    snprintf(path, sizeof(path), "/System/Devices/%s", value);
+     free(value);
+ 
+     return strdup(path);
+diff -ruN a/xf86drm.h b/xf86drm.h
+--- a/xf86drm.h	2026-07-18 00:30:51.146220800 +0200
++++ b/xf86drm.h	2026-07-18 00:30:51.158220795 +0200
+@@ -82,7 +82,7 @@
+ #define DRM_CONTROL_MINOR_NAME  "drmC" /* deprecated */
+ #define DRM_RENDER_MINOR_NAME   "drmR"
+ #else
+-#define DRM_DIR_NAME  "/dev/dri"
++#define DRM_DIR_NAME  "/System/Devices/dri"
+ #define DRM_PRIMARY_MINOR_NAME  "card"
+ #define DRM_CONTROL_MINOR_NAME  "controlD" /* deprecated */
+ #define DRM_RENDER_MINOR_NAME   "renderD"

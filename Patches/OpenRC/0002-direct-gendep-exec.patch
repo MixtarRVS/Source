@@ -1,0 +1,118 @@
+diff --git a/src/librc/librc-depend.c b/src/librc/librc-depend.c
+index c7ef4dc..9a5eb8f 100644
+--- a/src/librc/librc-depend.c
++++ b/src/librc/librc-depend.c
+@@ -25,6 +25,7 @@
+ #include <stdlib.h>
+ #include <string.h>
+ #include <sys/stat.h>
++#include <sys/wait.h>
+ #include <time.h>
+ #include <unistd.h>
+ 
+@@ -37,6 +38,61 @@
+ 
+ static const char *bootlevel = NULL;
+ 
++static FILE *
++gendep_open(pid_t *pid)
++{
++	int fds[2];
++	FILE *fp;
++	int serrno;
++
++	if (pipe(fds) == -1)
++		return NULL;
++
++	*pid = fork();
++	if (*pid == -1) {
++		serrno = errno;
++		close(fds[0]);
++		close(fds[1]);
++		errno = serrno;
++		return NULL;
++	}
++	if (*pid == 0) {
++		close(fds[0]);
++		if (fds[1] != STDOUT_FILENO) {
++			if (dup2(fds[1], STDOUT_FILENO) == -1)
++				_exit(127);
++			close(fds[1]);
++		}
++		execl(GENDEP, GENDEP, (char *)NULL);
++		_exit(127);
++	}
++
++	close(fds[1]);
++	fp = fdopen(fds[0], "r");
++	if (!fp) {
++		serrno = errno;
++		close(fds[0]);
++		while (waitpid(*pid, NULL, 0) == -1 && errno == EINTR)
++			;
++		errno = serrno;
++	}
++	return fp;
++}
++
++static bool
++gendep_close(FILE *fp, pid_t pid)
++{
++	int status;
++	bool ok;
++
++	ok = fclose(fp) == 0;
++	while (waitpid(pid, &status, 0) == -1) {
++		if (errno != EINTR)
++			return false;
++	}
++	return ok && WIFEXITED(status) && WEXITSTATUS(status) == 0;
++}
++
+ static char *
+ get_shell_value(char *string)
+ {
+@@ -588,6 +644,7 @@ deep_mtime_check(int target_dir, const char *target, bool newer, time_t *rel, ch
+ {
+ 	struct stat buf;
+ 	bool retval = true;
++	pid_t gendep_pid;
+ 	DIR *dp;
+ 	struct dirent *d;
+ 
+@@ -639,6 +696,7 @@ mtime_check(int dirfd, const char *source, const char *target, bool newer, time_
+ 	struct stat buf;
+ 	time_t mtime;
+ 	bool retval = true;
++	pid_t gendep_pid;
+ 
+ 	/* We have to exist */
+ 	if (stat(source, &buf) != 0)
+@@ -789,12 +847,13 @@ rc_deptree_update(void)
+ 	char *depend, *depends, *service, *type;
+ 	size_t i, l;
+ 	bool retval = true;
++	pid_t gendep_pid;
+ 	const char *sys = rc_sys();
+ 	int serrno;
+ 
+ 	/* Phase 1 - source all init scripts and print dependencies */
+ 	setup_environment();
+-	if (!(fp = popen(GENDEP, "r")))
++	if (!(fp = gendep_open(&gendep_pid)))
+ 		return false;
+ 
+ 	config = rc_stringlist_new();
+@@ -876,7 +935,11 @@ rc_deptree_update(void)
+ 		}
+ 	}
+ 	free(line);
+-	pclose(fp);
++	if (!gendep_close(fp, gendep_pid)) {
++		rc_stringlist_free(config);
++		rc_deptree_free(deptree);
++		return false;
++	}
+ 
+ 	/* Phase 2 - if we're a special system, remove services that don't
+ 	 * work for them. This doesn't stop them from being run directly. */

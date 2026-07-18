@@ -1,0 +1,19 @@
+#!/System/Init/openrc-run
+description="Start the Mixtar display model, window manager and Workbench"
+
+depend() {
+  need mixtar-platform
+  before mixtar-console
+}
+
+start() {
+  ebegin "Starting Mixtar graphics"
+  /System/Core/Graphics/start-graphics start
+  eend $?
+}
+
+stop() {
+  ebegin "Stopping Mixtar graphics"
+  /System/Core/Graphics/start-graphics stop
+  eend $?
+}

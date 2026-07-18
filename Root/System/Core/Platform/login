@@ -1,0 +1,26 @@
+#!/System/Terminal/POSIX/sh
+set -eu
+
+BUSYBOX=/System/Core/BusyBox/busybox
+ALIASES=/System/Configuration/Accounts/root.aliases
+
+requested=
+for argument in "$@"; do
+	case "$argument" in
+		--|-*) ;;
+		*) requested=$argument ;;
+	esac
+done
+
+if [ -z "$requested" ]; then
+	exec "$BUSYBOX" login
+fi
+canonical=$requested
+while IFS= read -r alias; do
+	if [ "$requested" = "$alias" ]; then
+		canonical=root
+		break
+	fi
+done <"$ALIASES"
+
+exec "$BUSYBOX" login "$canonical"

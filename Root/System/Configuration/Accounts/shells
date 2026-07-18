@@ -1,0 +1,4 @@
+/System/Core/Platform/user-shell
+/System/Terminal/ZSH/zsh
+/System/Terminal/POSIX/ash
+/System/Terminal/POSIX/sh

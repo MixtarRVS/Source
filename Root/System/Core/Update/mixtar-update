@@ -1,0 +1,142 @@
+#!/System/Terminal/POSIX/sh
+set -eu
+
+PATH=/System/Commands
+export PATH
+BUNDLE=${1:-}
+PUBLIC_KEY=/System/Configuration/Release/M1.public.pem
+STATE=/System/State/Update
+TRANSACTION=$STATE/Transaction.config
+MOUNT=/System/Runtime/UpdateRoot
+ESP=/System/EFI
+
+fail() {
+  printf 'MixtarRVS: update rejected: %s\n' "$1" >&2
+  exit 1
+}
+
+value() {
+  key=$1
+  file=$2
+  sed -n "s/^${key} = \"\([^\"]*\)\"$/\1/p" "$file"
+}
+
+blkid_value() {
+  key=$1
+  device=$2
+  blkid "$device" 2>/System/Devices/null | \
+    sed -n "s/.*${key}=\"\([^\"]*\)\".*/\1/p"
+}
+
+find_volume() {
+  wanted=$1
+  for device in \
+    /System/Devices/vd* \
+    /System/Devices/sd* \
+    /System/Devices/nvme*n*; do
+    [ -b "$device" ] || continue
+    label=$(blkid_value LABEL "$device" || true)
+    [ "$label" = "$wanted" ] && {
+      printf '%s\n' "$device"
+      return 0
+    }
+  done
+  return 1
+}
+
+[ -d "$BUNDLE" ] || fail 'bundle directory is missing'
+MANIFEST=$BUNDLE/Update.config
+SIGNATURE=$BUNDLE/Update.sig
+ROOT_ARCHIVE=$BUNDLE/root.tar
+FIRMWARE=$BUNDLE/BOOTX64.EFI
+for file in "$MANIFEST" "$SIGNATURE" "$ROOT_ARCHIVE" "$FIRMWARE" "$PUBLIC_KEY"; do
+  [ -f "$file" ] || fail "required file is missing: $file"
+done
+
+openssl dgst -sha256 -verify "$PUBLIC_KEY" \
+  -signature "$SIGNATURE" "$MANIFEST" >/System/Devices/null 2>&1 || \
+  fail 'manifest signature is invalid'
+
+schema=$(value schema "$MANIFEST")
+release=$(value release "$MANIFEST")
+slot=$(value slot "$MANIFEST")
+dataset=$(value dataset "$MANIFEST")
+root_sha256=$(value root_sha256 "$MANIFEST")
+efi_sha256=$(value efi_sha256 "$MANIFEST")
+[ "$schema" = 'mixtar.update.v1' ] || fail 'unsupported manifest schema'
+[ "$release" = 'M1' ] || fail 'release line is not M1'
+case "$slot" in M1-A|M1-B) ;; *) fail 'invalid target slot' ;; esac
+[ "$dataset" = "mixtar/ROOT/$slot" ] || fail 'slot and dataset disagree'
+case "$root_sha256" in
+  ''|*[!0-9a-f]*) fail 'invalid root SHA-256 field' ;;
+esac
+case "$efi_sha256" in
+  ''|*[!0-9a-f]*) fail 'invalid EFI SHA-256 field' ;;
+esac
+[ ${#root_sha256} -eq 64 ] && [ ${#efi_sha256} -eq 64 ] || \
+  fail 'invalid SHA-256 length'
+[ "$(sha256sum "$ROOT_ARCHIVE" | cut -d ' ' -f 1)" = "$root_sha256" ] || \
+  fail 'root archive hash mismatch'
+[ "$(sha256sum "$FIRMWARE" | cut -d ' ' -f 1)" = "$efi_sha256" ] || \
+  fail 'EFI hash mismatch'
+
+ACTIVE=/System/Configuration/Release/Active.config
+[ -f "$ACTIVE" ] || fail 'active release identity is missing'
+previous_slot=$(value slot "$ACTIVE")
+previous_dataset=$(value dataset "$ACTIVE")
+case "$previous_slot" in M1-A|M1-B) ;; *) fail 'invalid active slot' ;; esac
+[ "$previous_dataset" = "mixtar/ROOT/$previous_slot" ] || fail 'invalid active dataset'
+[ "$previous_dataset" != "$dataset" ] || fail 'target slot is already active'
+
+mkdir -p "$STATE" "$MOUNT" "$ESP"
+if zfs list -H -o name "$dataset" >/System/Devices/null 2>&1; then
+  zfs destroy -r "$dataset"
+fi
+zfs create -o mountpoint=legacy "$dataset"
+mount -t zfs "$dataset" "$MOUNT"
+tar -xf "$ROOT_ARCHIVE" -C "$MOUNT"
+for forbidden in proc sys dev run usr etc lib var; do
+  [ ! -e "$MOUNT/$forbidden" ] || fail "bundle exposes forbidden root /$forbidden"
+done
+mkdir -p \
+  "$MOUNT/Users" \
+  "$MOUNT/System/State" \
+  "$MOUNT/System/Logs" \
+  "$MOUNT/System/Cache" \
+  "$MOUNT/System/Configuration/Release"
+cat >"$MOUNT/System/Configuration/Release/Active.config" <<EOF
+schema = "mixtar.active-release.v1"
+release = "M1"
+slot = "$slot"
+dataset = "$dataset"
+EOF
+sync
+umount "$MOUNT"
+zfs set readonly=on "$dataset"
+zfs snapshot "$dataset@accepted"
+
+cat >"$TRANSACTION" <<EOF
+schema = "mixtar.update-transaction.v1"
+status = "pending"
+previous_slot = "$previous_slot"
+previous_dataset = "$previous_dataset"
+candidate_slot = "$slot"
+candidate_dataset = "$dataset"
+EOF
+sync
+
+esp_device=$(find_volume MIXTARRVS) || fail 'ESP label MIXTARRVS was not found'
+mount -t vfat "$esp_device" "$ESP"
+mkdir -p "$ESP/EFI/BOOT" "$ESP/EFI/Mixtar"
+cp "$ESP/EFI/BOOT/BOOTX64.EFI" "$ESP/EFI/Mixtar/Previous.EFI.new"
+mv "$ESP/EFI/Mixtar/Previous.EFI.new" "$ESP/EFI/Mixtar/Previous.EFI"
+cp "$FIRMWARE" "$ESP/EFI/BOOT/BOOTX64.EFI.new"
+[ "$(sha256sum "$ESP/EFI/BOOT/BOOTX64.EFI.new" | cut -d ' ' -f 1)" = "$efi_sha256" ] || \
+  fail 'staged EFI hash mismatch'
+sync
+mv "$ESP/EFI/BOOT/BOOTX64.EFI.new" "$ESP/EFI/BOOT/BOOTX64.EFI"
+sync
+umount "$ESP"
+zpool set bootfs="$dataset" mixtar
+sync
+printf 'MixtarRVS: update installed slot %s\n' "$slot"

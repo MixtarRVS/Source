@@ -1,0 +1,70 @@
+#!/System/Init/openrc-run
+description="Prepare the Mixtar 1.0 product runtime"
+
+depend() {
+  need zsh-proof
+  before mixtar-console
+}
+
+write_console_session() {
+  /System/Core/BusyBox/busybox cat > /System/Runtime/Sessions/console/Session.config <<'EOF'
+schema = 1
+
+[session]
+id = "console"
+user = "Administrator"
+type = "console"
+state = "active"
+EOF
+}
+
+start() {
+  ebegin "Preparing the Mixtar product runtime"
+  bb=/System/Core/BusyBox/busybox
+  "$bb" mkdir -p /System/Runtime/Sessions/console/Launch
+  "$bb" mkdir -p /System/Logs/Executor
+  "$bb" cp /System/Core/Product/Executor /System/Runtime/Executor
+  "$bb" chmod 0755 /System/Runtime/Executor
+  "$bb" chmod 0700 /System/Runtime/Sessions/console
+  write_console_session
+  "$bb" chmod 0600 /System/Runtime/Sessions/console/Session.config
+  export HOME=/Root
+  export TMPDIR=/Temporary
+  executor="/System/Runtime/Executor"
+  bundle="/System/Terminal/ZSH/zsh.apx"
+  plan_log="/System/Logs/Executor/zsh-plan.log"
+
+  if ! "$executor" version; then
+    eend 1 "Executor version probe failed"
+    return 1
+  fi
+  if ! "$executor" validate "$bundle"; then
+    eend 1 "Executor rejected zsh.apx"
+    return 1
+  fi
+  if ! "$executor" plan --context terminal --user Administrator --session console "$bundle" > "$plan_log"; then
+    eend 1 "Executor could not prepare the zsh.apx launch descriptor"
+    return 1
+  fi
+  if ! "$executor" launch --context terminal --user Administrator --session console --wait "$bundle" -- -fc 'printf "%s\n" "MixtarRVS: Executor zsh launch ready"'; then
+    eend 1 "Executor could not launch zsh.apx"
+    return 1
+  fi
+
+  printf '%s\n' 'MixtarRVS: product runtime ready'
+  eend 0
+}
+
+stop() {
+  ebegin "Stopping the Mixtar product runtime"
+  /System/Core/BusyBox/busybox cat > /System/Runtime/Sessions/console/Session.config <<'EOF'
+schema = 1
+
+[session]
+id = "console"
+user = "Administrator"
+type = "console"
+state = "stopped"
+EOF
+  eend 0
+}

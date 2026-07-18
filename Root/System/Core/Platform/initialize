@@ -1,0 +1,43 @@
+#!/System/Terminal/POSIX/sh
+set -eu
+
+BUSYBOX=/System/Core/BusyBox/busybox
+
+"$BUSYBOX" hostname MixtarRVS
+
+mount_once() {
+	filesystem=$1
+	source=$2
+	target=$3
+	options=$4
+
+	"$BUSYBOX" mkdir -p "$target"
+	if "$BUSYBOX" mountpoint -q "$target"; then
+		return 0
+	fi
+
+	"$BUSYBOX" mount -n -t "$filesystem" -o "$options" 		"$source" "$target"
+}
+
+# Runtime must be mounted before OpenRC creates its service state. The dynamic
+# loader deliberately lives in /System/Libraries and cannot be hidden here.
+mount_once tmpfs tmpfs /System/Runtime mode=0755,nosuid,nodev
+"$BUSYBOX" mkdir -p \
+	/System/Runtime/OpenRC \
+	/System/Runtime/Accounts \
+	/System/State/Accounts \
+	/System/Logs/Accounts
+"$BUSYBOX" touch \
+	/System/Runtime/Accounts/utmp \
+	/System/Logs/Accounts/wtmp \
+	/System/Logs/Accounts/lastlog
+"$BUSYBOX" chmod 0600 \
+	/System/Runtime/Accounts/utmp \
+	/System/Logs/Accounts/wtmp \
+	/System/Logs/Accounts/lastlog
+
+mount_once devtmpfs devtmpfs /System/Devices mode=0755,nosuid
+mount_once proc proc /System/Processes nosuid,nodev,noexec
+mount_once sysfs sysfs /System/Hardware nosuid,nodev,noexec
+
+printf '%s\n' 'MixtarRVS: platform namespace ready'

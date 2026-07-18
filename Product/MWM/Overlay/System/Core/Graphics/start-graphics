@@ -1,0 +1,281 @@
+#!/System/Terminal/POSIX/sh
+set -eu
+
+readonly BB=/System/Core/BusyBox/busybox
+readonly SSD=/System/Init/start-stop-daemon
+readonly MWM=/System/Core/Graphics/MWM
+readonly MDDM_CONFIG=/System/Configuration/Graphics/MDDM.config
+readonly MWM_CONFIG=/System/Configuration/Graphics/MWM.config
+readonly STATE=/System/State/Graphics
+readonly DEFAULT_RUNTIME=/System/Runtime/Graphics
+readonly DEFAULT_LOG=/System/Logs/Graphics/MWM.log
+
+config_value() {
+  file="$1"
+  key="$2"
+  fallback="$3"
+  value="$($BB awk -F= -v wanted="$key" '
+    $1 ~ "^[[:space:]]*" wanted "[[:space:]]*$" {
+      result = $2
+      sub(/^[[:space:]]+/, "", result)
+      sub(/[[:space:]#].*$/, "", result)
+      gsub(/^"|"$/, "", result)
+      print result
+      exit
+    }
+  ' "$file")"
+  [ -n "$value" ] && printf '%s\n' "$value" || printf '%s\n' "$fallback"
+}
+
+config_section_value() {
+  file="$1"
+  section="$2"
+  key="$3"
+  fallback="$4"
+  value="$($BB awk -F= -v wanted_section="$section" -v wanted="$key" '
+    /^[[:space:]]*\[[^]]+\][[:space:]]*$/ {
+      current = $0
+      sub(/^[[:space:]]*\[/, "", current)
+      sub(/\][[:space:]]*$/, "", current)
+      next
+    }
+    current == wanted_section && $1 ~ "^[[:space:]]*" wanted "[[:space:]]*$" {
+      result = $2
+      sub(/^[[:space:]]+/, "", result)
+      sub(/[[:space:]#].*$/, "", result)
+      gsub(/^"|"$/, "", result)
+      print result
+      exit
+    }
+  ' "$file")"
+  [ -n "$value" ] && printf '%s\n' "$value" || printf '%s\n' "$fallback"
+}
+
+prepare_drm() {
+  log="$1"
+  timeout="$2"
+  for module in virtio_gpu hyperv_drm simpledrm; do
+    if $BB modprobe "$module" >>"$log" 2>&1; then
+      printf 'MixtarRVS: loaded graphics module %s\n' "$module" >>"$log"
+    fi
+  done
+  $BB mdev -s >>"$log" 2>&1 || true
+
+  elapsed=0
+  while [ "$elapsed" -lt "$timeout" ]; do
+    for candidate in /System/Devices/dri/card*; do
+      [ -c "$candidate" ] || continue
+      printf 'MixtarRVS: DRM device ready: %s\n' "$candidate" >>"$log"
+      return 0
+    done
+
+    $BB sleep 1
+    elapsed=$((elapsed + 1))
+  done
+
+  printf 'MixtarRVS: no DRM/KMS device became available\n' >&2
+  return 1
+}
+
+# Input drivers are kernel modules (evdev/atkbd/psmouse) and nothing else in
+# the boot path loads them, so without this the libinput backend starts with
+# zero devices. Missing input must never block the desktop: on timeout this
+# returns success and WLR_LIBINPUT_NO_DEVICES=1 keeps wlroots tolerant.
+prepare_input() {
+  log="$1"
+  timeout="$2"
+  for module in evdev atkbd psmouse virtio_input; do
+    if $BB modprobe "$module" >>"$log" 2>&1; then
+      printf 'MixtarRVS: loaded input module %s\n' "$module" >>"$log"
+    fi
+  done
+
+  # Wait until the set of event nodes is stable for a second: the PS/2 mouse
+  # probe finishes visibly later than the keyboard and libinput only sees
+  # devices that exist when the backend starts (udev-zero hotplug is not
+  # reliable here yet).
+  elapsed=0
+  previous_count=-1
+  while [ "$elapsed" -lt "$timeout" ]; do
+    count=0
+    for candidate in /System/Devices/input/event*; do
+      [ -c "$candidate" ] && count=$((count + 1))
+    done
+    if [ "$count" -gt 0 ] && [ "$count" -eq "$previous_count" ]; then
+      printf 'MixtarRVS: input devices ready (%s)\n' "$count" >>"$log"
+      return 0
+    fi
+    previous_count=$count
+    $BB sleep 1
+    elapsed=$((elapsed + 1))
+  done
+
+  printf 'MixtarRVS: no input devices appeared; continuing without\n' >>"$log"
+  return 0
+}
+
+start_graphics() {
+  runtime="$(config_value "$MWM_CONFIG" runtime "$DEFAULT_RUNTIME")"
+  log="$(config_value "$MWM_CONFIG" log "$DEFAULT_LOG")"
+  backend="$(config_section_value "$MDDM_CONFIG" display backend "$(config_value "$MDDM_CONFIG" backend wayland)")"
+  renderer="$(config_section_value "$MDDM_CONFIG" display renderer "$(config_value "$MDDM_CONFIG" renderer pixman)")"
+  input_provider="$(config_section_value "$MDDM_CONFIG" input provider none)"
+
+  allow_software="$(config_section_value "$MDDM_CONFIG" display allow_software_renderer "$(config_value "$MDDM_CONFIG" allow_software_renderer true)")"
+  seat_backend="$(config_section_value "$MDDM_CONFIG" session backend builtin)"
+  seat_socket="$(config_section_value "$MDDM_CONFIG" session socket /System/Runtime/Seats/seatd.sock)"
+  layout="$(config_value "$MWM_CONFIG" keyboard_layout us)"
+  timeout="$(config_value "$MWM_CONFIG" startup_timeout_seconds 10)"
+  launch="$(config_value "$MWM_CONFIG" launch_workbench true)"
+  workbench="$(config_value "$MWM_CONFIG" workbench /System/Core/Product/Workbench/Workbench)"
+  workbench_mode="$(config_value "$MWM_CONFIG" workbench_graphics_mode auto)"
+
+  case "$backend" in
+    drm|wayland|headless) ;;
+    *) printf 'MixtarRVS: unsupported MDDM backend %s\n' "$backend" >&2; return 1 ;;
+  esac
+  case "$timeout" in ''|*[!0-9]*) timeout=10 ;; esac
+
+  stop_graphics
+  $BB mkdir -p "$runtime" "$STATE" /System/Logs/Graphics "${seat_socket%/*}"
+  $BB chmod 0700 "$runtime"
+  $BB rm -f "$runtime"/wayland-* "$runtime"/mwm-* 2>/System/Devices/null || true
+
+  if [ "$backend" = drm ] && ! prepare_drm "$log" "$timeout"; then
+    stop_graphics
+    return 1
+  fi
+  if [ "$backend" = drm ] && [ "$input_provider" = libinput ]; then
+    prepare_input "$log" "$timeout"
+  fi
+
+  export XDG_RUNTIME_DIR="$runtime"
+  if [ "$backend" = drm ] && [ "$input_provider" = libinput ]; then
+    export WLR_BACKENDS="$backend,libinput"
+    export WLR_LIBINPUT_NO_DEVICES=1
+  else
+    export WLR_BACKENDS="$backend"
+    unset WLR_LIBINPUT_NO_DEVICES || true
+  fi
+  export MWM_RENDERER="$renderer"
+  unset WLR_RENDERER || true
+  unset WLR_ALLOCATOR || true
+  if [ "$allow_software" = true ]; then export WLR_RENDERER_ALLOW_SOFTWARE=1; else unset WLR_RENDERER_ALLOW_SOFTWARE || true; fi
+  export LIBSEAT_BACKEND="$seat_backend"
+  export SEATD_SOCK="$seat_socket"
+  export XKB_CONFIG_ROOT=/System/Configuration/Keyboard/xkeyboard-config-2
+  export XKB_DEFAULT_LAYOUT="$layout"
+  export LD_LIBRARY_PATH=/System/Libraries/Graphics:/System/Libraries:/System/Core/Product/Workbench
+  if [ "$workbench_mode" = software ]; then
+    export WLR_SCENE_DISABLE_DIRECT_SCANOUT=1
+  else
+    unset WLR_SCENE_DISABLE_DIRECT_SCANOUT || true
+  fi
+
+  "$MWM" >>"$log" 2>&1 &
+  mwm_pid=$!
+  printf '%s\n' "$mwm_pid" >"$STATE/MWM.pid"
+
+  elapsed=0
+  socket=''
+  while [ "$elapsed" -lt "$timeout" ]; do
+    for candidate in "$runtime"/wayland-* "$runtime"/mwm-*; do
+      [ -S "$candidate" ] || continue
+      socket="${candidate##*/}"
+      break
+    done
+    [ -n "$socket" ] && break
+    [ -d "/System/Processes/$mwm_pid" ] || {
+      printf 'MixtarRVS: MWM stopped during initialization\n' >&2
+      stop_graphics
+      return 1
+    }
+    $BB sleep 1
+    elapsed=$((elapsed + 1))
+  done
+  [ -n "$socket" ] || {
+    printf 'MixtarRVS: MWM did not publish a Wayland socket\n' >&2
+    stop_graphics
+    return 1
+  }
+
+  workbench_pid=0
+  if [ "$launch" = true ]; then
+    export WAYLAND_DISPLAY="$socket"
+    export TMPDIR=/Temporary
+    if [ "$workbench_mode" != auto ]; then
+      export MIXTAR_GRAPHICS_MODE="$workbench_mode"
+    else
+      unset MIXTAR_GRAPHICS_MODE || true
+    fi
+    "$workbench" </System/Devices/null >>"$log" 2>&1 &
+    workbench_pid=$!
+    printf '%s\n' "$workbench_pid" >"$STATE/Workbench.pid"
+    $BB sleep 2
+    [ -d "/System/Processes/$workbench_pid" ] || {
+      printf 'MixtarRVS: Workbench stopped during initialization\n' >&2
+      stop_graphics
+      return 1
+    }
+  fi
+
+  printf 'schema = 1\nready = true\nbackend = "%s"\nsocket = "%s"\npid = %s\nworkbench_pid = %s\n' \
+    "$backend" "$socket" "$mwm_pid" "$workbench_pid" >"$STATE/Status.config"
+  printf 'MixtarRVS: MWM ready on %s using %s\n' "$socket" "$backend"
+}
+
+# The POSIX sh has no kill builtin, the trimmed BusyBox has no kill applet
+# and its procps applets (killall, pidof) hardcode /proc, which Mixtar does
+# not mount. The only working signal sender in the image is the
+# path-patched OpenRC start-stop-daemon; liveness comes from
+# /System/Processes directory checks.
+any_named_process() {
+  any_named_name="$1"
+
+  for any_named_comm in /System/Processes/[0-9]*/comm; do
+    [ -f "$any_named_comm" ] || continue
+    read -r any_named_value <"$any_named_comm" 2>/System/Devices/null || continue
+    [ "$any_named_value" = "$any_named_name" ] && return 0
+  done
+  return 1
+}
+
+stop_named_processes() {
+  stop_named_name="$1"
+
+  any_named_process "$stop_named_name" || return 0
+
+  $SSD --stop --signal 15 --name "$stop_named_name" >/System/Devices/null 2>&1 || true
+  stop_named_elapsed=0
+  while any_named_process "$stop_named_name" &&
+        [ "$stop_named_elapsed" -lt 3 ]; do
+    $BB sleep 1
+    stop_named_elapsed=$((stop_named_elapsed + 1))
+  done
+
+  if any_named_process "$stop_named_name"; then
+    $SSD --stop --signal 9 --name "$stop_named_name" >/System/Devices/null 2>&1 || true
+    $BB sleep 1
+  fi
+}
+
+stop_record() {
+  stop_record_path="$1"
+  stop_record_name="$2"
+
+  $BB rm -f "$stop_record_path"
+  stop_named_processes "$stop_record_name"
+}
+stop_graphics() {
+  runtime="$(config_value "$MWM_CONFIG" runtime "$DEFAULT_RUNTIME")"
+  stop_record "$STATE/Workbench.pid" Workbench
+  stop_record "$STATE/MWM.pid" MWM
+  $BB rm -f "$STATE/Status.config"
+  $BB rm -f "$runtime"/wayland-* "$runtime"/mwm-* 2>/System/Devices/null || true
+}
+
+case "${1:-}" in
+  start) start_graphics ;;
+  stop) stop_graphics ;;
+  *) printf 'Usage: %s {start|stop}\n' "$0" >&2; exit 2 ;;
+esac

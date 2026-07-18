@@ -1,0 +1,64 @@
+diff -ruN a/common/drm.c b/common/drm.c
+--- a/common/drm.c	2026-07-18 00:09:22.110470254 +0200
++++ b/common/drm.c	2026-07-18 00:09:22.126470254 +0200
+@@ -23,13 +23,13 @@
+ 
+ #if defined(__linux__) || defined(__NetBSD__)
+ int path_is_drm(const char *path) {
+-	if (STR_HAS_PREFIX("/dev/dri/", path))
++	if (STR_HAS_PREFIX("/System/Devices/dri/", path))
+ 		return 1;
+ 	return 0;
+ }
+ #elif defined(__FreeBSD__)
+ int path_is_drm(const char *path) {
+-	if (STR_HAS_PREFIX("/dev/dri/", path))
++	if (STR_HAS_PREFIX("/System/Devices/dri/", path))
+ 		return 1;
+ 	/* Some drivers have /dev/dri/X symlinked to /dev/drm/X */
+ 	if (STR_HAS_PREFIX("/dev/drm/", path))
+diff -ruN a/common/evdev.c b/common/evdev.c
+--- a/common/evdev.c	2026-07-18 00:09:22.114470256 +0200
++++ b/common/evdev.c	2026-07-18 00:09:22.130470251 +0200
+@@ -17,7 +17,7 @@
+ 
+ #if defined(__linux__) || defined(__FreeBSD__)
+ int path_is_evdev(const char *path) {
+-	static const char prefix[] = "/dev/input/event";
++	static const char prefix[] = "/System/Devices/input/event";
+ 	static const size_t prefixlen = STRLEN(prefix);
+ 	return strncmp(prefix, path, prefixlen) == 0;
+ }
+diff -ruN a/common/hidraw.c b/common/hidraw.c
+--- a/common/hidraw.c	2026-07-18 00:09:22.122470253 +0200
++++ b/common/hidraw.c	2026-07-18 00:09:22.130470251 +0200
+@@ -14,7 +14,7 @@
+ 
+ #if defined(__linux__) && defined(HIDIOCREVOKE)
+ int path_is_hidraw(const char *path) {
+-	static const char prefix[] = "/dev/hidraw";
++	static const char prefix[] = "/System/Devices/hidraw";
+ 	static const size_t prefixlen = STRLEN(prefix);
+ 	return strncmp(prefix, path, prefixlen) == 0;
+ }
+diff -ruN a/common/terminal.c b/common/terminal.c
+--- a/common/terminal.c	2026-07-18 00:09:22.102470256 +0200
++++ b/common/terminal.c	2026-07-18 00:09:22.126470254 +0200
+@@ -33,7 +33,7 @@
+ #include "log.h"
+ #include "terminal.h"
+ 
+-#define TTYPATHLEN 16
++#define TTYPATHLEN 32
+ 
+ #if defined(__FreeBSD__)
+ static int get_tty_path(int tty, char path[static TTYPATHLEN]) {
+@@ -134,7 +134,7 @@
+ #elif defined(__linux__)
+ static int get_tty_path(int tty, char path[static TTYPATHLEN]) {
+ 	assert(tty >= 0);
+-	if (snprintf(path, TTYPATHLEN, "/dev/tty%d", tty) == -1) {
++	if (snprintf(path, TTYPATHLEN, "/System/Devices/tty%d", tty) == -1) {
+ 		return -1;
+ 	}
+ 	return 0;

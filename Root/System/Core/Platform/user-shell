@@ -1,0 +1,17 @@
+#!/System/Terminal/POSIX/sh
+set -eu
+
+BUSYBOX=/System/Core/BusyBox/busybox
+ZSH=/System/Terminal/ZSH/zsh
+
+: "${HOME:=/Users/root}"
+export HOME
+export PATH=/System/Commands:/System/Terminal/ZSH
+export MIXTAR_SYSTEM_NAME=MixtarRVS
+export ZDOTDIR=/System/Configuration/Terminal/ZSH
+
+state=$HOME/.Mixtar/ZSH
+"$BUSYBOX" mkdir -p "$state/cache"
+"$BUSYBOX" chmod 0700 "$HOME/.Mixtar" "$state" "$state/cache"
+
+exec "$ZSH" -l

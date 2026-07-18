@@ -1,0 +1,69 @@
+diff --git a/util/shm.c b/util/shm.c
+--- a/util/shm.c
++++ b/util/shm.c
+@@ -8,7 +8,7 @@
+ #include <wlr/config.h>
+ #include "util/shm.h"
+ 
+-#define RANDNAME_PATTERN "/wlroots-XXXXXX"
++#define RANDNAME_PATTERN "/System/Runtime/Graphics/wlroots-XXXXXX"
+ 
+ static void randname(char *buf) {
+ 	struct timespec ts;
+@@ -25,8 +25,7 @@ static int excl_shm_open(char *name) {
+ 		randname(name + strlen(RANDNAME_PATTERN) - 6);
+ 
+ 		--retries;
+-		// CLOEXEC is guaranteed to be set by shm_open
+-		int fd = shm_open(name, O_RDWR | O_CREAT | O_EXCL, 0600);
++		int fd = open(name, O_RDWR | O_CREAT | O_EXCL | O_CLOEXEC, 0600);
+ 		if (fd >= 0) {
+ 			return fd;
+ 		}
+@@ -42,7 +41,7 @@ int allocate_shm_file(size_t size) {
+ 	if (fd < 0) {
+ 		return -1;
+ 	}
+-	shm_unlink(name);
++	unlink(name);
+ 
+ 	int ret;
+ 	do {
+@@ -63,18 +62,17 @@ bool allocate_shm_file_pair(size_t size, int *rw_fd_ptr, int *ro_fd_ptr) {
+ 		return false;
+ 	}
+ 
+-	// CLOEXEC is guaranteed to be set by shm_open
+-	int ro_fd = shm_open(name, O_RDONLY, 0);
++	int ro_fd = open(name, O_RDONLY | O_CLOEXEC);
+ 	if (ro_fd < 0) {
+-		shm_unlink(name);
++		unlink(name);
+ 		close(rw_fd);
+ 		return false;
+ 	}
+ 
+-	shm_unlink(name);
++	unlink(name);
+ 
+ 	// Make sure the file cannot be re-opened in read-write mode (e.g. via
+-	// "/proc/self/fd/" on Linux)
++	// "/System/Processes/self/fd/" on Mixtar)
+ 	if (fchmod(rw_fd, 0) != 0) {
+ 		close(rw_fd);
+ 		close(ro_fd);
+diff --git a/types/seat/wlr_seat_keyboard.c b/types/seat/wlr_seat_keyboard.c
+--- a/types/seat/wlr_seat_keyboard.c
++++ b/types/seat/wlr_seat_keyboard.c
+@@ -350,9 +350,9 @@ static void seat_client_send_keymap(struct wlr_seat_client *client,
+ 		size = keyboard->keymap_size;
+ 	} else {
+ 		format = WL_KEYBOARD_KEYMAP_FORMAT_NO_KEYMAP;
+-		devnull = open("/dev/null", O_RDONLY | O_CLOEXEC);
++		devnull = open("/System/Devices/null", O_RDONLY | O_CLOEXEC);
+ 		if (devnull < 0) {
+-			wlr_log_errno(WLR_ERROR, "Failed to open /dev/null");
++			wlr_log_errno(WLR_ERROR, "Failed to open /System/Devices/null");
+ 			return;
+ 		}
+ 		fd = devnull;

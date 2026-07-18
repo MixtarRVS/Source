@@ -1,3 +1,0 @@
-#ifndef MIXTAR_EMPTY_UTIL_H
-#define MIXTAR_EMPTY_UTIL_H
-#endif

@@ -1,0 +1,18 @@
+# Build caches and artifacts
+Cache/
+Output/
+out/
+**/bin/
+**/obj/
+**/__pycache__/
+*.pyc
+
+# Local workspace / session files
+.vscode/
+strace
+HANDOFF.md
+advice.md
+kontekst.md
+Preview.html
+Final_UI.png
+Setup-MixtarLocalAgent.ps1

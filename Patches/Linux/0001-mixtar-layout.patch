@@ -1,0 +1,112 @@
+From: MixtarRVS Builder <builder@mixtar.invalid>
+Subject: [PATCH] init: use the native MixtarRVS system layout
+
+Remove the early boot dependency on FHS paths.  MixtarRVS keeps devices,
+the temporary root mount and PID 1 below /System.
+
+--- a/init/main.c
++++ b/init/main.c
+@@ -164,7 +164,7 @@ static char *extra_init_args;
+ #endif
+ 
+ static char *execute_command;
+-static char *ramdisk_execute_command = "/init";
++static char *ramdisk_execute_command = "/System/Init/MixtarRVS";
+ static bool __initdata ramdisk_execute_command_set;
+ 
+ /*
+@@ -1601,20 +1601,22 @@ static int __ref kernel_init(void *unused)
+ 			return 0;
+ 	}
+ 
+-	if (!try_to_run_init_process("/sbin/init") ||
+-	    !try_to_run_init_process("/etc/init") ||
+-	    !try_to_run_init_process("/bin/init") ||
+-	    !try_to_run_init_process("/bin/sh"))
++	if (!try_to_run_init_process("/System/Init/MixtarRVS"))
+ 		return 0;
+ 
+-	panic("No working init found.  Try passing init= option to kernel. "
+-	      "See Linux Documentation/admin-guide/init.rst for guidance.");
++	panic("No working MixtarRVS init found at /System/Init/MixtarRVS.");
+ }
+ 
+-/* Open /dev/console, for stdin/stdout/stderr, this should never fail */
++/* Open the MixtarRVS console for stdin/stdout/stderr. */
+ void __init console_on_rootfs(void)
+ {
+-	struct file *file = filp_open("/dev/console", O_RDWR, 0);
++	struct file *file;
++
++	init_mkdir("/System", 0755);
++	init_mkdir("/System/Devices", 0755);
++	init_mknod("/System/Devices/console", S_IFCHR | S_IRUSR | S_IWUSR,
++			new_encode_dev(MKDEV(5, 1)));
++	file = filp_open("/System/Devices/console", O_RDWR, 0);
+ 
+ 	if (IS_ERR(file)) {
+ 		pr_err("Warning: unable to open an initial console.\n");
+--- a/init/noinitramfs.c
++++ b/init/noinitramfs.c
+@@ -20,16 +20,20 @@ static int __init default_rootfs(void)
+ 	int err;
+ 
+ 	usermodehelper_enable();
+-	err = init_mkdir("/dev", 0755);
++	err = init_mkdir("/System", 0755);
+ 	if (err < 0)
+ 		goto out;
+ 
+-	err = init_mknod("/dev/console", S_IFCHR | S_IRUSR | S_IWUSR,
++	err = init_mkdir("/System/Devices", 0755);
++	if (err < 0)
++		goto out;
++
++	err = init_mknod("/System/Devices/console", S_IFCHR | S_IRUSR | S_IWUSR,
+ 			new_encode_dev(MKDEV(5, 1)));
+ 	if (err < 0)
+ 		goto out;
+ 
+-	err = init_mkdir("/root", 0700);
++	err = init_mkdir("/System/Mount", 0700);
+ 	if (err < 0)
+ 		goto out;
+ 
+--- a/init/do_mounts.c
++++ b/init/do_mounts.c
+@@ -154,11 +154,11 @@ int __init mount_root_generic(char *name, char *pretty_name, char *fstype,
+ 		strscpy_pad(data_page, data, PAGE_SIZE);
+ 	}
+ 
+-	ret = init_mount(name, "/root", fs, flags, data_page);
++	ret = init_mount(name, "/System/Mount", fs, flags, data_page);
+ 	if (ret)
+ 		goto out;
+ 
+-	init_chdir("/root");
++	init_chdir("/System/Mount");
+ 	s = current->fs->pwd.dentry->d_sb;
+ 	ROOT_DEV = s->s_dev;
+ 	printk(KERN_INFO
+@@ -366,11 +366,18 @@ void __init mount_root_generic(char *name, char *pretty_name, char *fstype,
+ #ifdef CONFIG_BLOCK
+ static void __init mount_block_root(char *root_device_name)
+ {
+-	int err = create_dev("/dev/root", ROOT_DEV);
++	int err;
++
++	init_mkdir("/System", 0755);
++	init_mkdir("/System/Devices", 0755);
++	init_mkdir("/System/Mount", 0700);
++	init_mknod("/System/Devices/console", S_IFCHR | S_IRUSR | S_IWUSR,
++			new_encode_dev(MKDEV(5, 1)));
++	err = create_dev("/System/Devices/root", ROOT_DEV);
+ 
+ 	if (err < 0)
+-		pr_emerg("Failed to create /dev/root: %d\n", err);
+-	mount_root_generic("/dev/root", root_device_name, root_mountflags);
++		pr_emerg("Failed to create /System/Devices/root: %d\n", err);
++	mount_root_generic("/System/Devices/root", root_device_name, root_mountflags);
+ }
+ #else
+ static inline void mount_block_root(char *root_device_name)
