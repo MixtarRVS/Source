@@ -58,26 +58,26 @@ zmianę TUTAJ (commit w tym pliku), nigdy wartość ad-hoc w kodzie.
 - [x] otwieranie okien z kaskadą pozycji
 - [x] przeciąganie za pasek tytułu
 - [x] resize w 8 kierunkach (krawędzie+narożniki, kursory)
-- [ ] snapping krawędziowy i narożnikowy z podglądem
+- [x] snapping krawędziowy i narożnikowy z podglądem (połówki, ćwiartki, top=max)
 - [x] minimalizacja / maksymalizacja / przywracanie
-- [ ] przywracanie przez odciągnięcie od krawędzi
+- [x] przywracanie przez odciągnięcie (tear-off spod krawędzi, Windows-style)
 - [x] kolejność Z + fokus aktywnego okna
-- [ ] recykling z-index
+- [x] recykling z-index (renormalizacja po 5000)
 - [ ] always-on-top (np. menedżer zadań)
-- [ ] Alt+Tab cykliczne przełączanie okien
-- [ ] pokaż pulpit / minimalizuj wszystko
+- [x] Alt+Tab cykliczne przełączanie okien
+- [x] pokaż pulpit / minimalizuj wszystko (przycisk przy tacce, toggle)
 - [ ] karty w oknach (add/switch/close)
-- [ ] zapis pozycji okien między sesjami
+- [x] zapis pozycji okien między sesjami (Layout.config w /System/State/Workbench)
 
 ### Pasek zadań / dock / Start
 - [x] pasek zadań z przyciskami okien
 - [ ] przypinanie/odpinanie aplikacji z persistencją
 - [ ] drag-reorder przypiętych ikon
-- [ ] menu kontekstowe docka
+- [x] menu kontekstowe przycisków paska (Show/Minimize/Close)
 - [x] dwukolumnowe menu Start
-- [ ] działająca wyszukiwarka w menu Start
+- [x] działająca wyszukiwarka w menu Start (filtr na żywo)
 - [ ] "All Programs" (lista aplikacji APX)
-- [ ] skróty lokalizacji w Starcie (Dokumenty itd.)
+- [x] skrót Home w Starcie (dalsze lokalizacje po APX)
 - [ ] ustawienia paska (układ, ukrywanie)
 - [x] zegar w tacce
 - [ ] panel sieci w tacce

@@ -247,6 +247,10 @@
 
       <Canvas x:Name="DesktopCanvas">
 
+      <!-- Snap preview overlay (HIG: snapping with preview) -->
+      <Border x:Name="SnapPreview" ZIndex="8" IsVisible="False" Background="#2618B9FF"
+              BorderBrush="#8018B9FF" BorderThickness="2" CornerRadius="8" IsHitTestVisible="False" />
+
         <!-- Terminal -->
         <Border x:Name="TerminalWindow" Classes="desktop-window active" Width="470" Height="270"
                 Canvas.Left="28" Canvas.Top="58" ZIndex="20" PointerPressed="FocusDesktopWindow">
@@ -533,9 +537,10 @@
               Margin="10,0,0,56" ZIndex="130" Background="#F214161A" BorderBrush="{StaticResource StrokeBrush}"
               BorderThickness="1" CornerRadius="11" BoxShadow="0 24 68 0 #D0000000">
         <Grid RowDefinitions="Auto,Auto">
-          <TextBox Margin="13,11" PlaceholderText="Search applications and commands" Padding="10,0" />
+          <TextBox x:Name="StartSearch" Margin="13,11" PlaceholderText="Search applications and commands"
+                   Padding="10,0" TextChanged="OnStartSearchChanged" />
           <Grid Grid.Row="1" ColumnDefinitions="*,*" Margin="13,7,13,13" ColumnSpacing="13">
-            <StackPanel Spacing="4">
+            <StackPanel x:Name="StartAppsPanel" Spacing="4">
               <TextBlock Text="APPLICATIONS" Foreground="#8EBDFF" FontFamily="Noto Sans Mono" FontSize="9" FontWeight="Bold" Margin="3,0,0,4" />
               <Button Classes="tree" Tag="files" Content="▣  Files Explorer" Click="OnAction" />
               <Button Classes="tree" Tag="terminal" Content="&gt;_  Terminal" Click="OnAction" />
@@ -543,9 +548,10 @@
               <Button Classes="tree" Tag="network" Content="◇  Network Inspector (preview)" Click="OnAction" />
               <Button Classes="tree" Tag="settings" Content="⚙  Settings" Click="OnAction" />
             </StackPanel>
-            <StackPanel Grid.Column="1" Spacing="4">
+            <StackPanel x:Name="StartSystemPanel" Grid.Column="1" Spacing="4">
               <TextBlock Text="SYSTEM" Foreground="#8EBDFF" FontFamily="Noto Sans Mono" FontSize="9" FontWeight="Bold" Margin="3,0,0,4" />
               <Button Classes="tree" Tag="root" Content="⌂  Root" Click="OnAction" />
+              <Button Classes="tree" Tag="home" Content="●  Home" Click="OnAction" />
               <Button Classes="tree" Tag="verify" Content="✓  Platform State" Click="OnAction" />
               <Button Classes="tree" Tag="reboot" Content="↻  Reboot" Click="OnAction" />
               <Button Classes="tree" Tag="poweroff" Content="⏻  Power Off" Click="OnAction" />
@@ -607,6 +613,9 @@
             <Button x:Name="NetworkTask" Classes="task" Tag="NetworkWindow" Content="◇  Network" Click="OnTaskClick" IsVisible="False" />
           </StackPanel>
           <StackPanel Grid.Column="3" Orientation="Horizontal" Spacing="12" VerticalAlignment="Center">
+            <Button Width="12" Height="30" Padding="0" Background="Transparent" BorderBrush="#20FFFFFF"
+                    BorderThickness="1,0" CornerRadius="0" Tag="showdesktop" Click="OnAction"
+                    ToolTip.Tip="Show desktop" />
             <TextBlock x:Name="TrayGraphicsDot" Text="● MWM" Foreground="#6E7F98" FontFamily="Noto Sans Mono" FontSize="10" />
             <TextBlock x:Name="TrayVolumesDot" Text="● VOL" Foreground="#6E7F98" FontFamily="Noto Sans Mono" FontSize="10" />
             <Border BorderBrush="#20FFFFFF" BorderThickness="1,0,0,0" Padding="12,0,0,0">

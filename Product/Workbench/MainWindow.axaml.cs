@@ -84,6 +84,14 @@ public sealed partial class MainWindow : Window
         StartMenu.PointerMoved += OnStartMenuResizeMoved;
         StartMenu.PointerReleased += OnStartMenuResizeReleased;
 
+        foreach (var task in new[] { TerminalTask, FilesTask, RuntimeTask, NetworkTask })
+        {
+            AttachTaskContextMenu(task);
+        }
+
+        LoadLayout();
+        Closed += (_, _) => SaveLayout();
+
         // Buttons mark PointerPressed as handled, so light dismiss must see
         // handled events too - otherwise taskbar/toolbar clicks keep menus open.
         RootLayout.AddHandler(PointerPressedEvent, OnGlobalPointerPressed,
@@ -682,8 +690,25 @@ public sealed partial class MainWindow : Window
         return null;
     }
 
+    // HIG: keep z-indexes bounded by renormalizing once they run away.
+    private void RecycleZIndices()
+    {
+        if (_topZ < 5000)
+        {
+            return;
+        }
+
+        var ordered = DesktopWindows().OrderBy(item => item.ZIndex).ToList();
+        _topZ = 30;
+        foreach (var item in ordered)
+        {
+            item.ZIndex = ++_topZ;
+        }
+    }
+
     private void ActivateWindow(Border window)
     {
+        RecycleZIndices();
         window.IsVisible = true;
         window.ZIndex = ++_topZ;
 
@@ -833,7 +858,7 @@ public sealed partial class MainWindow : Window
         }
 
         var window = WindowByName(name);
-        if (window is null || _restoreBounds.ContainsKey(window))
+        if (window is null)
         {
             return;
         }
@@ -842,9 +867,46 @@ public sealed partial class MainWindow : Window
         _dragWindow = window;
         _dragHandle = handle;
         _dragPointerOrigin = e.GetPosition(DesktopCanvas);
+
+        // HIG: dragging a maximized/snapped window tears it off and restores
+        // its size under the pointer, Windows-style.
+        if (_restoreBounds.Remove(window, out var saved))
+        {
+            var fraction = Math.Clamp(
+                (_dragPointerOrigin.X - Canvas.GetLeft(window)) / Math.Max(1, window.Width), 0.1, 0.9);
+            window.Width = saved.Width;
+            window.Height = saved.Height;
+            Canvas.SetLeft(window, _dragPointerOrigin.X - saved.Width * fraction);
+            Canvas.SetTop(window, Math.Max(8, _dragPointerOrigin.Y - 17));
+        }
+
         _dragWindowOrigin = new Point(Canvas.GetLeft(window), Canvas.GetTop(window));
         e.Pointer.Capture(handle);
         e.Handled = true;
+    }
+
+    // HIG: edge/corner snapping with preview. Zone flags reuse the resize
+    // convention: 1=left 2=right 4=top 8=bottom.
+    private int _pendingSnap;
+
+    private Rect SnapRect(int zone)
+    {
+        var bounds = DesktopCanvas.Bounds;
+        var top = 8d;
+        var height = Math.Max(200, bounds.Height - top - 48);
+        var half = bounds.Width / 2;
+        var halfH = height / 2;
+        return zone switch
+        {
+            1 => new Rect(0, top, half, height),
+            2 => new Rect(half, top, half, height),
+            4 => new Rect(0, top, bounds.Width, height),
+            5 => new Rect(0, top, half, halfH),
+            6 => new Rect(half, top, half, halfH),
+            9 => new Rect(0, top + halfH, half, halfH),
+            10 => new Rect(half, top + halfH, half, halfH),
+            _ => default
+        };
     }
 
     private void ContinueDesktopWindowDrag(object? sender, PointerEventArgs e)
@@ -862,6 +924,28 @@ public sealed partial class MainWindow : Window
             Math.Max(8, bounds.Height - 48 - 34));
         Canvas.SetLeft(_dragWindow, x);
         Canvas.SetTop(_dragWindow, y);
+
+        const double edge = 14;
+        const double corner = 90;
+        var zone = 0;
+        if (point.X <= edge) zone |= 1;
+        else if (point.X >= bounds.Width - edge) zone |= 2;
+        if (point.Y <= edge + 8) zone |= 4;
+        else if (point.Y >= bounds.Height - 48 - edge) zone |= 8;
+        if (zone is 4 && point.X <= corner) zone = 5;
+        else if (zone is 4 && point.X >= bounds.Width - corner) zone = 6;
+        if (zone is 8) zone = 0;
+
+        _pendingSnap = zone;
+        var rect = SnapRect(zone);
+        SnapPreview.IsVisible = zone != 0;
+        if (zone != 0)
+        {
+            Canvas.SetLeft(SnapPreview, rect.X);
+            Canvas.SetTop(SnapPreview, rect.Y);
+            SnapPreview.Width = rect.Width;
+            SnapPreview.Height = rect.Height;
+        }
     }
 
     private void EndDesktopWindowDrag(object? sender, PointerReleasedEventArgs e)
@@ -871,6 +955,20 @@ public sealed partial class MainWindow : Window
             return;
         }
 
+        if (_pendingSnap != 0)
+        {
+            var rect = SnapRect(_pendingSnap);
+            _restoreBounds[_dragWindow] = new DesktopBounds(
+                Canvas.GetLeft(_dragWindow), Canvas.GetTop(_dragWindow),
+                _dragWindow.Width, _dragWindow.Height);
+            Canvas.SetLeft(_dragWindow, rect.X);
+            Canvas.SetTop(_dragWindow, rect.Y);
+            _dragWindow.Width = rect.Width;
+            _dragWindow.Height = rect.Height;
+            _pendingSnap = 0;
+        }
+
+        SnapPreview.IsVisible = false;
         e.Pointer.Capture(null);
         _dragWindow = null;
         _dragHandle = null;
@@ -948,6 +1046,116 @@ public sealed partial class MainWindow : Window
         }
     }
 
+    // HIG: taskbar buttons carry a context menu (show/minimize/close).
+    private void AttachTaskContextMenu(Button task)
+    {
+        var flyout = new MenuFlyout();
+        var show = new MenuItem { Header = "Show" };
+        show.Click += (_, _) =>
+        {
+            if (task.Tag is string name && WindowByName(name) is { } window) ShowWindow(window);
+        };
+        var minimize = new MenuItem { Header = "Minimize" };
+        minimize.Click += (_, _) =>
+        {
+            if (task.Tag is string name) OnDesktopMinimize(new Button { Tag = name }, new RoutedEventArgs());
+        };
+        var close = new MenuItem { Header = "Close" };
+        close.Click += (_, _) =>
+        {
+            if (task.Tag is string name) OnDesktopClose(new Button { Tag = name }, new RoutedEventArgs());
+        };
+        flyout.Items.Add(show);
+        flyout.Items.Add(minimize);
+        flyout.Items.Add(close);
+        task.ContextFlyout = flyout;
+    }
+
+    // HIG: window layout persists between sessions.
+    private static string LayoutPath()
+    {
+        if (Directory.Exists("/System/State"))
+        {
+            Directory.CreateDirectory("/System/State/Workbench");
+            return "/System/State/Workbench/Layout.config";
+        }
+
+        var directory = IOPath.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "MixtarWorkbench");
+        Directory.CreateDirectory(directory);
+        return IOPath.Combine(directory, "layout.config");
+    }
+
+    private void SaveLayout()
+    {
+        try
+        {
+            var lines = DesktopWindows().Select(window => string.Create(CultureInfo.InvariantCulture,
+                $"{window.Name}={Canvas.GetLeft(window):0},{Canvas.GetTop(window):0},{window.Width:0},{window.Height:0},{(window.IsVisible ? 1 : 0)}"));
+            File.WriteAllLines(LayoutPath(), lines);
+        }
+        catch
+        {
+        }
+    }
+
+    private void LoadLayout()
+    {
+        try
+        {
+            var path = LayoutPath();
+            if (!File.Exists(path))
+            {
+                return;
+            }
+
+            foreach (var line in File.ReadAllLines(path))
+            {
+                var separator = line.IndexOf('=');
+                if (separator <= 0)
+                {
+                    continue;
+                }
+
+                var window = WindowByName(line[..separator]);
+                var parts = line[(separator + 1)..].Split(',');
+                if (window is null || parts.Length < 5)
+                {
+                    continue;
+                }
+
+                if (double.TryParse(parts[0], CultureInfo.InvariantCulture, out var left))
+                    Canvas.SetLeft(window, left);
+                if (double.TryParse(parts[1], CultureInfo.InvariantCulture, out var top))
+                    Canvas.SetTop(window, Math.Max(8, top));
+                if (double.TryParse(parts[2], CultureInfo.InvariantCulture, out var width) && width >= 200)
+                    window.Width = width;
+                if (double.TryParse(parts[3], CultureInfo.InvariantCulture, out var height) && height >= 120)
+                    window.Height = height;
+
+                var visible = parts[4] == "1";
+                window.IsVisible = visible;
+                if (TaskFor(window) is { } task)
+                {
+                    if (visible)
+                    {
+                        task.IsVisible = true;
+                        task.Classes.Remove("minimized");
+                    }
+                    else if (window != NetworkWindow)
+                    {
+                        task.Classes.Add("minimized");
+                    }
+                }
+            }
+
+            _windowsPlaced = true;
+        }
+        catch
+        {
+        }
+    }
+
     private void ShowWindow(Border window)
     {
         if (TaskFor(window) is { } task)
@@ -1005,6 +1213,13 @@ public sealed partial class MainWindow : Window
                 ShowWindow(FilesWindow);
                 Navigate("/", recordHistory: true);
                 break;
+            case "home":
+                ShowWindow(FilesWindow);
+                Navigate(Directory.Exists("/Users") ? "/Users" : StartPath(), recordHistory: true);
+                break;
+            case "showdesktop":
+                ToggleShowDesktop();
+                return;
             case "apx":
                 ShowWindow(FilesWindow);
                 Navigate("/Applications", recordHistory: true);
@@ -2143,8 +2358,72 @@ public sealed partial class MainWindow : Window
     // Global keys and power
     // ------------------------------------------------------------------
 
+    // HIG: Alt+Tab cycles windows, show-desktop minimizes everything and
+    // restores the same set on the second use.
+    private readonly List<Border> _showDesktopStash = new();
+
+    private void CycleWindows()
+    {
+        var visible = DesktopWindows().Where(item => item.IsVisible)
+            .OrderBy(item => item.ZIndex).ToList();
+        if (visible.Count == 0)
+        {
+            var fallback = DesktopWindows().FirstOrDefault();
+            if (fallback is not null) ShowWindow(fallback);
+            return;
+        }
+
+        ActivateWindow(visible[0]);
+    }
+
+    private void ToggleShowDesktop()
+    {
+        if (_showDesktopStash.Count > 0)
+        {
+            foreach (var window in _showDesktopStash)
+            {
+                window.IsVisible = true;
+                TaskFor(window)?.Classes.Remove("minimized");
+            }
+
+            _showDesktopStash.Clear();
+            return;
+        }
+
+        foreach (var window in DesktopWindows().Where(item => item.IsVisible))
+        {
+            _showDesktopStash.Add(window);
+            window.IsVisible = false;
+            window.Classes.Remove("active");
+            TaskFor(window)?.Classes.Add("minimized");
+        }
+
+        _activeWindow = null;
+    }
+
+    private void OnStartSearchChanged(object? sender, TextChangedEventArgs e)
+    {
+        var query = StartSearch.Text?.Trim() ?? string.Empty;
+        foreach (var panel in new[] { StartAppsPanel, StartSystemPanel })
+        {
+            foreach (var child in panel.Children.OfType<Button>())
+            {
+                child.IsVisible = query.Length == 0 ||
+                    (child.Content?.ToString() ?? string.Empty)
+                        .Contains(query, StringComparison.OrdinalIgnoreCase);
+            }
+        }
+    }
+
     private void OnWindowKeyDown(object? sender, KeyEventArgs e)
     {
+        if (e.Key == Key.Tab && e.KeyModifiers.HasFlag(KeyModifiers.Alt))
+        {
+            CycleWindows();
+            e.Handled = true;
+            return;
+        }
+
         if (e.KeyModifiers.HasFlag(KeyModifiers.Control) && e.Key == Key.K)
         {
             CommandPalette.IsVisible = !CommandPalette.IsVisible;
