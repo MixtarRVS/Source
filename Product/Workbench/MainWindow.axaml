@@ -100,8 +100,8 @@
     <Style Selector="Button.tool">
       <Setter Property="Height" Value="28" />
       <Setter Property="Padding" Value="10,0" />
-      <Setter Property="Background" Value="#B20B2C60" />
-      <Setter Property="BorderBrush" Value="#845396FF" />
+      <Setter Property="Background" Value="#B2262A31" />
+      <Setter Property="BorderBrush" Value="#47FFFFFF" />
       <Setter Property="BorderThickness" Value="1" />
       <Setter Property="CornerRadius" Value="5" />
       <Setter Property="Foreground" Value="{StaticResource TextBrush}" />
@@ -192,7 +192,7 @@
     <Style Selector="Button.map-node.local"><Setter Property="Background" Value="#FFC65C" /></Style>
     <Style Selector="Button.map-node.selected"><Setter Property="Background" Value="White" /></Style>
     <Style Selector="Border.card">
-      <Setter Property="Background" Value="#C4081E41" />
+      <Setter Property="Background" Value="#E01B1E24" />
       <Setter Property="BorderBrush" Value="#12FFFFFF" />
       <Setter Property="BorderThickness" Value="1" />
       <Setter Property="CornerRadius" Value="7" />
@@ -262,7 +262,7 @@
                 </StackPanel>
               </Grid>
             </Border>
-            <Grid Grid.Row="1" RowDefinitions="*,34" Background="#F2010711">
+            <Grid Grid.Row="1" RowDefinitions="*,34" Background="#F20E1013">
               <ScrollViewer x:Name="TerminalScroll" Margin="14,12,14,2">
                 <StackPanel x:Name="TerminalLines" Spacing="3" />
               </ScrollViewer>
@@ -298,7 +298,7 @@
                 <Button Classes="tool" Width="24" Padding="0" Tag="up" Content="^" Click="OnAction" />
               </StackPanel>
               <Grid Grid.Column="1">
-                <Border x:Name="Breadcrumb" Background="#D30A2854" BorderBrush="#5A5FA2FF" BorderThickness="1"
+                <Border x:Name="Breadcrumb" Background="#D31E2126" BorderBrush="#5A5FA2FF" BorderThickness="1"
                         CornerRadius="5" Padding="4,0" PointerPressed="OnAddressPressed">
                   <ScrollViewer HorizontalScrollBarVisibility="Hidden" VerticalScrollBarVisibility="Disabled">
                     <StackPanel x:Name="BreadcrumbPanel" Orientation="Horizontal" VerticalAlignment="Center" />
@@ -308,7 +308,7 @@
                          FontFamily="Noto Sans Mono" KeyDown="OnAddressKeyDown" />
                 <Popup x:Name="AddressPopup" PlacementTarget="{Binding ElementName=AddressBox}"
                        Placement="BottomEdgeAlignedLeft" IsLightDismissEnabled="False">
-                  <Border Background="#F5051630" BorderBrush="{StaticResource StrokeBrush}" BorderThickness="1"
+                  <Border Background="#F514161A" BorderBrush="{StaticResource StrokeBrush}" BorderThickness="1"
                           CornerRadius="7" Padding="6" MinWidth="380" BoxShadow="0 14 40 0 #C0000000">
                     <StackPanel x:Name="AddressSuggestions" Spacing="1" />
                   </Border>
@@ -324,13 +324,13 @@
                          HorizontalAlignment="Right" VerticalAlignment="Center" FontFamily="Noto Sans Mono" FontSize="9" />
             </Grid>
             <Grid Grid.Row="3" ColumnDefinitions="170,*">
-              <Border BorderBrush="#344B97FF" BorderThickness="0,1,1,0" Background="#28030D1C" Padding="8,6">
+              <Border BorderBrush="#344B97FF" BorderThickness="0,1,1,0" Background="#281A1C20" Padding="8,6">
                 <ScrollViewer>
                   <StackPanel x:Name="TreePanel" Spacing="1" />
                 </ScrollViewer>
               </Border>
               <Grid Grid.Column="1" RowDefinitions="28,*">
-                <Border Background="#E6071936" Padding="10,0">
+                <Border Background="#E61A1D22" Padding="10,0">
                   <Grid ColumnDefinitions="190,60,74,96,*">
                     <Button Classes="column-header" Tag="name" Content="Name" Click="OnSortColumn" />
                     <Button Grid.Column="1" Classes="column-header" Tag="type" Content="Type" Click="OnSortColumn" />
@@ -344,7 +344,7 @@
                 </ScrollViewer>
               </Grid>
             </Grid>
-            <Border Grid.Row="4" Background="#52020812" Padding="9,0">
+            <Border Grid.Row="4" Background="#520A0C0F" Padding="9,0">
               <Grid ColumnDefinitions="Auto,*,Auto">
                 <TextBlock x:Name="ItemCount" Text="0 items" Foreground="#7FAEE6" FontFamily="Noto Sans Mono" FontSize="9" VerticalAlignment="Center" />
                 <TextBlock x:Name="VolumeInfo" Grid.Column="1" Text="" Foreground="#668AB9" FontFamily="Noto Sans Mono"
@@ -530,7 +530,7 @@
 
       <!-- Start menu -->
       <Border x:Name="StartMenu" IsVisible="False" Width="430" HorizontalAlignment="Left" VerticalAlignment="Bottom"
-              Margin="10,0,0,56" ZIndex="130" Background="#F0051630" BorderBrush="{StaticResource StrokeBrush}"
+              Margin="10,0,0,56" ZIndex="130" Background="#F214161A" BorderBrush="{StaticResource StrokeBrush}"
               BorderThickness="1" CornerRadius="11" BoxShadow="0 24 68 0 #D0000000">
         <Grid RowDefinitions="Auto,Auto">
           <TextBox Margin="13,11" PlaceholderText="Search applications and commands" Padding="10,0" />
@@ -556,7 +556,7 @@
 
       <!-- Command palette -->
       <Border x:Name="CommandPalette" IsVisible="False" Width="620" HorizontalAlignment="Center" VerticalAlignment="Top"
-              Margin="0,78,0,0" ZIndex="150" Background="#F5051630" BorderBrush="{StaticResource StrokeStrongBrush}"
+              Margin="0,78,0,0" ZIndex="150" Background="#F514161A" BorderBrush="{StaticResource StrokeStrongBrush}"
               BorderThickness="1" CornerRadius="11" Padding="13" BoxShadow="0 26 76 0 #E0000000">
         <StackPanel Spacing="8">
           <TextBox x:Name="PaletteInput" PlaceholderText="Type a command..." Padding="10,0" KeyDown="OnPaletteKeyDown" />
@@ -579,7 +579,7 @@
       </Border>
 
       <!-- System console layer: pulled down from the top edge (or F12) -->
-      <Border x:Name="ConsoleLayer" ZIndex="200" Background="#F30A1322" IsVisible="False">
+      <Border x:Name="ConsoleLayer" ZIndex="200" Background="#F5111316" IsVisible="False">
         <Grid RowDefinitions="*,40,18" Margin="0">
           <ScrollViewer x:Name="ConsoleScroll" Margin="28,24,28,4">
             <StackPanel x:Name="ConsoleLines" Spacing="3" />
@@ -590,13 +590,12 @@
             <TextBox x:Name="ConsoleInput" Grid.Column="1" Margin="8,0,0,0" Padding="3,0" Background="Transparent"
                      BorderThickness="0" FontFamily="Noto Sans Mono" KeyDown="OnConsoleKeyDown" />
           </Grid>
-          <Border Grid.Row="2" Width="120" Height="5" CornerRadius="3" Background="#33FFFFFF"
-                  VerticalAlignment="Center" HorizontalAlignment="Center" />
+          <Border Grid.Row="2" />
         </Grid>
       </Border>
 
       <!-- Taskbar -->
-      <Border Height="48" VerticalAlignment="Bottom" ZIndex="140" Background="#F0040E1F"
+      <Border Height="48" VerticalAlignment="Bottom" ZIndex="140" Background="#F0121418"
               BorderBrush="#4C4796FF" BorderThickness="0,1,0,0">
         <Grid ColumnDefinitions="Auto,1,*,Auto" Margin="8,0" ColumnSpacing="8">
           <Button Grid.Column="0" Classes="start" Tag="start" Click="OnAction" Content="▰  Start" />

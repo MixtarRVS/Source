@@ -1802,9 +1802,10 @@ public sealed partial class MainWindow : Window
 
         var ancestors = control.GetVisualAncestors().OfType<Control>().ToList();
         bool Within(Control host) => control == host || ancestors.Contains(host);
-        var withinButton = control is Button || ancestors.OfType<Button>().Any();
+        var startButton = (control as Button ?? ancestors.OfType<Button>().FirstOrDefault())
+            is { Tag: "start" };
 
-        if (!withinButton)
+        if (!startButton)
         {
             if (StartMenu.IsVisible && !Within(StartMenu))
             {
