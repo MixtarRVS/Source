@@ -77,6 +77,10 @@ public sealed partial class MainWindow : Window
             window.PointerMoved += OnWindowResizeMoved;
             window.PointerReleased += OnWindowResizeReleased;
         }
+
+        RootLayout.PointerMoved += OnConsoleDragMoved;
+        RootLayout.PointerReleased += OnConsoleDragReleased;
+        ConsoleLayer.RenderTransform = new TranslateTransform(0, 0);
         BuildTree();
         AppendSysinfo();
         Navigate(StartPath(), recordHistory: true);
@@ -1545,11 +1549,108 @@ public sealed partial class MainWindow : Window
 
     private void OnFileSearchChanged(object? sender, TextChangedEventArgs e) => RenderFiles();
 
+    // System console layer (first-concept screen manager): drag down from the
+    // top-center edge of the desktop, or F12. Escape closes.
+    private bool _consoleOpen;
+    private bool _consoleDragging;
+    private double _consoleDragStartY;
+
+    private void SetConsoleOffset(double offset) =>
+        ((TranslateTransform)ConsoleLayer.RenderTransform!).Y = offset;
+
+    private void ToggleConsole()
+    {
+        if (_consoleOpen)
+        {
+            _consoleOpen = false;
+            ConsoleLayer.IsVisible = false;
+        }
+        else
+        {
+            _consoleOpen = true;
+            ConsoleLayer.IsVisible = true;
+            SetConsoleOffset(0);
+            ConsolePrompt.Text = $"root@{HostName()}:{_currentPath}#";
+            ConsoleInput.Focus();
+        }
+    }
+
+    private void OnConsoleDragMoved(object? sender, PointerEventArgs e)
+    {
+        if (!_consoleDragging)
+        {
+            return;
+        }
+
+        var offset = e.GetPosition(RootLayout).Y - _consoleDragStartY;
+        SetConsoleOffset(Math.Min(0, -RootLayout.Bounds.Height + Math.Max(0, offset)));
+    }
+
+    private void OnConsoleDragReleased(object? sender, PointerReleasedEventArgs e)
+    {
+        if (!_consoleDragging)
+        {
+            return;
+        }
+
+        _consoleDragging = false;
+        var pulled = e.GetPosition(RootLayout).Y - _consoleDragStartY;
+        if (pulled > RootLayout.Bounds.Height * 0.25)
+        {
+            _consoleOpen = true;
+            SetConsoleOffset(0);
+            ConsolePrompt.Text = $"root@{HostName()}:{_currentPath}#";
+            ConsoleInput.Focus();
+        }
+        else
+        {
+            _consoleOpen = false;
+            ConsoleLayer.IsVisible = false;
+        }
+    }
+
+    private void OnConsoleKeyDown(object? sender, KeyEventArgs e)
+    {
+        if (e.Key == Key.Escape)
+        {
+            ToggleConsole();
+            e.Handled = true;
+            return;
+        }
+
+        if (e.Key != Key.Enter) return;
+        var command = ConsoleInput.Text?.Trim() ?? string.Empty;
+        if (command.Length == 0) return;
+
+        _outputTarget = ConsoleLines;
+        AppendTerminal($"{ConsolePrompt.Text} {command}", "#FFFFFF");
+        RunCommand(command);
+        _outputTarget = TerminalLines;
+        ConsoleInput.Text = string.Empty;
+        ConsoleScroll.ScrollToEnd();
+        e.Handled = true;
+    }
+
     private void OnGlobalPointerPressed(object? sender, PointerPressedEventArgs e)
     {
         if (e.Source is not Control control)
         {
             return;
+        }
+
+        if (!_consoleOpen)
+        {
+            var position = e.GetPosition(RootLayout);
+            if (position.Y <= 12 && Math.Abs(position.X - RootLayout.Bounds.Width / 2) <
+                RootLayout.Bounds.Width * 0.18)
+            {
+                _consoleDragging = true;
+                _consoleDragStartY = position.Y;
+                ConsoleLayer.IsVisible = true;
+                SetConsoleOffset(-RootLayout.Bounds.Height);
+                e.Handled = true;
+                return;
+            }
         }
 
         var ancestors = control.GetVisualAncestors().OfType<Control>().ToList();
@@ -1865,9 +1966,11 @@ public sealed partial class MainWindow : Window
         }
     }
 
+    private StackPanel? _outputTarget;
+
     private void AppendTerminal(string text, string color)
     {
-        TerminalLines.Children.Add(new TextBlock
+        (_outputTarget ?? TerminalLines).Children.Add(new TextBlock
         {
             Text = text,
             Foreground = new SolidColorBrush(Color.Parse(color)),
@@ -1876,9 +1979,10 @@ public sealed partial class MainWindow : Window
             TextWrapping = TextWrapping.Wrap
         });
 
-        if (TerminalLines.Children.Count > 400)
+        var target = _outputTarget ?? TerminalLines;
+        if (target.Children.Count > 400)
         {
-            TerminalLines.Children.RemoveRange(0, TerminalLines.Children.Count - 400);
+            target.Children.RemoveRange(0, target.Children.Count - 400);
         }
     }
 
@@ -1901,8 +2005,19 @@ public sealed partial class MainWindow : Window
             EnterAddressMode();
             e.Handled = true;
         }
+        else if (e.Key == Key.F12)
+        {
+            ToggleConsole();
+            e.Handled = true;
+        }
         else if (e.Key == Key.Escape)
         {
+            if (_consoleOpen)
+            {
+                ToggleConsole();
+                return;
+            }
+
             StartMenu.IsVisible = false;
             CommandPalette.IsVisible = false;
             ExitAddressMode();

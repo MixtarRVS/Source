@@ -159,6 +159,16 @@ zmianę TUTAJ (commit w tym pliku), nigdy wartość ad-hoc w kodzie.
 - [x] Ctrl+K paleta, Ctrl+L adres, Escape zamyka warstwę
 - [ ] konfigurowalne skróty z pliku TOML (~17 akcji jak w koncepcie)
 
+### Warstwy ekranu (screen manager z pierwszego konceptu)
+- [x] konsola systemowa ściągana gestem z górnej-środkowej krawędzi pulpitu
+      (strefa ~36% szerokości na środku, próg otwarcia 25% wysokości) + F12;
+      Escape zamyka
+- REGUŁA: warstwa konsoli NIE działa w tle — dopóki użytkownik jej nie
+  ściągnie, jest wyłączona (zero renderowania, timerów i logiki); koszt
+  ponosi się wyłącznie, gdy jest widoczna. Dotyczy też przyszłej tapety
+  shaderowej pod konsolą (Aurora aktywuje się razem z warstwą)
+- [ ] tło konsoli = aktywna tapeta shaderowa (po GLES2)
+
 ### Boot / infrastruktura
 - [ ] sekwencja bootowania z logiem czasów (splash)
 - [ ] globalna obsługa błędów UI (odpowiednik window.onerror)

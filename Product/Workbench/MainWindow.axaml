@@ -551,6 +551,23 @@
         </StackPanel>
       </Border>
 
+      <!-- System console layer: pulled down from the top edge (or F12) -->
+      <Border x:Name="ConsoleLayer" ZIndex="200" Background="#F30A1322" IsVisible="False">
+        <Grid RowDefinitions="*,40,18" Margin="0">
+          <ScrollViewer x:Name="ConsoleScroll" Margin="28,24,28,4">
+            <StackPanel x:Name="ConsoleLines" Spacing="3" />
+          </ScrollViewer>
+          <Grid Grid.Row="1" Margin="28,0" ColumnDefinitions="Auto,*">
+            <TextBlock x:Name="ConsolePrompt" Text="system#" Foreground="#27EE91" FontWeight="Bold"
+                       FontFamily="Noto Sans Mono" FontSize="12" VerticalAlignment="Center" />
+            <TextBox x:Name="ConsoleInput" Grid.Column="1" Margin="8,0,0,0" Padding="3,0" Background="Transparent"
+                     BorderThickness="0" FontFamily="Noto Sans Mono" KeyDown="OnConsoleKeyDown" />
+          </Grid>
+          <Border Grid.Row="2" Width="120" Height="5" CornerRadius="3" Background="#33FFFFFF"
+                  VerticalAlignment="Center" HorizontalAlignment="Center" />
+        </Grid>
+      </Border>
+
       <!-- Taskbar -->
       <Border Height="48" VerticalAlignment="Bottom" ZIndex="140" Background="#F0040E1F"
               BorderBrush="#4C4796FF" BorderThickness="0,1,0,0">
