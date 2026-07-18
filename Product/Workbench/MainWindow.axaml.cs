@@ -1614,6 +1614,9 @@ public sealed partial class MainWindow : Window
     {
         if (!_consoleDragging)
         {
+            var position = e.GetPosition(RootLayout);
+            ConsoleGrip.IsVisible = !_consoleOpen && position.Y <= 18 &&
+                Math.Abs(position.X - RootLayout.Bounds.Width / 2) < RootLayout.Bounds.Width * 0.22;
             return;
         }
 
@@ -2044,6 +2047,21 @@ public sealed partial class MainWindow : Window
         else if (e.Key == Key.F12)
         {
             ToggleConsole();
+            e.Handled = true;
+        }
+        else if (e.Key == Key.F11)
+        {
+            if (Width >= (Screens.Primary?.Bounds.Width ?? 1) / (Screens.Primary?.Scaling ?? 1) - 4)
+            {
+                Width = 1440;
+                Height = 900;
+                Position = new PixelPoint(120, 80);
+            }
+            else
+            {
+                SizeToPrimaryScreen();
+            }
+
             e.Handled = true;
         }
         else if (e.Key == Key.Escape)

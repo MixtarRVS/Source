@@ -169,6 +169,12 @@ zmianę TUTAJ (commit w tym pliku), nigdy wartość ad-hoc w kodzie.
   shaderowej pod konsolą (Aurora aktywuje się razem z warstwą)
 - [ ] tło konsoli = aktywna tapeta shaderowa (po GLES2)
 
+### Zgodność i ergonomia (runda po uwagach 18.07)
+- [ ] PEŁNY przegląd centrowania/metryk: każdy panel na siatce 4px, fonty
+      13/12/11 (min 10), kontrolki 32/28, teksty wycentrowane w pionie
+- [ ] widoczny uchwyt gestu konsoli przy najechaniu na górną krawędź
+- [ ] podgląd Windows: przełącznik fullscreen/okno (F11) do wygodnych testów
+
 ### Boot / infrastruktura
 - [ ] sekwencja bootowania z logiem czasów (splash)
 - [ ] globalna obsługa błędów UI (odpowiednik window.onerror)

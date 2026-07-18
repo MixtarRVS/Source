@@ -551,6 +551,11 @@
         </StackPanel>
       </Border>
 
+      <!-- Console pull hint: appears when the pointer nears the top edge -->
+      <Border x:Name="ConsoleGrip" ZIndex="190" Width="120" Height="5" CornerRadius="3"
+              Background="#4CFFFFFF" VerticalAlignment="Top" HorizontalAlignment="Center"
+              Margin="0,4,0,0" IsVisible="False" IsHitTestVisible="False" />
+
       <!-- System console layer: pulled down from the top edge (or F12) -->
       <Border x:Name="ConsoleLayer" ZIndex="200" Background="#F30A1322" IsVisible="False">
         <Grid RowDefinitions="*,40,18" Margin="0">
