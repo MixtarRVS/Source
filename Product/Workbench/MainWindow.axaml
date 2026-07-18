@@ -606,8 +606,7 @@
         <Grid ColumnDefinitions="Auto,1,*,Auto" Margin="8,0" ColumnSpacing="8">
           <Button Grid.Column="0" Classes="start" Tag="start" Click="OnAction" Content="▰  Start" />
           <Border Grid.Column="1" Width="1" Height="24" Background="#20FFFFFF" />
-          <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center"
-                      HorizontalAlignment="Center">
+          <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
             <Button x:Name="TerminalTask" Classes="task active" Tag="TerminalWindow" Content="▣  Terminal" Click="OnTaskClick" />
             <Button x:Name="FilesTask" Classes="task" Tag="FilesWindow" Content="▣  Files" Click="OnTaskClick" />
             <Button x:Name="RuntimeTask" Classes="task" Tag="RuntimeWindow" Content="◈  Runtime Monitor" Click="OnTaskClick" />
