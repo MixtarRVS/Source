@@ -53,7 +53,7 @@ public sealed partial class MainWindow
         {
             foreach (var drive in DriveInfo.GetDrives().Where(drive => drive.IsReady))
             {
-                TreePanel.Children.Add(TreeButton($"▰  {drive.Name}", drive.RootDirectory.FullName));
+                TreePanel.Children.Add(TreeButton($"▰  {DriveDisplayName(drive.Name[..1])}", drive.RootDirectory.FullName));
             }
         }
 
@@ -166,6 +166,28 @@ public sealed partial class MainWindow
     // and navigation history.
     // ------------------------------------------------------------------
 
+    // Explorer semantics: drive roots are shown as "<volume label> (X:)";
+    // the raw "X:\" form appears only in the editable address box.
+    private static string DriveDisplayName(string letter)
+    {
+        letter = letter.ToUpperInvariant();
+        try
+        {
+            var info = new DriveInfo(letter);
+            var label = info.VolumeLabel;
+            if (string.IsNullOrWhiteSpace(label))
+            {
+                label = info.DriveType == DriveType.Removable ? "Removable Disk" : "Local Disk";
+            }
+
+            return $"{label} ({letter}:)";
+        }
+        catch
+        {
+            return $"{letter}:";
+        }
+    }
+
     private static string TabLabel(string path)
     {
         var trimmed = path.TrimEnd('/', '\\');
@@ -176,7 +198,7 @@ public sealed partial class MainWindow
 
         if (trimmed.Length == 2 && trimmed[1] == ':')
         {
-            return $"▰ {trimmed[..1]}";
+            return $"▰ {DriveDisplayName(trimmed[..1])}";
         }
 
         var name = IOPath.GetFileName(trimmed);
@@ -326,7 +348,7 @@ public sealed partial class MainWindow
     {
         BreadcrumbPanel.Children.Clear();
         var isDrivePath = path.Length >= 2 && path[1] == ':';
-        var rootLabel = isDrivePath ? $"▰ {path[..1]}" : "⌂ MixtarRVS";
+        var rootLabel = isDrivePath ? $"▰ {DriveDisplayName(path[..1])}" : "⌂ MixtarRVS";
         var rootTarget = isDrivePath ? path[..2] + IOPath.DirectorySeparatorChar : "/";
         BreadcrumbPanel.Children.Add(CrumbButton(rootLabel, rootTarget));
 
