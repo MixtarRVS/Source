@@ -92,6 +92,14 @@ public sealed partial class MainWindow
         var button = new Button { Content = label, Tag = path };
         button.Classes.Add("tree");
         button.Click += OnTreePath;
+        button.PointerPressed += (_, args) =>
+        {
+            if (args.GetCurrentPoint(button).Properties.IsMiddleButtonPressed)
+            {
+                OpenBackgroundTab(path);
+                args.Handled = true;
+            }
+        };
         return button;
     }
 
@@ -168,7 +176,7 @@ public sealed partial class MainWindow
 
         if (trimmed.Length == 2 && trimmed[1] == ':')
         {
-            return $"▰ {trimmed}";
+            return $"▰ {trimmed[..1]}";
         }
 
         var name = IOPath.GetFileName(trimmed);
@@ -318,7 +326,7 @@ public sealed partial class MainWindow
     {
         BreadcrumbPanel.Children.Clear();
         var isDrivePath = path.Length >= 2 && path[1] == ':';
-        var rootLabel = isDrivePath ? $"▰ {path[..2]}" : "⌂ MixtarRVS";
+        var rootLabel = isDrivePath ? $"▰ {path[..1]}" : "⌂ MixtarRVS";
         var rootTarget = isDrivePath ? path[..2] + IOPath.DirectorySeparatorChar : "/";
         BreadcrumbPanel.Children.Add(CrumbButton(rootLabel, rootTarget));
 
