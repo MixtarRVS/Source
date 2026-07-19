@@ -116,9 +116,22 @@ public sealed partial class MainWindow
                 ? new RelativePoint(1, 0, RelativeUnit.Relative)
                 : new RelativePoint(0, 1, RelativeUnit.Relative);
         }
-        else if (existing is SolidColorBrush solid)
+        else
         {
-            solid.Color = Color.Parse(value);
+            // A plain color is valid for every key: on a gradient brush it
+            // collapses the stops, giving a flat (Windows-basic) hover.
+            var color = Color.Parse(value);
+            switch (existing)
+            {
+                case SolidColorBrush solid:
+                    solid.Color = color;
+                    break;
+                case LinearGradientBrush gradient:
+                    gradient.GradientStops.Clear();
+                    gradient.GradientStops.Add(new GradientStop(color, 0));
+                    gradient.GradientStops.Add(new GradientStop(color, 1));
+                    break;
+            }
         }
     }
 
@@ -134,7 +147,8 @@ public sealed partial class MainWindow
                 "# Uncomment a key to override the default color.\n" +
                 "# gradient(...) takes 2-4 colors, top to bottom; append\n" +
                 "# \", horizontal\" to rotate. 2 = plain fade, 3 = top/middle/\n" +
-                "# bottom, 4 = aero gloss break at the 50% line.\n" +
+                "# bottom, 4 = aero gloss break at the 50% line. A single color\n" +
+                "# on a gradient key gives a flat hover instead.\n" +
                 "#\n" +
                 "# accent        = #18B9FF\n" +
                 "# panel         = #D914161A\n" +

@@ -50,7 +50,8 @@ zmianę TUTAJ (commit w tym pliku), nigdy wartość ad-hoc w kodzie.
   text, caption.hover, caption.close. Wartości: `#RRGGBB`/`#AARRGGBB` albo
   `gradient(c1, c2[, c3[, c4]][, horizontal])` — domyślnie z góry na dół;
   2 kolory = zwykłe przejście, 3 = góra/środek/dół, 4 = aero z twardym
-  załamaniem połysku na linii 50% (para środkowa po obu jej stronach).
+  załamaniem połysku na linii 50% (para środkowa po obu jej stronach);
+  pojedynczy kolor na kluczu gradientowym = płaski hover (Windows basic).
   Nadpisania mutują współdzielone pędzle z Theme.axaml, więc obejmują
   wszystkie odwołania bez przebudowy.
 - Tekst na panelu musi mieć kontrast ≥ 4.5:1 (WCAG AA). Czerwony tylko dla
