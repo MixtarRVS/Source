@@ -119,16 +119,20 @@
         </ControlTemplate>
       </Setter>
     </Style>
-    <!-- Maximized state swaps the box for the Windows restore glyph:
-         front square at (1,3), back square peeking out top-right. -->
+    <!-- Maximized state: restore glyph 1:1 from the Studio QML spec -
+         11x11 box, two 8x8 squares with hairline 1px strokes; the back
+         square (top-right) is drawn only where the front one (bottom-left)
+         does not occlude it. -->
     <Style Selector="Button.window-dot.max.restore">
       <Setter Property="Template">
         <ControlTemplate>
           <Border Background="{TemplateBinding Background}" CornerRadius="{TemplateBinding CornerRadius}">
-            <Path Width="10" Height="10" Stretch="None"
-                  Data="M 1,3 L 7,3 L 7,9 L 1,9 Z M 3,3 L 3,1 L 9,1 L 9,7 L 7,7"
-                  Stroke="{TemplateBinding Foreground}" StrokeThickness="1.5"
-                  HorizontalAlignment="Center" VerticalAlignment="Center" />
+            <Canvas Width="11" Height="11" HorizontalAlignment="Center" VerticalAlignment="Center">
+              <Path Data="M 3.5,3 L 3.5,0.5 L 10.5,0.5 L 10.5,7.5 L 8,7.5"
+                    Stroke="{TemplateBinding Foreground}" StrokeThickness="1" />
+              <Border Canvas.Left="0" Canvas.Top="3" Width="8" Height="8"
+                      BorderBrush="{TemplateBinding Foreground}" BorderThickness="1" />
+            </Canvas>
           </Border>
         </ControlTemplate>
       </Setter>
