@@ -119,6 +119,20 @@
         </ControlTemplate>
       </Setter>
     </Style>
+    <!-- Maximized state swaps the box for the Windows restore glyph:
+         front square at (1,3), back square peeking out top-right. -->
+    <Style Selector="Button.window-dot.max.restore">
+      <Setter Property="Template">
+        <ControlTemplate>
+          <Border Background="{TemplateBinding Background}" CornerRadius="{TemplateBinding CornerRadius}">
+            <Path Width="10" Height="10" Stretch="None"
+                  Data="M 1,3 L 7,3 L 7,9 L 1,9 Z M 3,3 L 3,1 L 9,1 L 9,7 L 7,7"
+                  Stroke="{TemplateBinding Foreground}" StrokeThickness="1.5"
+                  HorizontalAlignment="Center" VerticalAlignment="Center" />
+          </Border>
+        </ControlTemplate>
+      </Setter>
+    </Style>
     <Style Selector="Button.tool">
       <Setter Property="Height" Value="28" />
       <Setter Property="Padding" Value="12,0" />

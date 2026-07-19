@@ -254,6 +254,7 @@ public sealed partial class MainWindow
             window.Height = saved.Height;
             Canvas.SetLeft(window, _dragPointerOrigin.X - saved.Width * fraction);
             Canvas.SetTop(window, Math.Max(8, _dragPointerOrigin.Y - 17));
+            UpdateMaximizeGlyph(window);
         }
 
         _dragWindowOrigin = new Point(Canvas.GetLeft(window), Canvas.GetTop(window));
@@ -342,6 +343,7 @@ public sealed partial class MainWindow
             _dragWindow.Width = rect.Width;
             _dragWindow.Height = rect.Height;
             _pendingSnap = 0;
+            UpdateMaximizeGlyph(_dragWindow);
         }
 
         SnapPreview.IsVisible = false;
@@ -378,6 +380,30 @@ public sealed partial class MainWindow
         e.Handled = true;
     }
 
+    // The max button shows the restore glyph exactly when clicking it would
+    // restore, i.e. when the window has saved bounds (maximized or snapped).
+    private void UpdateMaximizeGlyph(Border window)
+    {
+        var button = window.GetVisualDescendants().OfType<Button>()
+            .FirstOrDefault(item => item.Classes.Contains("max"));
+        if (button is null)
+        {
+            return;
+        }
+
+        if (_restoreBounds.ContainsKey(window))
+        {
+            if (!button.Classes.Contains("restore"))
+            {
+                button.Classes.Add("restore");
+            }
+        }
+        else
+        {
+            button.Classes.Remove("restore");
+        }
+    }
+
     private void OnDesktopMaximize(object? sender, RoutedEventArgs e)
     {
         var window = WindowFromButton(sender);
@@ -401,6 +427,7 @@ public sealed partial class MainWindow
             window.Height = Math.Max(200, bounds.Height - 40 - 48);
         }
 
+        UpdateMaximizeGlyph(window);
         ActivateWindow(window);
         e.Handled = true;
     }
