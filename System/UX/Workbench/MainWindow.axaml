@@ -1,5 +1,5 @@
 <Window
-    x:Class="Mixtar.Product.Workbench.MainWindow"
+    x:Class="Mixtar.UX.Workbench.MainWindow"
     xmlns="https://github.com/avaloniaui"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     Title="MixtarRVS Workbench"
@@ -9,10 +9,11 @@
     MinHeight="600"
     Background="{StaticResource DesktopBrush}"
     Foreground="{StaticResource TextBrush}"
-    FontFamily="Noto Sans"
+    FontFamily="Segoe UI, Noto Sans"
     WindowStartupLocation="CenterScreen"
     WindowDecorations="None"
     ExtendClientAreaToDecorationsHint="True"
+    Opened="OnWorkbenchOpened"
     KeyDown="OnWindowKeyDown">
 
   <Window.Styles>
@@ -20,7 +21,7 @@
   </Window.Styles>
 
   <LayoutTransformControl x:Name="ScaleHost">
-    <Grid x:Name="RootLayout" ClipToBounds="True" SizeChanged="OnRootSizeChanged">
+    <Grid x:Name="RootLayout" ClipToBounds="True" SizeChanged="OnResponsiveViewportChanged">
       <Border Background="{StaticResource DesktopBrush}" />
 
       <Ellipse Width="900" Height="620" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,-330,-120,0" IsHitTestVisible="False">
@@ -50,7 +51,7 @@
         <!-- Terminal -->
         <Border x:Name="TerminalWindow" Classes="desktop-window active" Width="470" Height="270"
                 Canvas.Left="28" Canvas.Top="58" ZIndex="20" PointerPressed="FocusDesktopWindow">
-          <Grid RowDefinitions="34,*">
+          <Grid RowDefinitions="42,*">
             <Border Classes="titlebar" Tag="TerminalWindow"
                     PointerPressed="BeginDesktopWindowDrag" PointerMoved="ContinueDesktopWindowDrag" PointerReleased="EndDesktopWindowDrag">
               <Grid ColumnDefinitions="*,Auto">
@@ -62,31 +63,33 @@
                 </StackPanel>
               </Grid>
             </Border>
-            <Grid Grid.Row="1" RowDefinitions="*,34" Background="{StaticResource TerminalBackBrush}">
-              <ScrollViewer x:Name="TerminalScroll" Margin="12,12,12,4">
-                <StackPanel x:Name="TerminalLines" Spacing="4" />
+            <Border Grid.Row="1" Classes="app-client" Background="{DynamicResource TerminalBackBrush}">
+              <ScrollViewer x:Name="TerminalScroll" Margin="12">
+                <StackPanel Spacing="4">
+                  <StackPanel x:Name="TerminalLines" Spacing="4" />
+                  <Grid Margin="0,2,0,0" MinHeight="20" ColumnDefinitions="Auto,*">
+                    <TextBlock x:Name="TerminalPrompt" Text="root@mixtar:/#" Foreground="{DynamicResource SuccessBrush}" FontWeight="Bold"
+                               FontFamily="Noto Sans Mono" FontSize="11" VerticalAlignment="Center" />
+                    <TextBox x:Name="TerminalInput" Classes="terminal-input" Grid.Column="1" Margin="7,0,0,0"
+                             FontFamily="Noto Sans Mono" FontSize="11" KeyDown="OnTerminalKeyDown" />
+                  </Grid>
+                </StackPanel>
               </ScrollViewer>
-              <Grid Grid.Row="1" Margin="12,0" ColumnDefinitions="Auto,*">
-                <TextBlock x:Name="TerminalPrompt" Text="root@mixtar:/#" Foreground="{StaticResource SuccessBrush}" FontWeight="Bold"
-                           FontFamily="Noto Sans Mono" FontSize="11" VerticalAlignment="Center" />
-                <TextBox x:Name="TerminalInput" Grid.Column="1" Margin="8,0,0,0" Padding="4,0" Background="Transparent"
-                         BorderThickness="0" FontFamily="Noto Sans Mono" KeyDown="OnTerminalKeyDown" />
-              </Grid>
-            </Grid>
+            </Border>
           </Grid>
         </Border>
 
         <!-- Files -->
-        <Border x:Name="FilesWindow" Classes="desktop-window" Width="680" Height="360"
+        <Border x:Name="FilesWindow" Classes="desktop-window" Width="620" Height="420"
                 Canvas.Left="220" Canvas.Top="332" ZIndex="16" PointerPressed="FocusDesktopWindow">
-          <Grid RowDefinitions="42,44,35,*,24">
-            <Border Classes="titlebar" Tag="FilesWindow" Height="42" Padding="8,0,0,0"
+          <Grid RowDefinitions="42,48,35,*,24" Background="Transparent">
+            <Border Grid.Row="1" Grid.RowSpan="4" Classes="app-client" />
+            <Border Classes="titlebar" Tag="FilesWindow" Height="42" Padding="10,0,0,0"
                     PointerPressed="BeginDesktopWindowDrag" PointerMoved="ContinueDesktopWindowDrag" PointerReleased="EndDesktopWindowDrag">
               <Grid ColumnDefinitions="*,Auto">
-                <StackPanel Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
-                  <StackPanel x:Name="FileTabsPanel" Orientation="Horizontal" Spacing="4" VerticalAlignment="Center" />
-                  <Button Classes="tab-add" Content="+" Click="OnAddFileTab" VerticalAlignment="Center"
-                          Margin="4,0,0,0" ToolTip.Tip="New tab" />
+                <StackPanel Orientation="Horizontal" Spacing="4" VerticalAlignment="Bottom" Margin="0,0,0,4">
+                  <StackPanel x:Name="FileTabsPanel" Orientation="Horizontal" Spacing="4" VerticalAlignment="Bottom" />
+                  <Button Classes="tab-add" Content="+" Click="OnAddFileTab" VerticalAlignment="Bottom" ToolTip.Tip="New tab" />
                 </StackPanel>
                 <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="0" VerticalAlignment="Center">
                   <Button Classes="window-dot min" Tag="FilesWindow" Content="–" Click="OnDesktopMinimize" />
@@ -95,15 +98,17 @@
                 </StackPanel>
               </Grid>
             </Border>
-            <Grid Grid.Row="1" ColumnDefinitions="78,*,170" Margin="8,8" ColumnSpacing="8">
+            <Border Grid.Row="1" Background="{StaticResource HeaderBackBrush}"
+                    BorderBrush="{StaticResource CommandBarBorderBrush}" BorderThickness="0,0,0,1">
+            <Grid ColumnDefinitions="78,*,180" Margin="12,0" ColumnSpacing="12">
               <StackPanel Orientation="Horizontal" Spacing="4">
-                <Button Classes="tool" Width="24" Padding="0" Tag="back" Content="&lt;" Click="OnAction" />
-                <Button Classes="tool" Width="24" Padding="0" Tag="forward" Content="&gt;" Click="OnAction" />
-                <Button Classes="tool" Width="24" Padding="0" Tag="up" Content="^" Click="OnAction" />
+                <Button Classes="nav-arrow" Tag="back" Content="&lt;" Click="OnAction" />
+                <Button Classes="nav-arrow" Tag="forward" Content="&gt;" Click="OnAction" />
+                <Button Classes="nav-arrow" Tag="up" Content="^" Click="OnAction" />
               </StackPanel>
               <Grid Grid.Column="1">
                 <Border x:Name="Breadcrumb" Background="{StaticResource InputSoftBrush}" BorderBrush="{StaticResource InputBorderBrush}" BorderThickness="1"
-                        CornerRadius="5" Padding="4,0" PointerPressed="OnAddressPressed">
+                        Height="28" CornerRadius="4" Padding="6,0" PointerPressed="OnAddressPressed">
                   <ScrollViewer HorizontalScrollBarVisibility="Hidden" VerticalScrollBarVisibility="Disabled">
                     <StackPanel x:Name="BreadcrumbPanel" Orientation="Horizontal" VerticalAlignment="Center" />
                   </ScrollViewer>
@@ -118,8 +123,10 @@
                   </Border>
                 </Popup>
               </Grid>
-              <TextBox x:Name="FileSearch" Grid.Column="2" PlaceholderText="Search" Padding="8,0" TextChanged="OnFileSearchChanged" />
+              <TextBox x:Name="FileSearch" Grid.Column="2" Height="28" CornerRadius="4" PlaceholderText="Search"
+                       Padding="10,0" Opacity="0.7" TextChanged="OnFileSearchChanged" />
             </Grid>
+            </Border>
             <Grid Grid.Row="2" ColumnDefinitions="Auto,Auto,Auto,*" Margin="8,0" ColumnSpacing="8">
               <Button Classes="tool" Tag="reload" Content="Refresh" Click="OnAction" />
               <Button Grid.Column="1" Classes="tool" Tag="newfolder" Content="New Folder" Click="OnAction" />
@@ -127,8 +134,8 @@
               <TextBlock x:Name="PathHint" Grid.Column="3" Text="" Foreground="{StaticResource MutedBrush}"
                          HorizontalAlignment="Right" VerticalAlignment="Center" FontFamily="Noto Sans Mono" FontSize="10" />
             </Grid>
-            <Grid Grid.Row="3" ColumnDefinitions="170,*">
-              <Border BorderBrush="{StaticResource PaneBorderBrush}" BorderThickness="0,1,1,0" Background="{StaticResource SidebarBrush}" Padding="8,8">
+            <Grid Grid.Row="3" ColumnDefinitions="160,*">
+              <Border BorderBrush="{StaticResource SidebarBorderBrush}" BorderThickness="0,0,1,0" Background="{StaticResource SidebarBrush}" Padding="10">
                 <ScrollViewer>
                   <StackPanel x:Name="TreePanel" Spacing="0" />
                 </ScrollViewer>
@@ -176,7 +183,8 @@
         <!-- Runtime -->
         <Border x:Name="RuntimeWindow" Classes="desktop-window" Width="290" Height="380"
                 Canvas.Left="855" Canvas.Top="346" ZIndex="14" PointerPressed="FocusDesktopWindow">
-          <Grid RowDefinitions="34,*">
+          <Grid RowDefinitions="42,*" Background="Transparent">
+            <Border Grid.Row="1" Classes="app-client" />
             <Border Classes="titlebar" Tag="RuntimeWindow"
                     PointerPressed="BeginDesktopWindowDrag" PointerMoved="ContinueDesktopWindowDrag" PointerReleased="EndDesktopWindowDrag">
               <Grid ColumnDefinitions="*,Auto">
@@ -228,7 +236,8 @@
         <!-- Network Inspector: hidden preview, waiting for a real traceroute backend -->
         <Border x:Name="NetworkWindow" Classes="desktop-window" Width="370" Height="380" IsVisible="False"
                 Canvas.Left="510" Canvas.Top="68" ZIndex="12" PointerPressed="FocusDesktopWindow">
-          <Grid RowDefinitions="34,Auto,*">
+          <Grid RowDefinitions="42,Auto,*" Background="Transparent">
+            <Border Grid.Row="1" Grid.RowSpan="2" Classes="app-client" />
             <Border Classes="titlebar" Tag="NetworkWindow"
                     PointerPressed="BeginDesktopWindowDrag" PointerMoved="ContinueDesktopWindowDrag" PointerReleased="EndDesktopWindowDrag">
               <Grid ColumnDefinitions="*,Auto">
@@ -273,7 +282,8 @@
         <!-- Text viewer -->
         <Border x:Name="ViewerWindow" Classes="desktop-window" Width="560" Height="400" IsVisible="False"
                 Canvas.Left="300" Canvas.Top="120" ZIndex="18" PointerPressed="FocusDesktopWindow">
-          <Grid RowDefinitions="34,*">
+          <Grid RowDefinitions="42,*" Background="Transparent">
+            <Border Grid.Row="1" Classes="app-client" />
             <Border Classes="titlebar" Tag="ViewerWindow"
                     PointerPressed="BeginDesktopWindowDrag" PointerMoved="ContinueDesktopWindowDrag" PointerReleased="EndDesktopWindowDrag">
               <Grid ColumnDefinitions="*,Auto">
@@ -297,7 +307,8 @@
         <!-- Settings -->
         <Border x:Name="SettingsWindow" Classes="desktop-window" Width="360" Height="380" IsVisible="False"
                 Canvas.Left="420" Canvas.Top="180" ZIndex="22" PointerPressed="FocusDesktopWindow">
-          <Grid RowDefinitions="34,*">
+          <Grid RowDefinitions="42,*" Background="Transparent">
+            <Border Grid.Row="1" Classes="app-client" />
             <Border Classes="titlebar" Tag="SettingsWindow"
                     PointerPressed="BeginDesktopWindowDrag" PointerMoved="ContinueDesktopWindowDrag" PointerReleased="EndDesktopWindowDrag">
               <Grid ColumnDefinitions="*,Auto">
@@ -308,27 +319,23 @@
             <StackPanel Grid.Row="1" Margin="12,12" Spacing="12">
               <TextBlock Text="UI SCALE" Foreground="{StaticResource HeadingBrush}" FontFamily="Noto Sans Mono" FontSize="10" FontWeight="Bold" />
               <StackPanel Orientation="Horizontal" Spacing="8">
-                <Button Classes="tool" Tag="scale:auto" Content="Auto" Click="OnAction" />
-                <Button Classes="tool" Tag="scale:1" Content="100%" Click="OnAction" />
-                <Button Classes="tool" Tag="scale:1.25" Content="125%" Click="OnAction" />
-                <Button Classes="tool" Tag="scale:1.5" Content="150%" Click="OnAction" />
-                <Button Classes="tool" Tag="scale:2" Content="200%" Click="OnAction" />
+                 <Button Classes="tool" Tag="scale:auto" Content="Auto" Click="OnScaleClick" />
+                 <Button Classes="tool" Tag="scale:1" Content="100%" Click="OnScaleClick" />
+                 <Button Classes="tool" Tag="scale:1.25" Content="125%" Click="OnScaleClick" />
+                 <Button Classes="tool" Tag="scale:1.5" Content="150%" Click="OnScaleClick" />
+                 <Button Classes="tool" Tag="scale:2" Content="200%" Click="OnScaleClick" />
               </StackPanel>
               <TextBlock x:Name="ScaleInfo" Text="" Foreground="{StaticResource InfoBrush}" FontFamily="Noto Sans Mono" FontSize="10" />
               <TextBlock Text="Scale applies to the whole desktop. Auto follows the screen resolution."
                          Foreground="{StaticResource MutedBrush}" FontSize="10" TextWrapping="Wrap" />
-              <TextBlock Text="APPEARANCE" Foreground="{StaticResource HeadingBrush}" FontFamily="Noto Sans Mono" FontSize="10" FontWeight="Bold" />
+              <TextBlock Text="THEME" Foreground="{StaticResource HeadingBrush}" FontFamily="Noto Sans Mono" FontSize="10" FontWeight="Bold" />
               <StackPanel Orientation="Horizontal" Spacing="8">
-                <Button Classes="tool" Tag="hover:aero" Content="Aero hover" Click="OnAction" />
-                <Button Classes="tool" Tag="hover:flat" Content="Flat hover" Click="OnAction" />
+                <Button Classes="tool" Tag="night" Content="Night" Click="OnThemeModeClick" />
+                <Button Classes="tool" Tag="day" Content="Day" Click="OnThemeModeClick" />
               </StackPanel>
-              <StackPanel Orientation="Horizontal" Spacing="8">
-                <Button Classes="tool" Tag="accent:#18B9FF" Content="Blue" Click="OnAction" />
-                <Button Classes="tool" Tag="accent:#3ED598" Content="Green" Click="OnAction" />
-                <Button Classes="tool" Tag="accent:#FFC65C" Content="Amber" Click="OnAction" />
-                <Button Classes="tool" Tag="accent:#E86FD8" Content="Magenta" Click="OnAction" />
-              </StackPanel>
-              <TextBlock Text="Hover style and accent write to Theme.config and apply instantly."
+              <TextBlock x:Name="ThemeInfo" Text="Night client, Faux Aero frame (no blur)"
+                         Foreground="{StaticResource InfoBrush}" FontFamily="Noto Sans Mono" FontSize="10" />
+              <TextBlock Text="Night uses flat Aero Plex blue; Day uses flat amber. Close remains a flat warm red."
                          Foreground="{StaticResource MutedBrush}" FontSize="10" TextWrapping="Wrap" />
             </StackPanel>
           </Grid>
@@ -343,19 +350,19 @@
             <Button Classes="hud-item" Tag="start" Click="OnAction" Padding="0,0,8,0">
               <StackPanel Orientation="Horizontal" Spacing="8">
                 <Border Width="17" Height="17" CornerRadius="5" Background="{StaticResource StartBrush}" BorderBrush="{StaticResource AccentBrush}" BorderThickness="1" />
-                <TextBlock Text="MixtarRVS" Foreground="{StaticResource HeadingBrush}" FontWeight="Bold" FontSize="12" VerticalAlignment="Center" />
+                 <TextBlock Text="MixtarRVS" Foreground="{StaticResource FrameHeadingBrush}" FontWeight="Bold" FontSize="12" VerticalAlignment="Center" />
               </StackPanel>
             </Button>
-            <Button Classes="hud-item" Tag="files" Content="Files" Click="OnAction" />
-            <Button Classes="hud-item" Tag="terminal" Content="Terminal" Click="OnAction" />
-            <Button Classes="hud-item" Tag="runtime" Content="Runtime" Click="OnAction" />
-            <Button Classes="hud-item" Tag="settings" Content="Settings" Click="OnAction" />
+             <Button Classes="hud-item" Tag="files" Content="Files" Click="OnAction" />
+             <Button Classes="hud-item" Tag="terminal" Content="Terminal" Click="OnAction" />
+             <Button Classes="hud-item" Tag="runtime" Content="Runtime" Click="OnAction" />
+             <Button Classes="hud-item" Tag="settings" Content="Settings" Click="OnAction" />
           </StackPanel>
           <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center" Spacing="14">
-            <TextBlock x:Name="GraphicsDot" Text="● MWM" Foreground="{StaticResource MutedBrush}" FontFamily="Noto Sans Mono" FontSize="10" />
-            <TextBlock x:Name="VolumesDot" Text="● VOL" Foreground="{StaticResource MutedBrush}" FontFamily="Noto Sans Mono" FontSize="10" />
-            <Border BorderBrush="{StaticResource DividerBrush}" BorderThickness="1,0,0,0" Padding="14,0,0,0">
-              <TextBlock x:Name="ClockText" Text="--:--:--" Foreground="{StaticResource MonoBrush}" FontFamily="Noto Sans Mono" FontSize="10" />
+            <TextBlock x:Name="GraphicsDot" Text="● MWM" Foreground="{StaticResource FrameMutedBrush}" FontFamily="Noto Sans Mono" FontSize="10" />
+            <TextBlock x:Name="VolumesDot" Text="● VOL" Foreground="{StaticResource FrameMutedBrush}" FontFamily="Noto Sans Mono" FontSize="10" />
+            <Border BorderBrush="{DynamicResource FrameDividerBrush}" BorderThickness="1,0,0,0" Padding="14,0,0,0">
+              <TextBlock x:Name="ClockText" Text="--:--:--" Foreground="{StaticResource FrameMonoBrush}" FontFamily="Noto Sans Mono" FontSize="10" />
             </Border>
           </StackPanel>
         </Grid>
@@ -363,30 +370,36 @@
 
       <!-- Start menu -->
       <Border x:Name="StartMenu" IsVisible="False" Width="430" HorizontalAlignment="Left" VerticalAlignment="Bottom"
-              Margin="8,0,0,56" ZIndex="130" Background="{StaticResource MenuBrush}" BorderBrush="{StaticResource StrokeBrush}"
-              BorderThickness="1" CornerRadius="11" BoxShadow="0 24 68 0 #D0000000">
-        <Grid RowDefinitions="Auto,Auto">
-          <TextBox x:Name="StartSearch" Margin="12,12" PlaceholderText="Search applications and commands"
-                   Padding="12,0" TextChanged="OnStartSearchChanged" />
-          <Grid Grid.Row="1" ColumnDefinitions="*,*" Margin="12,8,12,12" ColumnSpacing="12">
-            <StackPanel x:Name="StartAppsPanel" Spacing="4">
-              <TextBlock Text="APPLICATIONS" Foreground="{StaticResource HeadingBrush}" FontFamily="Noto Sans Mono" FontSize="10" FontWeight="Bold" Margin="4,0,0,4" />
-              <Button Classes="tree" Tag="files" Content="▣  Files Explorer" Click="OnAction" />
-              <Button Classes="tree" Tag="terminal" Content="&gt;_  Terminal" Click="OnAction" />
-              <Button Classes="tree" Tag="runtime" Content="◈  Runtime Monitor" Click="OnAction" />
-              <Button Classes="tree" Tag="network" Content="◇  Network Inspector (preview)" Click="OnAction" />
-              <Button Classes="tree" Tag="settings" Content="⚙  Settings" Click="OnAction" />
-            </StackPanel>
-            <StackPanel x:Name="StartSystemPanel" Grid.Column="1" Spacing="4">
-              <TextBlock Text="SYSTEM" Foreground="{StaticResource HeadingBrush}" FontFamily="Noto Sans Mono" FontSize="10" FontWeight="Bold" Margin="4,0,0,4" />
-              <Button Classes="tree" Tag="root" Content="⌂  Root" Click="OnAction" />
-              <Button Classes="tree" Tag="home" Content="●  Home" Click="OnAction" />
-              <Button Classes="tree" Tag="verify" Content="✓  Platform State" Click="OnAction" />
-              <Button Classes="tree" Tag="reboot" Content="↻  Reboot" Click="OnAction" />
-              <Button Classes="tree" Tag="poweroff" Content="⏻  Power Off" Click="OnAction" />
-            </StackPanel>
+              Margin="8,0,0,56" ZIndex="130" Background="{DynamicResource FrameBrush}" BorderBrush="{DynamicResource FrameStrokeStrongBrush}"
+              TextElement.Foreground="{DynamicResource TextBrush}"
+              BorderThickness="1" Padding="6" CornerRadius="8" BoxShadow="0 24 68 0 #D0000000">
+        <Border Background="{DynamicResource MenuBrush}" BorderBrush="{DynamicResource MenuBorderBrush}"
+                BorderThickness="1" CornerRadius="4" ClipToBounds="True">
+          <Grid RowDefinitions="Auto,Auto">
+            <TextBox x:Name="StartSearch" Margin="12,12" PlaceholderText="Search applications and commands"
+                     Padding="12,0" TextChanged="OnStartSearchChanged" />
+            <Grid Grid.Row="1" ColumnDefinitions="*,*" Margin="12,8,12,12" ColumnSpacing="12">
+               <StackPanel x:Name="StartAppsPanel" Spacing="4">
+                 <TextBlock Text="APX APPLICATIONS" Foreground="{DynamicResource HeadingBrush}" FontFamily="Noto Sans Mono" FontSize="10" FontWeight="Bold" Margin="4,0,0,4" />
+                 <StackPanel x:Name="ApxAppsPanel" Spacing="4" />
+                 <TextBlock Text="WORKBENCH PANELS" Foreground="{DynamicResource HeadingBrush}" FontFamily="Noto Sans Mono" FontSize="10" FontWeight="Bold" Margin="4,8,0,4" />
+                <Button Classes="tree" Tag="files" Content="▣  Files Explorer" Click="OnAction" />
+                <Button Classes="tree" Tag="terminal" Content="&gt;_  Terminal" Click="OnAction" />
+                <Button Classes="tree" Tag="runtime" Content="◈  Runtime Monitor" Click="OnAction" />
+                <Button Classes="tree" Tag="network" Content="◇  Network Inspector (preview)" Click="OnAction" />
+                <Button Classes="tree" Tag="settings" Content="⚙  Settings" Click="OnAction" />
+              </StackPanel>
+              <StackPanel x:Name="StartSystemPanel" Grid.Column="1" Spacing="4">
+                <TextBlock Text="SYSTEM" Foreground="{DynamicResource HeadingBrush}" FontFamily="Noto Sans Mono" FontSize="10" FontWeight="Bold" Margin="4,0,0,4" />
+                <Button Classes="tree" Tag="root" Content="⌂  Root" Click="OnAction" />
+                <Button Classes="tree" Tag="home" Content="●  Home" Click="OnAction" />
+                <Button Classes="tree" Tag="verify" Content="✓  Platform State" Click="OnAction" />
+                <Button Classes="tree" Tag="reboot" Content="↻  Reboot" Click="OnAction" />
+                <Button Classes="tree" Tag="poweroff" Content="⏻  Power Off" Click="OnAction" />
+              </StackPanel>
+            </Grid>
           </Grid>
-        </Grid>
+        </Border>
       </Border>
 
       <!-- Command palette -->
@@ -423,6 +436,7 @@
             <TextBlock x:Name="ConsolePrompt" Text="system#" Foreground="{StaticResource SuccessBrush}" FontWeight="Bold"
                        FontFamily="Noto Sans Mono" FontSize="12" VerticalAlignment="Center" />
             <TextBox x:Name="ConsoleInput" Grid.Column="1" Margin="8,0,0,0" Padding="4,0" Background="Transparent"
+                     Foreground="{StaticResource FrameTextBrush}"
                      BorderThickness="0" FontFamily="Noto Sans Mono" KeyDown="OnConsoleKeyDown" />
           </Grid>
           <Border Grid.Row="2" />
@@ -436,7 +450,7 @@
              compensates so children center on the true visual middle. -->
         <Grid ColumnDefinitions="Auto,1,*,Auto" Margin="8,0,8,1" ColumnSpacing="8">
           <Button Grid.Column="0" Classes="start" Tag="start" Click="OnAction" Content="▰  Start" />
-          <Border Grid.Column="1" Width="1" Height="24" Background="{StaticResource DividerBrush}" />
+          <Border Grid.Column="1" Width="1" Height="24" Background="{DynamicResource FrameDividerBrush}" />
           <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
             <Button x:Name="TerminalTask" Classes="task active" Tag="TerminalWindow" Content="▣  Terminal" Click="OnTaskClick" />
             <Button x:Name="FilesTask" Classes="task" Tag="FilesWindow" Content="▣  Files" Click="OnTaskClick" />
@@ -444,15 +458,15 @@
             <Button x:Name="NetworkTask" Classes="task" Tag="NetworkWindow" Content="◇  Network" Click="OnTaskClick" IsVisible="False" />
           </StackPanel>
           <StackPanel Grid.Column="3" Orientation="Horizontal" Spacing="12" VerticalAlignment="Center">
-            <TextBlock x:Name="TrayGraphicsDot" Text="● MWM" Foreground="{StaticResource MutedBrush}" FontFamily="Noto Sans Mono"
+            <TextBlock x:Name="TrayGraphicsDot" Text="● MWM" Foreground="{StaticResource FrameMutedBrush}" FontFamily="Noto Sans Mono"
                        FontSize="10" VerticalAlignment="Center" />
-            <TextBlock x:Name="TrayVolumesDot" Text="● VOL" Foreground="{StaticResource MutedBrush}" FontFamily="Noto Sans Mono"
+            <TextBlock x:Name="TrayVolumesDot" Text="● VOL" Foreground="{StaticResource FrameMutedBrush}" FontFamily="Noto Sans Mono"
                        FontSize="10" VerticalAlignment="Center" />
-            <Border BorderBrush="{StaticResource DividerBrush}" BorderThickness="1,0,0,0" Padding="12,0,0,0" VerticalAlignment="Center">
-              <TextBlock x:Name="TrayClock" Text="--:--:--" Foreground="{StaticResource MonoBrush}" FontFamily="Noto Sans Mono"
+            <Border BorderBrush="{DynamicResource FrameDividerBrush}" BorderThickness="1,0,0,0" Padding="12,0,0,0" VerticalAlignment="Center">
+              <TextBlock x:Name="TrayClock" Text="--:--:--" Foreground="{StaticResource FrameMonoBrush}" FontFamily="Noto Sans Mono"
                          FontSize="10" VerticalAlignment="Center" />
             </Border>
-            <TextBlock x:Name="DateText" Text="" Foreground="{StaticResource InfoBrush}" FontFamily="Noto Sans Mono"
+            <TextBlock x:Name="DateText" Text="" Foreground="{StaticResource FrameMutedBrush}" FontFamily="Noto Sans Mono"
                        FontSize="10" VerticalAlignment="Center" />
             <Button Width="24" Height="32" Padding="0" Margin="4,0,0,0" Background="Transparent"
                     BorderBrush="{StaticResource DividerBrush}" BorderThickness="1,0,0,0" CornerRadius="0"

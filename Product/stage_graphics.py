@@ -23,7 +23,7 @@ OUTPUT_ROOT = (REPOSITORY / "Output").absolute()
 NEEDED = re.compile(r"Shared library: \[([^]]+)]")
 INTERPRETER = re.compile(r"\[Requesting program interpreter: ([^]]+)]")
 RUNTIME_RPATH = "/System/Libraries/Graphics:/System/Libraries"
-WORKBENCH_RPATH = f"/System/Core/Product/Workbench:{RUNTIME_RPATH}"
+WORKBENCH_RPATH = f"/System/UX/Workbench:{RUNTIME_RPATH}"
 
 
 class StageError(RuntimeError):
@@ -222,13 +222,13 @@ def write_fontconfig(root: Path) -> None:
 
 
 def write_launcher(root: Path) -> None:
-    target = logical_path(root, "System/Core/Product/Workbench/Launch")
+    target = logical_path(root, "System/UX/Workbench/Launch")
     target.write_text(
         """#!/System/Terminal/POSIX/sh
 export FONTCONFIG_FILE=/System/Configuration/Fonts/fonts.conf
 export FONTCONFIG_PATH=/System/Configuration/Fonts
 export LIBGL_DRIVERS_PATH=/System/Libraries/Graphics/dri
-exec /System/Core/Product/Workbench/Workbench "$@"
+exec /System/UX/Workbench/Workbench "$@"
 """,
         encoding="utf-8",
         newline="\n",
@@ -260,7 +260,7 @@ def library_index(*roots: Path) -> dict[str, Path]:
 def audit_elf(root: Path, base_root: Path, loader: str) -> dict[str, object]:
     overlay_libraries = logical_path(root, "System/Libraries/Graphics")
     base_libraries = logical_path(base_root, "System/Libraries")
-    workbench = logical_path(root, "System/Core/Product/Workbench")
+    workbench = logical_path(root, "System/UX/Workbench")
     index = library_index(overlay_libraries, base_libraries, workbench)
     required = {
         "libEGL.so.1", "libGLESv2.so.2", "libgbm.so.1", "libfontconfig.so.1",

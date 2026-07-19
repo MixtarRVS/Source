@@ -16,7 +16,7 @@ using Avalonia.Threading;
 using Avalonia.VisualTree;
 using IOPath = System.IO.Path;
 
-namespace Mixtar.Product.Workbench;
+namespace Mixtar.UX.Workbench;
 
 public sealed partial class MainWindow
 {
@@ -226,7 +226,8 @@ public sealed partial class MainWindow
         (_outputTarget ?? TerminalLines).Children.Add(new TextBlock
         {
             Text = text,
-            Foreground = new SolidColorBrush(Color.Parse(color)),
+            Tag = color,
+            Foreground = TerminalOutputBrush(color),
             FontFamily = new FontFamily("Noto Sans Mono"),
             FontSize = 10,
             TextWrapping = TextWrapping.Wrap
@@ -236,6 +237,39 @@ public sealed partial class MainWindow
         if (target.Children.Count > 400)
         {
             target.Children.RemoveRange(0, target.Children.Count - 400);
+        }
+    }
+
+    private Avalonia.Media.IBrush TerminalOutputBrush(string color)
+    {
+        if (!string.Equals(_activeThemeMode, "day", StringComparison.OrdinalIgnoreCase))
+        {
+            return new SolidColorBrush(Color.Parse(color));
+        }
+
+        return color.ToUpperInvariant() switch
+        {
+            "#FFFFFF" => Token("TextBrush"),
+            "#91B7E8" => Token("InfoBrush"),
+            "#9FC5F4" => Token("MonoBrush"),
+            "#668AB9" => Token("MutedBrush"),
+            _ => new SolidColorBrush(Color.Parse(color))
+        };
+    }
+
+    private void RefreshTerminalOutputColors()
+    {
+        if (TerminalLines is null)
+        {
+            return;
+        }
+
+        foreach (var child in TerminalLines.Children)
+        {
+            if (child is TextBlock line && line.Tag is string color)
+            {
+                line.Foreground = TerminalOutputBrush(color);
+            }
         }
     }
 

@@ -10,6 +10,9 @@
          terminal-output colors are content, not chrome - they stay local. -->
     <!-- Surfaces -->
     <SolidColorBrush x:Key="DesktopBrush" Color="#0B1220" />
+    <SolidColorBrush x:Key="FrameBrush" Color="#D914161A" />
+    <SolidColorBrush x:Key="ClientBrush" Color="#FF1E1E1E" />
+    <SolidColorBrush x:Key="ClientBorderBrush" Color="#FF000000" />
     <SolidColorBrush x:Key="PanelBrush" Color="#D914161A" />
     <SolidColorBrush x:Key="PanelSoftBrush" Color="#E6191B20" />
     <SolidColorBrush x:Key="MenuBrush" Color="#F214161A" />
@@ -35,7 +38,17 @@
     <SolidColorBrush x:Key="SoftBrush" Color="#9EC1EF" />
     <SolidColorBrush x:Key="ListTextBrush" Color="#D8E7FF" />
     <SolidColorBrush x:Key="TabTextBrush" Color="#A9B4C4" />
+    <SolidColorBrush x:Key="TabActiveTextBrush" Color="#FFFFFFFF" />
+    <SolidColorBrush x:Key="CaptionGlyphBrush" Color="#FFDFDFDF" />
+    <SolidColorBrush x:Key="CaptionHoverGlyphBrush" Color="#FFFFFFFF" />
+    <SolidColorBrush x:Key="CaptionCloseGlyphBrush" Color="#FFFFFFFF" />
     <SolidColorBrush x:Key="MutedBrush" Color="#668AB9" />
+    <SolidColorBrush x:Key="FrameTextBrush" Color="#CFD8E6" />
+    <SolidColorBrush x:Key="FrameHeadingBrush" Color="#8FC1FF" />
+    <SolidColorBrush x:Key="FrameMutedBrush" Color="#668AB9" />
+    <SolidColorBrush x:Key="FrameMonoBrush" Color="#C4DCFF" />
+    <SolidColorBrush x:Key="FrameDividerBrush" Color="#20FFFFFF" />
+    <SolidColorBrush x:Key="MenuBorderBrush" Color="#FF14161A" />
     <!-- Status -->
     <SolidColorBrush x:Key="SuccessBrush" Color="#27EE91" />
     <SolidColorBrush x:Key="SuccessDimBrush" Color="#9ED8C6" />
@@ -65,6 +78,11 @@
     <SolidColorBrush x:Key="StrokeStrongBrush" Color="#4DFFFFFF" />
     <SolidColorBrush x:Key="HairlineBrush" Color="#1AFFFFFF" />
     <SolidColorBrush x:Key="DividerBrush" Color="#20FFFFFF" />
+    <SolidColorBrush x:Key="FrameStrokeBrush" Color="#26FFFFFF" />
+    <SolidColorBrush x:Key="FrameStrokeStrongBrush" Color="#4DFFFFFF" />
+    <SolidColorBrush x:Key="FrameHairlineBrush" Color="#1AFFFFFF" />
+    <SolidColorBrush x:Key="CommandBarBorderBrush" Color="#FF333333" />
+    <SolidColorBrush x:Key="SidebarBorderBrush" Color="#FF333333" />
     <SolidColorBrush x:Key="RowLineBrush" Color="#0EFFFFFF" />
     <SolidColorBrush x:Key="TrackBrush" Color="#17FFFFFF" />
     <SolidColorBrush x:Key="GripBrush" Color="#4CFFFFFF" />
@@ -74,57 +92,55 @@
     <SolidColorBrush x:Key="ToolBorderBrush" Color="#47FFFFFF" />
     <SolidColorBrush x:Key="NetLineBrush" Color="#416FA8E8" />
     <SolidColorBrush x:Key="NetLineFaintBrush" Color="#244B79B6" />
-    <!-- Caption hover gradients as named resources so Theme.config can
-         retint them (Theme API v1); the code mutates these instances. -->
-    <LinearGradientBrush x:Key="CaptionHoverBrush" StartPoint="0%,0%" EndPoint="0%,100%">
-      <GradientStop Color="#5BA4E5" Offset="0" />
-      <GradientStop Color="#4388CC" Offset="0.49" />
-      <GradientStop Color="#2969AD" Offset="0.5" />
-      <GradientStop Color="#1C528F" Offset="1" />
-    </LinearGradientBrush>
-    <LinearGradientBrush x:Key="CaptionCloseHoverBrush" StartPoint="0%,0%" EndPoint="0%,100%">
-      <GradientStop Color="#E85F51" Offset="0" />
-      <GradientStop Color="#D34031" Offset="0.49" />
-      <GradientStop Color="#B52B1E" Offset="0.5" />
-      <GradientStop Color="#8E1C12" Offset="1" />
-    </LinearGradientBrush>
+    <!-- Flat caption interaction colors. Mode-specific values are supplied
+         by MainWindow.Theme.cs and remain configurable through Theme.config. -->
+    <SolidColorBrush x:Key="CaptionHoverBrush" Color="#FF4388CC" />
+    <SolidColorBrush x:Key="CaptionCloseHoverBrush" Color="#FFD34031" />
+    <SolidColorBrush x:Key="CaptionPressedBrush" Color="#FF1A3957" />
   </Styles.Resources>
 
     <Style Selector="Border.desktop-window">
-      <Setter Property="Background" Value="{StaticResource PanelBrush}" />
-      <Setter Property="BorderBrush" Value="{StaticResource StrokeBrush}" />
+      <Setter Property="Background" Value="{StaticResource FrameBrush}" />
+      <Setter Property="BorderBrush" Value="{StaticResource FrameStrokeBrush}" />
       <Setter Property="BorderThickness" Value="1" />
-      <Setter Property="CornerRadius" Value="9" />
+      <Setter Property="Padding" Value="6,0,6,6" />
+      <Setter Property="CornerRadius" Value="8" />
       <Setter Property="ClipToBounds" Value="True" />
       <Setter Property="BoxShadow" Value="inset 0 1 1 0 #1AFFFFFF, 0 15 35 0 #99000000" />
     </Style>
     <Style Selector="Border.desktop-window.active">
-      <Setter Property="BorderBrush" Value="{StaticResource StrokeStrongBrush}" />
+      <Setter Property="BorderBrush" Value="{StaticResource FrameStrokeStrongBrush}" />
       <Setter Property="BoxShadow" Value="inset 0 1 1 0 #26FFFFFF, 0 18 42 0 #B3000000" />
     </Style>
+    <Style Selector="Border.app-client">
+      <Setter Property="Background" Value="{StaticResource ClientBrush}" />
+      <Setter Property="BorderBrush" Value="{StaticResource ClientBorderBrush}" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="4" />
+      <Setter Property="ClipToBounds" Value="True" />
+    </Style>
     <Style Selector="Border.titlebar">
-      <Setter Property="Height" Value="34" />
-      <Setter Property="Background" Value="Transparent" />
-      <Setter Property="BorderBrush" Value="{StaticResource HairlineBrush}" />
+      <Setter Property="Height" Value="42" />
+      <Setter Property="Background" Value="{StaticResource FrameBrush}" />
+      <Setter Property="BorderBrush" Value="{StaticResource FrameHairlineBrush}" />
       <Setter Property="BorderThickness" Value="0,0,0,1" />
-      <Setter Property="Padding" Value="12,0,0,0" />
+      <Setter Property="Padding" Value="10,0,0,0" />
     </Style>
     <Style Selector="TextBlock.window-title">
-      <Setter Property="Foreground" Value="{StaticResource TitleBrush}" />
+      <Setter Property="Foreground" Value="{StaticResource CaptionGlyphBrush}" />
       <Setter Property="FontFamily" Value="Noto Sans" />
       <Setter Property="FontSize" Value="12" />
       <Setter Property="FontWeight" Value="Bold" />
       <Setter Property="LetterSpacing" Value="0.6" />
       <Setter Property="VerticalAlignment" Value="Center" />
     </Style>
-    <!-- Caption buttons per Mixtar-Studio "Stealth Dark Plex"
-         (dark_plex_aero_vs_faux_aero.html): 46px square buttons, aero-blue
-         hover for min/max, red gradient hover for close. -->
+    <!-- Caption buttons keep the Studio geometry but use modern flat hover
+         colors instead of the reference's 2008-style gradients. -->
     <Style Selector="Button.window-dot">
       <Setter Property="Width" Value="46" />
-      <Setter Property="Height" Value="33" />
+      <Setter Property="Height" Value="32" />
       <Setter Property="MinWidth" Value="46" />
-      <Setter Property="MinHeight" Value="33" />
+      <Setter Property="MinHeight" Value="32" />
       <Setter Property="Padding" Value="0" />
       <Setter Property="Margin" Value="0" />
       <Setter Property="CornerRadius" Value="0" />
@@ -133,15 +149,28 @@
       <Setter Property="Foreground" Value="{StaticResource TitleBrush}" />
       <Setter Property="FontSize" Value="11" />
       <Setter Property="FontFamily" Value="Noto Sans" />
+      <Setter Property="VerticalAlignment" Value="Top" />
       <Setter Property="HorizontalContentAlignment" Value="Center" />
       <Setter Property="VerticalContentAlignment" Value="Center" />
     </Style>
     <Style Selector="Button.window-dot:pointerover">
-      <Setter Property="Foreground" Value="White" />
-      <Setter Property="Background" Value="{StaticResource CaptionHoverBrush}" />
+      <Setter Property="Foreground" Value="{DynamicResource CaptionHoverGlyphBrush}" />
+      <Setter Property="Background" Value="{DynamicResource CaptionHoverBrush}" />
     </Style>
     <Style Selector="Button.window-dot.close:pointerover">
-      <Setter Property="Background" Value="{StaticResource CaptionCloseHoverBrush}" />
+      <Setter Property="Foreground" Value="{DynamicResource CaptionCloseGlyphBrush}" />
+      <Setter Property="Background" Value="{DynamicResource CaptionCloseHoverBrush}" />
+    </Style>
+    <Style Selector="Button.window-dot.min:pointerover">
+      <Setter Property="BorderBrush" Value="#1AFFFFFF" />
+      <Setter Property="BorderThickness" Value="1,0,0,0" />
+    </Style>
+    <Style Selector="Button.window-dot.max:pointerover">
+      <Setter Property="BorderBrush" Value="#1AFFFFFF" />
+      <Setter Property="BorderThickness" Value="1,0,0,0" />
+    </Style>
+    <Style Selector="Button.window-dot:pressed">
+      <Setter Property="Background" Value="{DynamicResource CaptionPressedBrush}" />
     </Style>
     <!-- Caption glyphs as vectors, 1:1 from the Studio spec: one shared
          10x10 viewBox, stroke 1.5, no fill. The minimize dash (y 8-9)
@@ -211,6 +240,22 @@
     </Style>
     <Style Selector="Button.tool:pointerover"><Setter Property="BorderBrush" Value="{StaticResource AccentBrush}" /></Style>
     <Style Selector="Button.tool.danger"><Setter Property="BorderBrush" Value="{StaticResource DangerSoftBrush}" /></Style>
+    <Style Selector="Button.nav-arrow">
+      <Setter Property="Width" Value="24" />
+      <Setter Property="Height" Value="28" />
+      <Setter Property="Padding" Value="0" />
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="Foreground" Value="{StaticResource TextBrush}" />
+      <Setter Property="FontSize" Value="16" />
+      <Setter Property="FontWeight" Value="Bold" />
+      <Setter Property="Opacity" Value="0.6" />
+    </Style>
+    <Style Selector="Button.nav-arrow:pointerover">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="Foreground" Value="{StaticResource TextBrush}" />
+      <Setter Property="Opacity" Value="1" />
+    </Style>
     <Style Selector="Button.tree">
       <Setter Property="Height" Value="28" />
       <Setter Property="HorizontalContentAlignment" Value="Left" />
@@ -218,11 +263,15 @@
       <Setter Property="Background" Value="Transparent" />
       <Setter Property="BorderThickness" Value="0" />
       <Setter Property="CornerRadius" Value="4" />
-      <Setter Property="Foreground" Value="{StaticResource ListTextBrush}" />
+      <Setter Property="Foreground" Value="{DynamicResource ListTextBrush}" />
       <Setter Property="FontSize" Value="11" />
       <Setter Property="VerticalContentAlignment" Value="Center" />
     </Style>
     <Style Selector="Button.tree:pointerover"><Setter Property="Background" Value="{StaticResource ItemHoverBrush}" /></Style>
+    <Style Selector="Button.tree.active">
+      <Setter Property="Background" Value="{StaticResource RowSelectedBrush}" />
+      <Setter Property="FontWeight" Value="Medium" />
+    </Style>
     <Style Selector="Button.column-header">
       <Setter Property="Background" Value="Transparent" />
       <Setter Property="BorderThickness" Value="0" />
@@ -233,7 +282,7 @@
       <Setter Property="FontSize" Value="10" />
       <Setter Property="VerticalContentAlignment" Value="Center" />
     </Style>
-    <Style Selector="Button.column-header:pointerover"><Setter Property="Foreground" Value="White" /></Style>
+    <Style Selector="Button.column-header:pointerover"><Setter Property="Foreground" Value="{StaticResource TextBrush}" /></Style>
     <Style Selector="Button.crumb">
       <Setter Property="Background" Value="Transparent" />
       <Setter Property="BorderThickness" Value="0" />
@@ -247,42 +296,78 @@
     </Style>
     <Style Selector="Button.crumb:pointerover">
       <Setter Property="Background" Value="{StaticResource ItemHoverBrush}" />
-      <Setter Property="Foreground" Value="White" />
+      <Setter Property="Foreground" Value="{StaticResource TextBrush}" />
     </Style>
     <!-- Titlebar tabs: uniform-width 32px pills sharing one vertical axis
          with the + button and the caption buttons (user decision 19.07). -->
     <Style Selector="Button.file-tab">
       <Setter Property="Height" Value="32" />
-      <Setter Property="Padding" Value="12,4" />
-      <Setter Property="CornerRadius" Value="6" />
+      <Setter Property="Padding" Value="16,6" />
+      <Setter Property="CornerRadius" Value="6,6,0,0" />
       <Setter Property="BorderThickness" Value="0" />
       <Setter Property="Background" Value="Transparent" />
-      <Setter Property="Foreground" Value="{StaticResource TabTextBrush}" />
+      <Setter Property="Foreground" Value="{DynamicResource TabTextBrush}" />
       <Setter Property="FontSize" Value="12" />
+      <Setter Property="VerticalAlignment" Value="Bottom" />
       <Setter Property="VerticalContentAlignment" Value="Center" />
+      <Setter Property="Template">
+        <ControlTemplate>
+          <Border Background="{TemplateBinding Background}"
+                  BorderBrush="{TemplateBinding BorderBrush}"
+                  BorderThickness="{TemplateBinding BorderThickness}"
+                  CornerRadius="{TemplateBinding CornerRadius}"
+                  Padding="{TemplateBinding Padding}"
+                  ClipToBounds="True">
+            <ContentPresenter Content="{TemplateBinding Content}"
+                              ContentTemplate="{TemplateBinding ContentTemplate}"
+                              HorizontalContentAlignment="{TemplateBinding HorizontalContentAlignment}"
+                              VerticalContentAlignment="{TemplateBinding VerticalContentAlignment}" />
+          </Border>
+        </ControlTemplate>
+      </Setter>
     </Style>
     <Style Selector="Button.file-tab:pointerover">
-      <Setter Property="Background" Value="{StaticResource TabHoverBrush}" />
+      <Setter Property="Background" Value="{DynamicResource TabHoverBrush}" />
       <Setter Property="Foreground" Value="White" />
     </Style>
     <Style Selector="Button.file-tab.active">
-      <Setter Property="Background" Value="{StaticResource TabActiveBrush}" />
-      <Setter Property="Foreground" Value="White" />
+      <Setter Property="Background" Value="{DynamicResource TabActiveBrush}" />
+      <Setter Property="Foreground" Value="{DynamicResource TabActiveTextBrush}" />
+    </Style>
+    <Style Selector="Button.file-tab.active:pointerover">
+      <Setter Property="Background" Value="{DynamicResource TabActiveBrush}" />
+      <Setter Property="Foreground" Value="{DynamicResource TabActiveTextBrush}" />
     </Style>
     <Style Selector="Button.tab-add">
       <Setter Property="Width" Value="32" />
       <Setter Property="Height" Value="32" />
       <Setter Property="Padding" Value="0" />
-      <Setter Property="CornerRadius" Value="6" />
+      <Setter Property="CornerRadius" Value="6,6,0,0" />
       <Setter Property="BorderThickness" Value="0" />
       <Setter Property="Background" Value="Transparent" />
-      <Setter Property="Foreground" Value="{StaticResource TabTextBrush}" />
+      <Setter Property="Foreground" Value="{DynamicResource TabTextBrush}" />
       <Setter Property="FontSize" Value="13" />
+      <Setter Property="VerticalAlignment" Value="Bottom" />
       <Setter Property="HorizontalContentAlignment" Value="Center" />
       <Setter Property="VerticalContentAlignment" Value="Center" />
+      <Setter Property="Template">
+        <ControlTemplate>
+          <Border Background="{TemplateBinding Background}"
+                  BorderBrush="{TemplateBinding BorderBrush}"
+                  BorderThickness="{TemplateBinding BorderThickness}"
+                  CornerRadius="{TemplateBinding CornerRadius}"
+                  Padding="{TemplateBinding Padding}"
+                  ClipToBounds="True">
+            <ContentPresenter Content="{TemplateBinding Content}"
+                              ContentTemplate="{TemplateBinding ContentTemplate}"
+                              HorizontalContentAlignment="{TemplateBinding HorizontalContentAlignment}"
+                              VerticalContentAlignment="{TemplateBinding VerticalContentAlignment}" />
+          </Border>
+        </ControlTemplate>
+      </Setter>
     </Style>
     <Style Selector="Button.tab-add:pointerover">
-      <Setter Property="Background" Value="{StaticResource TabHoverBrush}" />
+      <Setter Property="Background" Value="{DynamicResource TabHoverBrush}" />
       <Setter Property="Foreground" Value="White" />
     </Style>
     <Style Selector="Button.tab-close">
@@ -322,15 +407,45 @@
       <Setter Property="BorderBrush" Value="Transparent" />
       <Setter Property="BorderThickness" Value="1" />
       <Setter Property="CornerRadius" Value="6" />
-      <Setter Property="Foreground" Value="{StaticResource SoftBrush}" />
+      <Setter Property="Foreground" Value="{DynamicResource FrameTextBrush}" />
       <Setter Property="FontSize" Value="11" />
+      <Setter Property="Template">
+        <ControlTemplate>
+          <Border Background="{TemplateBinding Background}"
+                  BorderBrush="{TemplateBinding BorderBrush}"
+                  BorderThickness="{TemplateBinding BorderThickness}"
+                  CornerRadius="{TemplateBinding CornerRadius}"
+                  Padding="{TemplateBinding Padding}">
+            <ContentPresenter Content="{TemplateBinding Content}"
+                              ContentTemplate="{TemplateBinding ContentTemplate}"
+                              HorizontalContentAlignment="{TemplateBinding HorizontalContentAlignment}"
+                              VerticalContentAlignment="{TemplateBinding VerticalContentAlignment}" />
+          </Border>
+        </ControlTemplate>
+      </Setter>
+    </Style>
+    <Style Selector="Button.task:pointerover">
+      <Setter Property="Background" Value="{DynamicResource HoverWashBrush}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource FrameHairlineBrush}" />
+      <Setter Property="Foreground" Value="{DynamicResource FrameTextBrush}" />
     </Style>
     <Style Selector="Button.task.active">
-      <Setter Property="Background" Value="{StaticResource TaskActiveBrush}" />
-      <Setter Property="BorderBrush" Value="{StaticResource TaskActiveBorderBrush}" />
+      <Setter Property="Background" Value="{DynamicResource TaskActiveBrush}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource TaskActiveBorderBrush}" />
+      <Setter Property="Foreground" Value="White" />
+    </Style>
+    <Style Selector="Button.task.active:pointerover">
+      <Setter Property="Background" Value="{DynamicResource TaskActiveBrush}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource TaskActiveBorderBrush}" />
+      <Setter Property="Foreground" Value="White" />
+    </Style>
+    <Style Selector="Button.task:pressed">
+      <Setter Property="Background" Value="{DynamicResource TaskActiveBrush}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource TaskActiveBorderBrush}" />
       <Setter Property="Foreground" Value="White" />
     </Style>
     <Style Selector="Button.task.minimized"><Setter Property="Opacity" Value="0.55" /></Style>
+    <Style Selector="Button.task.minimized:pointerover"><Setter Property="Opacity" Value="1" /></Style>
     <Style Selector="Button.start">
       <Setter Property="Height" Value="32" />
       <Setter Property="Padding" Value="16,0" />
@@ -342,16 +457,64 @@
       <Setter Property="FontWeight" Value="Bold" />
       <Setter Property="VerticalContentAlignment" Value="Center" />
       <Setter Property="HorizontalContentAlignment" Value="Center" />
+      <Setter Property="Template">
+        <ControlTemplate>
+          <Border Background="{TemplateBinding Background}"
+                  BorderBrush="{TemplateBinding BorderBrush}"
+                  BorderThickness="{TemplateBinding BorderThickness}"
+                  CornerRadius="{TemplateBinding CornerRadius}"
+                  Padding="{TemplateBinding Padding}">
+            <ContentPresenter Content="{TemplateBinding Content}"
+                              ContentTemplate="{TemplateBinding ContentTemplate}"
+                              HorizontalContentAlignment="{TemplateBinding HorizontalContentAlignment}"
+                              VerticalContentAlignment="{TemplateBinding VerticalContentAlignment}" />
+          </Border>
+        </ControlTemplate>
+      </Setter>
+    </Style>
+    <Style Selector="Button.start:pointerover">
+      <Setter Property="Background" Value="{DynamicResource StartBrush}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource StartBorderBrush}" />
+      <Setter Property="Foreground" Value="White" />
+    </Style>
+    <Style Selector="Button.start:pressed">
+      <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
+      <Setter Property="Foreground" Value="White" />
     </Style>
     <Style Selector="Button.hud-item">
       <Setter Property="Background" Value="Transparent" />
-      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="BorderBrush" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="1" />
       <Setter Property="Padding" Value="8,0" />
-      <Setter Property="Foreground" Value="{StaticResource SoftBrush}" />
+      <Setter Property="CornerRadius" Value="5" />
+      <Setter Property="Foreground" Value="{DynamicResource FrameTextBrush}" />
       <Setter Property="FontSize" Value="11" />
       <Setter Property="VerticalContentAlignment" Value="Center" />
+      <Setter Property="Template">
+        <ControlTemplate>
+          <Border Background="{TemplateBinding Background}"
+                  BorderBrush="{TemplateBinding BorderBrush}"
+                  BorderThickness="{TemplateBinding BorderThickness}"
+                  CornerRadius="{TemplateBinding CornerRadius}"
+                  Padding="{TemplateBinding Padding}">
+            <ContentPresenter Content="{TemplateBinding Content}"
+                              ContentTemplate="{TemplateBinding ContentTemplate}"
+                              HorizontalContentAlignment="{TemplateBinding HorizontalContentAlignment}"
+                              VerticalContentAlignment="{TemplateBinding VerticalContentAlignment}" />
+          </Border>
+        </ControlTemplate>
+      </Setter>
     </Style>
-    <Style Selector="Button.hud-item:pointerover"><Setter Property="Foreground" Value="White" /></Style>
+    <Style Selector="Button.hud-item:pointerover">
+      <Setter Property="Background" Value="{DynamicResource HoverWashBrush}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource FrameHairlineBrush}" />
+      <Setter Property="Foreground" Value="White" />
+    </Style>
+    <Style Selector="Button.hud-item:pressed">
+      <Setter Property="Background" Value="{DynamicResource TaskActiveBrush}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource TaskActiveBorderBrush}" />
+      <Setter Property="Foreground" Value="White" />
+    </Style>
     <!-- The visual stays a 12px dot; the button around it is a 24x24
          transparent hit area (HIG minimum click target). -->
     <Style Selector="Button.map-node">
@@ -400,9 +563,85 @@
       <Setter Property="BorderThickness" Value="1" />
       <Setter Property="CornerRadius" Value="5" />
       <Setter Property="Foreground" Value="{StaticResource TextBrush}" />
-      <Setter Property="CaretBrush" Value="White" />
+      <Setter Property="CaretBrush" Value="{StaticResource TextBrush}" />
       <Setter Property="SelectionBrush" Value="{StaticResource TextSelectionBrush}" />
       <Setter Property="FontSize" Value="11" />
       <Setter Property="VerticalContentAlignment" Value="Center" />
     </Style>
+    <Style Selector="Button.start">
+      <Setter Property="Foreground" Value="{StaticResource FrameTextBrush}" />
+    </Style>
+    <Style Selector="Button.task">
+      <Setter Property="Foreground" Value="{StaticResource FrameTextBrush}" />
+    </Style>
+    <Style Selector="Button.hud-item">
+      <Setter Property="Foreground" Value="{StaticResource FrameTextBrush}" />
+    </Style>
+  <!-- Prevent Fluent interaction states from replacing Mixtar's palette. -->
+  <Style Selector="TextBox:pointerover">
+    <Setter Property="Background" Value="{DynamicResource InputBackBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource InputBorderBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
+  </Style>
+  <Style Selector="TextBox:focus">
+    <Setter Property="Background" Value="{DynamicResource InputBackBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource InputBorderBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
+    <Setter Property="CaretBrush" Value="{DynamicResource TextBrush}" />
+  </Style>
+  <Style Selector="TextBox:focus-within">
+    <Setter Property="Background" Value="{DynamicResource InputBackBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource InputBorderBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
+  </Style>
+  <Style Selector="Button.tool:pointerover">
+    <Setter Property="Background" Value="{DynamicResource ToolBackBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
+  </Style>
+  <Style Selector="Button.tool:pressed">
+    <Setter Property="Background" Value="{DynamicResource ItemHoverBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
+  </Style>
+  <Style Selector="Button.crumb:pointerover">
+    <Setter Property="Background" Value="{DynamicResource ItemHoverBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
+  </Style>
+  <Style Selector="Button.tree:pointerover">
+    <Setter Property="Background" Value="{DynamicResource ItemHoverBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
+  </Style>
+  <Style Selector="TextBox.terminal-input">
+    <Setter Property="Padding" Value="0" />
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="CornerRadius" Value="0" />
+    <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
+    <Setter Property="CaretBrush" Value="{DynamicResource TextBrush}" />
+    <Setter Property="SelectionBrush" Value="{DynamicResource TextSelectionBrush}" />
+  </Style>
+  <Style Selector="TextBox.terminal-input:pointerover">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
+  </Style>
+  <Style Selector="TextBox.terminal-input:focus">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
+  </Style>
+  <Style Selector="TextBox.terminal-input:focus-within">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
+  </Style>
+  <Style Selector="TextBox.terminal-input /template/ Border#PART_BorderElement">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+  </Style>
 </Styles>

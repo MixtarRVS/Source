@@ -26,7 +26,7 @@ FORBIDDEN_TOP_LEVEL = {
 REQUIRED_PATHS = (
     "System/Core/Graphics/MWM",
     "System/Core/Graphics/start-graphics",
-    "System/Core/Product/Workbench/Workbench",
+    "System/UX/Workbench/Workbench",
     "System/Configuration/Graphics/MDDM.config",
     "System/Configuration/OpenRC/init.d/mixtar-graphics",
 )
@@ -57,7 +57,7 @@ def repository_path(value: str, *, output: bool = False) -> Path:
 
 def repository_relative(path: Path) -> Path:
     physical = path.resolve(strict=False)
-    for area in ("Output", "out", "Product", "Release", "Root", "Kernel"):
+    for area in ("Output", "out", "Product", "System", "Release", "Root", "Kernel"):
         anchor = (REPO / area).resolve(strict=False)
         try:
             suffix = physical.relative_to(anchor)

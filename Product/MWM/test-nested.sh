@@ -12,7 +12,7 @@ graphics_mode="${MIXTAR_GRAPHICS_MODE:-auto}"
 
 loader="$mwm/System/Libraries/Loader/ld-linux-x86-64.so.2"
 mwm_binary="$mwm/System/Core/Graphics/MWM"
-workbench_dir="$graphics/System/Core/Product/Workbench"
+workbench_dir="$graphics/System/UX/Workbench"
 workbench="$workbench_dir/Workbench"
 libraries="$mwm/System/Libraries/Graphics:$graphics/System/Libraries/Graphics:$mwm/System/Libraries:$graphics/System/Libraries:$workbench_dir"
 

@@ -16,7 +16,7 @@ using Avalonia.Threading;
 using Avalonia.VisualTree;
 using IOPath = System.IO.Path;
 
-namespace Mixtar.Product.Workbench;
+namespace Mixtar.UX.Workbench;
 
 public sealed partial class MainWindow
 {
@@ -352,7 +352,7 @@ public sealed partial class MainWindow
     {
         BreadcrumbPanel.Children.Clear();
         var isDrivePath = path.Length >= 2 && path[1] == ':';
-        var rootLabel = isDrivePath ? $"▰ {DriveDisplayName(path[..1])}" : "⌂ MixtarRVS";
+        var rootLabel = isDrivePath ? $"▰ {DriveBreadcrumb(path)}" : "⌂ MixtarRVS";
         var rootTarget = isDrivePath ? path[..2] + IOPath.DirectorySeparatorChar : "/";
         BreadcrumbPanel.Children.Add(CrumbButton(rootLabel, rootTarget));
 
@@ -415,19 +415,7 @@ public sealed partial class MainWindow
 
         var sizeBytes = info is FileInfo file ? file.Length : -1;
         var size = sizeBytes >= 0 ? FormatSize(sizeBytes) : "-";
-        var entries = "-";
-        if (isDirectory && type != "Link")
-        {
-            try
-            {
-                entries = Directory.EnumerateFileSystemEntries(info.FullName).Take(1000).Count()
-                    .ToString(CultureInfo.InvariantCulture);
-            }
-            catch
-            {
-                entries = "?";
-            }
-        }
+        var entries = isDirectory && type != "Link" ? "dir" : "-";
 
         var modifiedAt = info.LastWriteTime;
         return new Listing(info.Name, info.FullName, isDirectory, type, sizeBytes, size, modifiedAt,
@@ -442,7 +430,7 @@ public sealed partial class MainWindow
         _ => $"{bytes / (1024.0 * 1024 * 1024):0.##} G"
     };
 
-    private Listing[] ListDirectory(string path)
+    private Listing[] ListDirectoryBlocking(string path)
     {
         try
         {
@@ -451,8 +439,7 @@ public sealed partial class MainWindow
         }
         catch (Exception error)
         {
-            AppendTerminal($"[FS] {path}: {error.Message}", "#FF5C7B");
-            return [];
+            throw new IOException($"Could not enumerate {path}.", error);
         }
     }
 
@@ -862,12 +849,12 @@ public sealed partial class MainWindow
                     var target = IOPath.Combine(_currentPath, fresh);
                     if (entry.IsDirectory)
                     {
-                        Directory.Move(entry.FullPath, target);
+                        FileMutationPolicy.MoveDirectory(entry.FullPath, target);
                         RetargetTabs(entry.FullPath, target);
                     }
                     else
                     {
-                        File.Move(entry.FullPath, target);
+                        FileMutationPolicy.MoveFile(entry.FullPath, target);
                     }
 
                     _selectedPaths.Remove(entry.FullPath);
@@ -910,7 +897,7 @@ public sealed partial class MainWindow
     }
 
     // Renaming a directory must not orphan tabs that live inside it.
-    private void RetargetTabs(string oldPath, string newPath)
+    private void RetargetTabsLegacy(string oldPath, string newPath)
     {
         foreach (var tab in _fileTabs)
         {
@@ -941,7 +928,7 @@ public sealed partial class MainWindow
                 counter++;
             }
 
-            Directory.CreateDirectory(target);
+            FileMutationPolicy.CreateDirectory(target);
             RenderFiles();
         }
         catch (Exception error)
@@ -987,11 +974,11 @@ public sealed partial class MainWindow
             {
                 if (Directory.Exists(path))
                 {
-                    Directory.Delete(path, recursive: false);
+                    FileMutationPolicy.DeleteDirectory(path);
                 }
                 else
                 {
-                    File.Delete(path);
+                    FileMutationPolicy.DeleteFile(path);
                 }
 
                 _selectedPaths.Remove(path);
@@ -1021,25 +1008,8 @@ public sealed partial class MainWindow
     {
         if (ImageExtensions.Contains(IOPath.GetExtension(path).ToLowerInvariant()))
         {
-            try
-            {
-                var bitmap = new Avalonia.Media.Imaging.Bitmap(path);
-                var previous = _viewerBitmap;
-                _viewerBitmap = bitmap;
-                ViewerImage.Source = bitmap;
-                ViewerImage.IsVisible = true;
-                ViewerContent.IsVisible = false;
-                ViewerTitle.Text =
-                    $"VIEWER - {IOPath.GetFileName(path).ToUpperInvariant()} ({bitmap.PixelSize.Width}x{bitmap.PixelSize.Height})";
-                ViewerScroll.Offset = default;
-                ShowWindow(ViewerWindow);
-                previous?.Dispose();
-                return;
-            }
-            catch
-            {
-                // Corrupt or unsupported image - fall back to the text path.
-            }
+            BeginLoadViewerImage(path);
+            return;
         }
 
         const int limit = 200 * 1024;
@@ -1126,7 +1096,7 @@ public sealed partial class MainWindow
         return path.Length > 1 ? path.TrimEnd('/', '\\') : path;
     }
 
-    private static string ParentPath(string path)
+    private static string ParentPathLegacy(string path)
     {
         var parent = IOPath.GetDirectoryName(path.TrimEnd('/', '\\'));
         return string.IsNullOrEmpty(parent) ? "/" : parent;
