@@ -84,7 +84,7 @@
     </Style>
     <Style Selector="Button.tool">
       <Setter Property="Height" Value="28" />
-      <Setter Property="Padding" Value="10,0" />
+      <Setter Property="Padding" Value="12,0" />
       <Setter Property="Background" Value="#B2262A31" />
       <Setter Property="BorderBrush" Value="#47FFFFFF" />
       <Setter Property="BorderThickness" Value="1" />
@@ -96,9 +96,9 @@
     <Style Selector="Button.tool:pointerover"><Setter Property="BorderBrush" Value="{StaticResource AccentBrush}" /></Style>
     <Style Selector="Button.tool.danger"><Setter Property="BorderBrush" Value="#B0FF5C7B" /></Style>
     <Style Selector="Button.tree">
-      <Setter Property="Height" Value="27" />
+      <Setter Property="Height" Value="28" />
       <Setter Property="HorizontalContentAlignment" Value="Left" />
-      <Setter Property="Padding" Value="9,0" />
+      <Setter Property="Padding" Value="8,0" />
       <Setter Property="Background" Value="Transparent" />
       <Setter Property="BorderThickness" Value="0" />
       <Setter Property="CornerRadius" Value="4" />
@@ -114,14 +114,15 @@
       <Setter Property="HorizontalContentAlignment" Value="Left" />
       <Setter Property="Foreground" Value="#8BBCFF" />
       <Setter Property="FontFamily" Value="Noto Sans Mono" />
-      <Setter Property="FontSize" Value="9" />
+      <Setter Property="FontSize" Value="10" />
       <Setter Property="VerticalContentAlignment" Value="Center" />
     </Style>
     <Style Selector="Button.column-header:pointerover"><Setter Property="Foreground" Value="White" /></Style>
     <Style Selector="Button.crumb">
       <Setter Property="Background" Value="Transparent" />
       <Setter Property="BorderThickness" Value="0" />
-      <Setter Property="Padding" Value="5,2" />
+      <Setter Property="MinHeight" Value="24" />
+      <Setter Property="Padding" Value="8,0" />
       <Setter Property="CornerRadius" Value="4" />
       <Setter Property="Foreground" Value="#C2DBFF" />
       <Setter Property="FontFamily" Value="Noto Sans Mono" />
@@ -135,7 +136,7 @@
     <!-- Titlebar tabs per Mixtar-Studio: bottom-aligned, 6px top radius,
          active tab bridges into the window body. -->
     <Style Selector="Button.file-tab">
-      <Setter Property="Padding" Value="14,6" />
+      <Setter Property="Padding" Value="12,4" />
       <Setter Property="CornerRadius" Value="6,6,0,0" />
       <Setter Property="BorderThickness" Value="0" />
       <Setter Property="Background" Value="Transparent" />
@@ -152,14 +153,14 @@
       <Setter Property="Foreground" Value="White" />
     </Style>
     <Style Selector="Button.tab-add">
-      <Setter Property="Width" Value="26" />
-      <Setter Property="Height" Value="26" />
+      <Setter Property="Width" Value="32" />
+      <Setter Property="Height" Value="32" />
       <Setter Property="Padding" Value="0" />
       <Setter Property="CornerRadius" Value="6" />
       <Setter Property="BorderThickness" Value="0" />
       <Setter Property="Background" Value="Transparent" />
       <Setter Property="Foreground" Value="#A9B4C4" />
-      <Setter Property="FontSize" Value="14" />
+      <Setter Property="FontSize" Value="13" />
       <Setter Property="HorizontalContentAlignment" Value="Center" />
       <Setter Property="VerticalContentAlignment" Value="Center" />
     </Style>
@@ -168,16 +169,16 @@
       <Setter Property="Foreground" Value="White" />
     </Style>
     <Style Selector="Button.tab-close">
-      <Setter Property="Width" Value="18" />
-      <Setter Property="Height" Value="18" />
-      <Setter Property="MinWidth" Value="18" />
-      <Setter Property="MinHeight" Value="18" />
+      <Setter Property="Width" Value="24" />
+      <Setter Property="Height" Value="24" />
+      <Setter Property="MinWidth" Value="24" />
+      <Setter Property="MinHeight" Value="24" />
       <Setter Property="Padding" Value="0" />
       <Setter Property="CornerRadius" Value="4" />
       <Setter Property="BorderThickness" Value="0" />
       <Setter Property="Background" Value="Transparent" />
       <Setter Property="Foreground" Value="#8894A6" />
-      <Setter Property="FontSize" Value="9" />
+      <Setter Property="FontSize" Value="10" />
       <Setter Property="HorizontalContentAlignment" Value="Center" />
       <Setter Property="VerticalContentAlignment" Value="Center" />
     </Style>
@@ -186,9 +187,9 @@
       <Setter Property="Foreground" Value="White" />
     </Style>
     <Style Selector="Button.task">
-      <Setter Property="Height" Value="31" />
+      <Setter Property="Height" Value="32" />
       <Setter Property="MinWidth" Value="92" />
-      <Setter Property="Padding" Value="10,0" />
+      <Setter Property="Padding" Value="12,0" />
       <Setter Property="HorizontalContentAlignment" Value="Left" />
       <Setter Property="VerticalContentAlignment" Value="Center" />
       <Setter Property="Background" Value="Transparent" />
@@ -205,8 +206,8 @@
     </Style>
     <Style Selector="Button.task.minimized"><Setter Property="Opacity" Value="0.55" /></Style>
     <Style Selector="Button.start">
-      <Setter Property="Height" Value="34" />
-      <Setter Property="Padding" Value="14,0" />
+      <Setter Property="Height" Value="32" />
+      <Setter Property="Padding" Value="16,0" />
       <Setter Property="Background" Value="#0B65D8" />
       <Setter Property="BorderBrush" Value="#5EA8FF" />
       <Setter Property="BorderThickness" Value="1" />
@@ -225,15 +226,25 @@
       <Setter Property="VerticalContentAlignment" Value="Center" />
     </Style>
     <Style Selector="Button.hud-item:pointerover"><Setter Property="Foreground" Value="White" /></Style>
+    <!-- The visual stays a 12px dot; the button around it is a 24x24
+         transparent hit area (HIG minimum click target). -->
     <Style Selector="Button.map-node">
-      <Setter Property="Width" Value="12" />
-      <Setter Property="Height" Value="12" />
-      <Setter Property="MinWidth" Value="12" />
-      <Setter Property="MinHeight" Value="12" />
+      <Setter Property="Width" Value="24" />
+      <Setter Property="Height" Value="24" />
+      <Setter Property="MinWidth" Value="24" />
+      <Setter Property="MinHeight" Value="24" />
       <Setter Property="Padding" Value="0" />
-      <Setter Property="CornerRadius" Value="6" />
       <Setter Property="BorderThickness" Value="0" />
       <Setter Property="Background" Value="#6B94C9" />
+      <Setter Property="Template">
+        <ControlTemplate>
+          <Border Background="Transparent">
+            <Border Width="12" Height="12" CornerRadius="6"
+                    HorizontalAlignment="Center" VerticalAlignment="Center"
+                    Background="{TemplateBinding Background}" />
+          </Border>
+        </ControlTemplate>
+      </Setter>
     </Style>
     <Style Selector="Button.map-node.local"><Setter Property="Background" Value="#FFC65C" /></Style>
     <Style Selector="Button.map-node.selected"><Setter Property="Background" Value="White" /></Style>
@@ -244,8 +255,8 @@
       <Setter Property="CornerRadius" Value="7" />
     </Style>
     <Style Selector="Border.file-row">
-      <Setter Property="MinHeight" Value="30" />
-      <Setter Property="Padding" Value="10,0" />
+      <Setter Property="MinHeight" Value="32" />
+      <Setter Property="Padding" Value="12,0" />
       <Setter Property="BorderBrush" Value="#0EFFFFFF" />
       <Setter Property="BorderThickness" Value="0,0,0,1" />
       <Setter Property="Background" Value="Transparent" />
@@ -257,6 +268,7 @@
       <Setter Property="BorderThickness" Value="3,0,0,1" />
     </Style>
     <Style Selector="TextBox">
+      <Setter Property="MinHeight" Value="28" />
       <Setter Property="Background" Value="#80000000" />
       <Setter Property="BorderBrush" Value="#425FA2FF" />
       <Setter Property="BorderThickness" Value="1" />

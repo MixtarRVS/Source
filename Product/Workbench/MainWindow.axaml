@@ -63,13 +63,13 @@
               </Grid>
             </Border>
             <Grid Grid.Row="1" RowDefinitions="*,34" Background="#F20E1013">
-              <ScrollViewer x:Name="TerminalScroll" Margin="14,12,14,2">
-                <StackPanel x:Name="TerminalLines" Spacing="3" />
+              <ScrollViewer x:Name="TerminalScroll" Margin="12,12,12,4">
+                <StackPanel x:Name="TerminalLines" Spacing="4" />
               </ScrollViewer>
-              <Grid Grid.Row="1" Margin="14,0,14,6" ColumnDefinitions="Auto,*">
+              <Grid Grid.Row="1" Margin="12,0" ColumnDefinitions="Auto,*">
                 <TextBlock x:Name="TerminalPrompt" Text="root@mixtar:/#" Foreground="#27EE91" FontWeight="Bold"
                            FontFamily="Noto Sans Mono" FontSize="11" VerticalAlignment="Center" />
-                <TextBox x:Name="TerminalInput" Grid.Column="1" Margin="7,0,0,0" Padding="3,0" Background="Transparent"
+                <TextBox x:Name="TerminalInput" Grid.Column="1" Margin="8,0,0,0" Padding="4,0" Background="Transparent"
                          BorderThickness="0" FontFamily="Noto Sans Mono" KeyDown="OnTerminalKeyDown" />
               </Grid>
             </Grid>
@@ -85,8 +85,8 @@
               <Grid ColumnDefinitions="*,Auto">
                 <StackPanel Orientation="Horizontal" Spacing="4" VerticalAlignment="Bottom">
                   <StackPanel x:Name="FileTabsPanel" Orientation="Horizontal" Spacing="4" VerticalAlignment="Bottom" />
-                  <Button Classes="tab-add" Content="+" Click="OnAddFileTab" VerticalAlignment="Center"
-                          Margin="2,0,0,5" ToolTip.Tip="New tab" />
+                  <Button Classes="tab-add" Content="+" Click="OnAddFileTab" VerticalAlignment="Bottom"
+                          Margin="4,0,0,0" ToolTip.Tip="New tab" />
                 </StackPanel>
                 <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="0" VerticalAlignment="Top">
                   <Button Classes="window-dot min" Tag="FilesWindow" Content="–" Click="OnDesktopMinimize" />
@@ -95,7 +95,7 @@
                 </StackPanel>
               </Grid>
             </Border>
-            <Grid Grid.Row="1" ColumnDefinitions="78,*,170" Margin="9,7" ColumnSpacing="6">
+            <Grid Grid.Row="1" ColumnDefinitions="78,*,170" Margin="8,8" ColumnSpacing="8">
               <StackPanel Orientation="Horizontal" Spacing="4">
                 <Button Classes="tool" Width="24" Padding="0" Tag="back" Content="&lt;" Click="OnAction" />
                 <Button Classes="tool" Width="24" Padding="0" Tag="forward" Content="&gt;" Click="OnAction" />
@@ -113,34 +113,34 @@
                 <Popup x:Name="AddressPopup" PlacementTarget="{Binding ElementName=AddressBox}"
                        Placement="BottomEdgeAlignedLeft" IsLightDismissEnabled="False">
                   <Border Background="#F514161A" BorderBrush="{StaticResource StrokeBrush}" BorderThickness="1"
-                          CornerRadius="7" Padding="6" MinWidth="380" BoxShadow="0 14 40 0 #C0000000">
-                    <StackPanel x:Name="AddressSuggestions" Spacing="1" />
+                          CornerRadius="7" Padding="8" MinWidth="380" BoxShadow="0 14 40 0 #C0000000">
+                    <StackPanel x:Name="AddressSuggestions" Spacing="0" />
                   </Border>
                 </Popup>
               </Grid>
               <TextBox x:Name="FileSearch" Grid.Column="2" PlaceholderText="Search" Padding="8,0" TextChanged="OnFileSearchChanged" />
             </Grid>
-            <Grid Grid.Row="2" ColumnDefinitions="Auto,Auto,Auto,*" Margin="9,3,9,4" ColumnSpacing="6">
+            <Grid Grid.Row="2" ColumnDefinitions="Auto,Auto,Auto,*" Margin="8,0" ColumnSpacing="8">
               <Button Classes="tool" Tag="reload" Content="Refresh" Click="OnAction" />
               <Button Grid.Column="1" Classes="tool" Tag="newfolder" Content="New Folder" Click="OnAction" />
               <Button x:Name="DeleteButton" Grid.Column="2" Classes="tool danger" Tag="delete" Content="Delete" Click="OnAction" />
               <TextBlock x:Name="PathHint" Grid.Column="3" Text="" Foreground="#668AB9"
-                         HorizontalAlignment="Right" VerticalAlignment="Center" FontFamily="Noto Sans Mono" FontSize="9" />
+                         HorizontalAlignment="Right" VerticalAlignment="Center" FontFamily="Noto Sans Mono" FontSize="10" />
             </Grid>
             <Grid Grid.Row="3" ColumnDefinitions="170,*">
-              <Border BorderBrush="#344B97FF" BorderThickness="0,1,1,0" Background="#3D0F1114" Padding="8,6">
+              <Border BorderBrush="#344B97FF" BorderThickness="0,1,1,0" Background="#3D0F1114" Padding="8,8">
                 <ScrollViewer>
-                  <StackPanel x:Name="TreePanel" Spacing="1" />
+                  <StackPanel x:Name="TreePanel" Spacing="0" />
                 </ScrollViewer>
               </Border>
               <Grid Grid.Column="1" RowDefinitions="28,*">
-                <Border Background="#E61A1D22" Padding="10,0">
+                <Border Background="#E61A1D22" Padding="12,0">
                   <Grid ColumnDefinitions="190,60,74,96,*">
                     <Button Classes="column-header" Tag="name" Content="Name" Click="OnSortColumn" />
                     <Button Grid.Column="1" Classes="column-header" Tag="type" Content="Type" Click="OnSortColumn" />
                     <Button Grid.Column="2" Classes="column-header" Tag="size" Content="Size" Click="OnSortColumn" />
                     <Button Grid.Column="3" Classes="column-header" Tag="modified" Content="Modified" Click="OnSortColumn" />
-                    <TextBlock Grid.Column="4" Text="Entries" Foreground="#8BBCFF" FontFamily="Noto Sans Mono" FontSize="9" VerticalAlignment="Center" />
+                    <TextBlock Grid.Column="4" Text="Entries" Foreground="#8BBCFF" FontFamily="Noto Sans Mono" FontSize="10" VerticalAlignment="Center" />
                   </Grid>
                 </Border>
                 <ScrollViewer Grid.Row="1">
@@ -148,13 +148,13 @@
                 </ScrollViewer>
               </Grid>
             </Grid>
-            <Border Grid.Row="4" Background="#520A0C0F" Padding="9,0">
+            <Border Grid.Row="4" Background="#520A0C0F" Padding="8,0">
               <Grid ColumnDefinitions="Auto,*,Auto">
-                <TextBlock x:Name="ItemCount" Text="0 items" Foreground="#7FAEE6" FontFamily="Noto Sans Mono" FontSize="9" VerticalAlignment="Center" />
+                <TextBlock x:Name="ItemCount" Text="0 items" Foreground="#7FAEE6" FontFamily="Noto Sans Mono" FontSize="10" VerticalAlignment="Center" />
                 <TextBlock x:Name="VolumeInfo" Grid.Column="1" Text="" Foreground="#668AB9" FontFamily="Noto Sans Mono"
-                           FontSize="9" VerticalAlignment="Center" HorizontalAlignment="Center" />
+                           FontSize="10" VerticalAlignment="Center" HorizontalAlignment="Center" />
                 <TextBlock x:Name="SelectionStatus" Grid.Column="2" Text="No selection" Foreground="#7FAEE6"
-                           FontFamily="Noto Sans Mono" FontSize="9" VerticalAlignment="Center" />
+                           FontFamily="Noto Sans Mono" FontSize="10" VerticalAlignment="Center" />
               </Grid>
             </Border>
           </Grid>
@@ -174,39 +174,39 @@
                 </StackPanel>
               </Grid>
             </Border>
-            <StackPanel Grid.Row="1" Margin="12,10" Spacing="8">
+            <StackPanel Grid.Row="1" Margin="12,12" Spacing="8">
               <Grid ColumnDefinitions="50,*,40">
-                <TextBlock Text="CPU" FontSize="9" />
+                <TextBlock Text="CPU" FontSize="10" />
                 <Border x:Name="CpuTrack" Grid.Column="1" Height="6" Background="#17FFFFFF" CornerRadius="3" VerticalAlignment="Center">
                   <Border x:Name="CpuBar" Width="0" HorizontalAlignment="Left" Background="#18B9FF" CornerRadius="3" />
                 </Border>
-                <TextBlock x:Name="CpuText" Grid.Column="2" Text="--" FontSize="9" HorizontalAlignment="Right" />
+                <TextBlock x:Name="CpuText" Grid.Column="2" Text="--" FontSize="10" HorizontalAlignment="Right" />
               </Grid>
               <Border Classes="card" Padding="4" Height="46">
                 <Canvas x:Name="CpuGraph" ClipToBounds="True" />
               </Border>
               <Grid ColumnDefinitions="50,*,40">
-                <TextBlock Text="Memory" FontSize="9" />
+                <TextBlock Text="Memory" FontSize="10" />
                 <Border x:Name="MemTrack" Grid.Column="1" Height="6" Background="#17FFFFFF" CornerRadius="3" VerticalAlignment="Center">
                   <Border x:Name="MemBar" Width="0" HorizontalAlignment="Left" Background="#18B9FF" CornerRadius="3" />
                 </Border>
-                <TextBlock x:Name="MemText" Grid.Column="2" Text="--" FontSize="9" HorizontalAlignment="Right" />
+                <TextBlock x:Name="MemText" Grid.Column="2" Text="--" FontSize="10" HorizontalAlignment="Right" />
               </Grid>
               <Grid ColumnDefinitions="50,*,Auto">
-                <TextBlock Text="Procs" FontSize="9" />
-                <TextBlock x:Name="ProcText" Grid.Column="2" Text="--" FontSize="9" HorizontalAlignment="Right" />
+                <TextBlock Text="Procs" FontSize="10" />
+                <TextBlock x:Name="ProcText" Grid.Column="2" Text="--" FontSize="10" HorizontalAlignment="Right" />
               </Grid>
               <Grid ColumnDefinitions="50,*,Auto">
-                <TextBlock Text="Uptime" FontSize="9" />
-                <TextBlock x:Name="UptimeText" Grid.Column="2" Text="--" FontSize="9" HorizontalAlignment="Right" />
+                <TextBlock Text="Uptime" FontSize="10" />
+                <TextBlock x:Name="UptimeText" Grid.Column="2" Text="--" FontSize="10" HorizontalAlignment="Right" />
               </Grid>
-              <TextBlock Text="TOP PROCESSES" Foreground="#8FC1FF" FontFamily="Noto Sans Mono" FontSize="9" FontWeight="Bold" />
-              <Border Classes="card" Padding="8,6" MinHeight="90">
-                <StackPanel x:Name="ProcessList" Spacing="2" />
+              <TextBlock Text="TOP PROCESSES" Foreground="#8FC1FF" FontFamily="Noto Sans Mono" FontSize="10" FontWeight="Bold" />
+              <Border Classes="card" Padding="8,8" MinHeight="90">
+                <StackPanel x:Name="ProcessList" Spacing="4" />
               </Border>
-              <Border Classes="card" Padding="8,6">
+              <Border Classes="card" Padding="8,8">
                 <TextBlock x:Name="StateLines" Text="reading /System/State..." Foreground="#91B7E8"
-                           FontFamily="Noto Sans Mono" FontSize="8" LineHeight="11" />
+                           FontFamily="Noto Sans Mono" FontSize="10" LineHeight="14" />
               </Border>
             </StackPanel>
           </Grid>
@@ -226,25 +226,25 @@
                 </StackPanel>
               </Grid>
             </Border>
-            <Border Grid.Row="1" Background="#40FFC65C" Padding="10,3">
+            <Border Grid.Row="1" Background="#40FFC65C" Padding="12,4">
               <TextBlock Text="OFFLINE PREVIEW - sample topology, real traceroute planned"
-                         Foreground="#FFE3AC" FontFamily="Noto Sans Mono" FontSize="8" />
+                         Foreground="#FFE3AC" FontFamily="Noto Sans Mono" FontSize="10" />
             </Border>
-            <Grid Grid.Row="2" RowDefinitions="180,Auto,*" Margin="11" RowSpacing="10">
+            <Grid Grid.Row="2" RowDefinitions="180,Auto,*" Margin="12" RowSpacing="12">
               <Border Classes="card" Background="#F0020711">
                 <Canvas Width="344" Height="176">
                   <Line StartPoint="38,78" EndPoint="125,116" Stroke="#416FA8E8" StrokeThickness="1" />
                   <Line StartPoint="125,116" EndPoint="218,66" Stroke="#416FA8E8" StrokeThickness="1" />
                   <Line StartPoint="218,66" EndPoint="320,126" Stroke="#416FA8E8" StrokeThickness="1" />
                   <Line StartPoint="38,78" EndPoint="218,66" Stroke="#244B79B6" StrokeThickness="1" />
-                  <Button Classes="map-node local" Tag="local" Canvas.Left="32" Canvas.Top="72" Click="OnNetworkNode" />
-                  <Button Classes="map-node" Tag="relay" Canvas.Left="119" Canvas.Top="110" Click="OnNetworkNode" />
-                  <Button Classes="map-node selected" Tag="vault" Canvas.Left="212" Canvas.Top="60" Click="OnNetworkNode" />
-                  <Button Classes="map-node" Tag="edge" Canvas.Left="314" Canvas.Top="120" Click="OnNetworkNode" />
+                  <Button Classes="map-node local" Tag="local" Canvas.Left="26" Canvas.Top="66" Click="OnNetworkNode" />
+                  <Button Classes="map-node" Tag="relay" Canvas.Left="113" Canvas.Top="104" Click="OnNetworkNode" />
+                  <Button Classes="map-node selected" Tag="vault" Canvas.Left="206" Canvas.Top="54" Click="OnNetworkNode" />
+                  <Button Classes="map-node" Tag="edge" Canvas.Left="308" Canvas.Top="114" Click="OnNetworkNode" />
                 </Canvas>
               </Border>
-              <Border Grid.Row="1" Classes="card" Padding="10,8">
-                <Grid ColumnDefinitions="82,*" RowDefinitions="Auto,Auto,Auto" RowSpacing="3">
+              <Border Grid.Row="1" Classes="card" Padding="12,8">
+                <Grid ColumnDefinitions="82,*" RowDefinitions="Auto,Auto,Auto" RowSpacing="4">
                   <TextBlock Text="TARGET" Foreground="#8EB6E9" FontSize="10" />
                   <TextBlock x:Name="NodeName" Grid.Column="1" Text="local.mix" FontSize="10" />
                   <TextBlock Grid.Row="1" Text="ADDRESS" Foreground="#8EB6E9" FontSize="10" />
@@ -289,16 +289,16 @@
                 <Button Grid.Column="1" Classes="window-dot close" Tag="SettingsWindow" Content="✕" Click="OnDesktopClose" />
               </Grid>
             </Border>
-            <StackPanel Grid.Row="1" Margin="14,12" Spacing="10">
-              <TextBlock Text="UI SCALE" Foreground="#8FC1FF" FontFamily="Noto Sans Mono" FontSize="9" FontWeight="Bold" />
-              <StackPanel Orientation="Horizontal" Spacing="6">
+            <StackPanel Grid.Row="1" Margin="12,12" Spacing="12">
+              <TextBlock Text="UI SCALE" Foreground="#8FC1FF" FontFamily="Noto Sans Mono" FontSize="10" FontWeight="Bold" />
+              <StackPanel Orientation="Horizontal" Spacing="8">
                 <Button Classes="tool" Tag="scale:auto" Content="Auto" Click="OnAction" />
                 <Button Classes="tool" Tag="scale:1" Content="100%" Click="OnAction" />
                 <Button Classes="tool" Tag="scale:1.25" Content="125%" Click="OnAction" />
                 <Button Classes="tool" Tag="scale:1.5" Content="150%" Click="OnAction" />
                 <Button Classes="tool" Tag="scale:2" Content="200%" Click="OnAction" />
               </StackPanel>
-              <TextBlock x:Name="ScaleInfo" Text="" Foreground="#91B7E8" FontFamily="Noto Sans Mono" FontSize="9" />
+              <TextBlock x:Name="ScaleInfo" Text="" Foreground="#91B7E8" FontFamily="Noto Sans Mono" FontSize="10" />
               <TextBlock Text="Scale applies to the whole desktop. Auto follows the screen resolution."
                          Foreground="#668AB9" FontSize="10" TextWrapping="Wrap" />
             </StackPanel>
@@ -334,14 +334,14 @@
 
       <!-- Start menu -->
       <Border x:Name="StartMenu" IsVisible="False" Width="430" HorizontalAlignment="Left" VerticalAlignment="Bottom"
-              Margin="10,0,0,56" ZIndex="130" Background="#F214161A" BorderBrush="{StaticResource StrokeBrush}"
+              Margin="8,0,0,56" ZIndex="130" Background="#F214161A" BorderBrush="{StaticResource StrokeBrush}"
               BorderThickness="1" CornerRadius="11" BoxShadow="0 24 68 0 #D0000000">
         <Grid RowDefinitions="Auto,Auto">
-          <TextBox x:Name="StartSearch" Margin="13,11" PlaceholderText="Search applications and commands"
-                   Padding="10,0" TextChanged="OnStartSearchChanged" />
-          <Grid Grid.Row="1" ColumnDefinitions="*,*" Margin="13,7,13,13" ColumnSpacing="13">
+          <TextBox x:Name="StartSearch" Margin="12,12" PlaceholderText="Search applications and commands"
+                   Padding="12,0" TextChanged="OnStartSearchChanged" />
+          <Grid Grid.Row="1" ColumnDefinitions="*,*" Margin="12,8,12,12" ColumnSpacing="12">
             <StackPanel x:Name="StartAppsPanel" Spacing="4">
-              <TextBlock Text="APPLICATIONS" Foreground="#8EBDFF" FontFamily="Noto Sans Mono" FontSize="9" FontWeight="Bold" Margin="3,0,0,4" />
+              <TextBlock Text="APPLICATIONS" Foreground="#8EBDFF" FontFamily="Noto Sans Mono" FontSize="10" FontWeight="Bold" Margin="4,0,0,4" />
               <Button Classes="tree" Tag="files" Content="▣  Files Explorer" Click="OnAction" />
               <Button Classes="tree" Tag="terminal" Content="&gt;_  Terminal" Click="OnAction" />
               <Button Classes="tree" Tag="runtime" Content="◈  Runtime Monitor" Click="OnAction" />
@@ -349,7 +349,7 @@
               <Button Classes="tree" Tag="settings" Content="⚙  Settings" Click="OnAction" />
             </StackPanel>
             <StackPanel x:Name="StartSystemPanel" Grid.Column="1" Spacing="4">
-              <TextBlock Text="SYSTEM" Foreground="#8EBDFF" FontFamily="Noto Sans Mono" FontSize="9" FontWeight="Bold" Margin="3,0,0,4" />
+              <TextBlock Text="SYSTEM" Foreground="#8EBDFF" FontFamily="Noto Sans Mono" FontSize="10" FontWeight="Bold" Margin="4,0,0,4" />
               <Button Classes="tree" Tag="root" Content="⌂  Root" Click="OnAction" />
               <Button Classes="tree" Tag="home" Content="●  Home" Click="OnAction" />
               <Button Classes="tree" Tag="verify" Content="✓  Platform State" Click="OnAction" />
@@ -362,10 +362,10 @@
 
       <!-- Command palette -->
       <Border x:Name="CommandPalette" IsVisible="False" Width="620" HorizontalAlignment="Center" VerticalAlignment="Top"
-              Margin="0,78,0,0" ZIndex="150" Background="#F514161A" BorderBrush="{StaticResource StrokeStrongBrush}"
-              BorderThickness="1" CornerRadius="11" Padding="13" BoxShadow="0 26 76 0 #E0000000">
+              Margin="0,80,0,0" ZIndex="150" Background="#F514161A" BorderBrush="{StaticResource StrokeStrongBrush}"
+              BorderThickness="1" CornerRadius="11" Padding="12" BoxShadow="0 26 76 0 #E0000000">
         <StackPanel Spacing="8">
-          <TextBox x:Name="PaletteInput" PlaceholderText="Type a command..." Padding="10,0" KeyDown="OnPaletteKeyDown" />
+          <TextBox x:Name="PaletteInput" PlaceholderText="Type a command..." Height="32" Padding="12,0" KeyDown="OnPaletteKeyDown" />
           <Grid ColumnDefinitions="*,Auto"><TextBlock Text="Files Explorer" /><TextBlock Grid.Column="1" Text="files" Foreground="#7FB2ED" FontFamily="Noto Sans Mono" /></Grid>
           <Grid ColumnDefinitions="*,Auto"><TextBlock Text="Terminal" /><TextBlock Grid.Column="1" Text="terminal" Foreground="#7FB2ED" FontFamily="Noto Sans Mono" /></Grid>
           <Grid ColumnDefinitions="*,Auto"><TextBlock Text="Runtime Monitor" /><TextBlock Grid.Column="1" Text="runtime" Foreground="#7FB2ED" FontFamily="Noto Sans Mono" /></Grid>
@@ -388,12 +388,12 @@
       <Border x:Name="ConsoleLayer" ZIndex="200" Background="#F5111316" IsVisible="False">
         <Grid RowDefinitions="*,40,18" Margin="0">
           <ScrollViewer x:Name="ConsoleScroll" Margin="28,24,28,4">
-            <StackPanel x:Name="ConsoleLines" Spacing="3" />
+            <StackPanel x:Name="ConsoleLines" Spacing="4" />
           </ScrollViewer>
           <Grid Grid.Row="1" Margin="28,0" ColumnDefinitions="Auto,*">
             <TextBlock x:Name="ConsolePrompt" Text="system#" Foreground="#27EE91" FontWeight="Bold"
                        FontFamily="Noto Sans Mono" FontSize="12" VerticalAlignment="Center" />
-            <TextBox x:Name="ConsoleInput" Grid.Column="1" Margin="8,0,0,0" Padding="3,0" Background="Transparent"
+            <TextBox x:Name="ConsoleInput" Grid.Column="1" Margin="8,0,0,0" Padding="4,0" Background="Transparent"
                      BorderThickness="0" FontFamily="Noto Sans Mono" KeyDown="OnConsoleKeyDown" />
           </Grid>
           <Border Grid.Row="2" />
@@ -408,7 +408,7 @@
         <Grid ColumnDefinitions="Auto,1,*,Auto" Margin="8,0,8,1" ColumnSpacing="8">
           <Button Grid.Column="0" Classes="start" Tag="start" Click="OnAction" Content="▰  Start" />
           <Border Grid.Column="1" Width="1" Height="24" Background="#20FFFFFF" />
-          <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+          <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
             <Button x:Name="TerminalTask" Classes="task active" Tag="TerminalWindow" Content="▣  Terminal" Click="OnTaskClick" />
             <Button x:Name="FilesTask" Classes="task" Tag="FilesWindow" Content="▣  Files" Click="OnTaskClick" />
             <Button x:Name="RuntimeTask" Classes="task" Tag="RuntimeWindow" Content="◈  Runtime Monitor" Click="OnTaskClick" />
@@ -424,8 +424,8 @@
                          FontSize="10" VerticalAlignment="Center" />
             </Border>
             <TextBlock x:Name="DateText" Text="" Foreground="#91B7E8" FontFamily="Noto Sans Mono"
-                       FontSize="9" VerticalAlignment="Center" />
-            <Button Width="12" Height="30" Padding="0" Margin="4,0,0,0" Background="Transparent"
+                       FontSize="10" VerticalAlignment="Center" />
+            <Button Width="24" Height="32" Padding="0" Margin="4,0,0,0" Background="Transparent"
                     BorderBrush="#20FFFFFF" BorderThickness="1,0,0,0" CornerRadius="0"
                     Tag="showdesktop" Click="OnAction" ToolTip.Tip="Show desktop" />
           </StackPanel>

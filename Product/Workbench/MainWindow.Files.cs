@@ -80,7 +80,7 @@ public sealed partial class MainWindow
     private static TextBlock TreeHeader(string text) => new()
     {
         Text = text,
-        Margin = new Thickness(7, 6, 7, 3),
+        Margin = new Thickness(8, 8, 8, 4),
         Foreground = new SolidColorBrush(Color.Parse("#7EAFE8")),
         FontFamily = new FontFamily("Noto Sans Mono"),
         FontSize = 11,
@@ -372,7 +372,7 @@ public sealed partial class MainWindow
                 Text = "›",
                 Foreground = new SolidColorBrush(Color.Parse("#5E86BC")),
                 FontSize = 10,
-                Margin = new Thickness(2, 0),
+                Margin = new Thickness(4, 0),
                 VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center
             });
             BreadcrumbPanel.Children.Add(CrumbButton(segment, accumulated));
@@ -1067,9 +1067,9 @@ public sealed partial class MainWindow
                 Text = section.Item1,
                 Foreground = new SolidColorBrush(Color.Parse("#7EAFE8")),
                 FontFamily = new FontFamily("Noto Sans Mono"),
-                FontSize = 8,
+                FontSize = 10,
                 FontWeight = FontWeight.Bold,
-                Margin = new Thickness(6, 4, 6, 2)
+                Margin = new Thickness(8, 4, 8, 4)
             });
             foreach (var path in section.Item2)
             {
