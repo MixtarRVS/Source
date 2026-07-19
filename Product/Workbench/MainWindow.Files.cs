@@ -992,7 +992,8 @@ public sealed partial class MainWindow
             }
         }
 
-        if (AddressBox.IsVisible && !Within(AddressBox) && !Within(AddressSuggestions))
+        if (AddressBox.IsVisible && !Within(AddressBox) && !Within(AddressSuggestions) &&
+            !Within(Breadcrumb))
         {
             ExitAddressMode();
         }
