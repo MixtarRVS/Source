@@ -1573,29 +1573,74 @@ public sealed partial class MainWindow : Window
         RenderFileTabs();
     }
 
+    private void OpenBackgroundTab(string path)
+    {
+        SaveActiveTabState();
+        _fileTabs.Add(new FileTab
+        {
+            Path = path,
+            History = new List<string> { path },
+            HistoryIndex = 0
+        });
+        RenderFileTabs();
+    }
+
+    // Explorer semantics: uniform tab width, inline close button,
+    // middle-click closes a tab.
     private void RenderFileTabs()
     {
         FileTabsPanel.Children.Clear();
         for (var index = 0; index < _fileTabs.Count; index++)
         {
             var tab = _fileTabs[index];
-            var button = new Button { Content = TabLabel(tab.Path) };
+            var captured = index;
+
+            var label = new TextBlock
+            {
+                Text = TabLabel(tab.Path),
+                FontSize = 12,
+                VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center,
+                TextTrimming = TextTrimming.CharacterEllipsis
+            };
+            var content = new Grid
+            {
+                ColumnDefinitions =
+                {
+                    new ColumnDefinition(GridLength.Star),
+                    new ColumnDefinition(GridLength.Auto)
+                },
+                Children = { label }
+            };
+            if (_fileTabs.Count > 1)
+            {
+                var close = new Button { Content = "✕" };
+                close.Classes.Add("tab-close");
+                close.Click += (_, _) => CloseFileTab(captured);
+                Grid.SetColumn(close, 1);
+                content.Children.Add(close);
+            }
+
+            var button = new Button
+            {
+                Content = content,
+                Width = 150,
+                HorizontalContentAlignment = Avalonia.Layout.HorizontalAlignment.Stretch
+            };
             button.Classes.Add("file-tab");
             if (index == _activeFileTab)
             {
                 button.Classes.Add("active");
             }
 
-            var captured = index;
             button.Click += (_, _) => SwitchFileTab(captured);
-            if (_fileTabs.Count > 1)
+            button.PointerPressed += (_, args) =>
             {
-                var closeFlyout = new MenuFlyout();
-                var closeItem = new MenuItem { Header = "Close tab" };
-                closeItem.Click += (_, _) => CloseFileTab(captured);
-                closeFlyout.Items.Add(closeItem);
-                button.ContextFlyout = closeFlyout;
-            }
+                if (args.GetCurrentPoint(button).Properties.IsMiddleButtonPressed)
+                {
+                    CloseFileTab(captured);
+                    args.Handled = true;
+                }
+            };
 
             FileTabsPanel.Children.Add(button);
         }
@@ -1788,6 +1833,14 @@ public sealed partial class MainWindow : Window
             row.ContextFlyout = BuildFileContextMenu(captured);
             row.PointerPressed += (_, args) =>
             {
+                if (captured.IsDirectory &&
+                    args.GetCurrentPoint(row).Properties.IsMiddleButtonPressed)
+                {
+                    OpenBackgroundTab(captured.FullPath);
+                    args.Handled = true;
+                    return;
+                }
+
                 if (args.ClickCount >= 2)
                 {
                     if (captured.IsDirectory)
