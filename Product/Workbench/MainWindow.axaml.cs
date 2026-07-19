@@ -84,7 +84,11 @@ public sealed partial class MainWindow : Window
         SizeToPrimaryScreen();
         foreach (var window in DesktopWindows())
         {
-            window.PointerPressed += OnWindowResizePressed;
+            // Tunnel: inside the 7px edge band the resize grab must win over
+            // child buttons (Windows semantics - the frame sliver resizes even
+            // over the caption buttons; the button body below still clicks).
+            window.AddHandler(PointerPressedEvent, OnWindowResizePressed,
+                RoutingStrategies.Tunnel);
             window.PointerMoved += OnWindowResizeMoved;
             window.PointerReleased += OnWindowResizeReleased;
         }
