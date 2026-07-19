@@ -1,5 +1,5 @@
 <Application
-    x:Class="Mixtar.Product.Workbench.App"
+    x:Class="Mixtar.UX.Workbench.App"
     xmlns="https://github.com/avaloniaui"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     RequestedThemeVariant="Dark">

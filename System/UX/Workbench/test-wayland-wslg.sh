@@ -2,10 +2,10 @@
 set -Eeuo pipefail
 
 readonly repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-readonly workbench="${1:-${repo_root}/out/Product/Workbench/linux-x64/Workbench}"
-readonly trace="${2:-${repo_root}/out/Product/Workbench/linux-x64/workbench.strace}"
+readonly workbench="${1:-${repo_root}/out/System/UX/Workbench/linux-x64/Workbench}"
+readonly trace="${2:-${repo_root}/out/System/UX/Workbench/linux-x64/workbench.strace}"
 readonly diagnostic_mode="${3:-strace}"
-readonly weston_log="${repo_root}/out/Product/Workbench/linux-x64/weston.log"
+readonly weston_log="${repo_root}/out/System/UX/Workbench/linux-x64/weston.log"
 readonly socket_name="mixtar-weston-${BASHPID}"
 
 weston_pid=""

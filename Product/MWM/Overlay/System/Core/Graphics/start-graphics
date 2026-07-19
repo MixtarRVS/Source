@@ -127,7 +127,7 @@ start_graphics() {
   layout="$(config_value "$MWM_CONFIG" keyboard_layout us)"
   timeout="$(config_value "$MWM_CONFIG" startup_timeout_seconds 10)"
   launch="$(config_value "$MWM_CONFIG" launch_workbench true)"
-  workbench="$(config_value "$MWM_CONFIG" workbench /System/Core/Product/Workbench/Workbench)"
+  workbench="$(config_value "$MWM_CONFIG" workbench /System/UX/Workbench/Workbench)"
   workbench_mode="$(config_value "$MWM_CONFIG" workbench_graphics_mode auto)"
 
   case "$backend" in
@@ -165,7 +165,7 @@ start_graphics() {
   export SEATD_SOCK="$seat_socket"
   export XKB_CONFIG_ROOT=/System/Configuration/Keyboard/xkeyboard-config-2
   export XKB_DEFAULT_LAYOUT="$layout"
-  export LD_LIBRARY_PATH=/System/Libraries/Graphics:/System/Libraries:/System/Core/Product/Workbench
+  export LD_LIBRARY_PATH=/System/Libraries/Graphics:/System/Libraries:/System/UX/Workbench
   if [ "$workbench_mode" = software ]; then
     export WLR_SCENE_DISABLE_DIRECT_SCANOUT=1
   else
@@ -203,6 +203,23 @@ start_graphics() {
   if [ "$launch" = true ]; then
     export WAYLAND_DISPLAY="$socket"
     export TMPDIR=/Temporary
+    session=/System/Runtime/Sessions/graphical
+    $BB mkdir -p "$session/Launch"
+    $BB cat >"$session/Session.config" <<EOF
+schema = 1
+
+[session]
+id = "graphical"
+user = "Administrator"
+type = "graphical"
+state = "active"
+wayland_display = "$socket"
+EOF
+    $BB chmod 0700 "$session"
+    $BB chmod 0600 "$session/Session.config"
+    export MIXTAR_USER=Administrator
+    export MIXTAR_SESSION_ID=graphical
+    export MIXTAR_STORAGE_WRITE=user-volumes
     if [ "$workbench_mode" != auto ]; then
       export MIXTAR_GRAPHICS_MODE="$workbench_mode"
     else

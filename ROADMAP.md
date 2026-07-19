@@ -1,3 +1,16 @@
+# Bieżąca kolejność P4 - stan kanoniczny 2026-07-19
+
+1. [x] Oddzielić panele Workbencha od aplikacji APX i kierować graficzne APX przez Executor.
+2. [x] Zarejestrować sesję `graphical` z użytkownikiem i `WAYLAND_DISPLAY`.
+3. [x] Ograniczyć zapisy Files do profilu użytkownika i `/Volumes`.
+4. [x] Przenieść Theme i Layout do profilu użytkownika oraz atomowego TOML.
+5. [x] Oprzeć Auto scale na logicznym DPI kompozytora, nie rozdzielczości.
+6. [x] Przenieść skanowanie katalogów i dekodowanie obrazów poza wątek UI.
+7. [ ] Zbudować jeden obraz kontrolny i potwierdzić zmiany w QEMU oraz Hyper-V.
+8. [ ] Dodać MDDM, prawdziwy PTY/zsh i broker operacji administracyjnych.
+
+Starsze listy kolejności są historyczne. W razie sprzeczności obowiązuje lista
+powyżej, następnie P4.md.
 # MixtarRVS: roadmap
 
 ## 1. Status

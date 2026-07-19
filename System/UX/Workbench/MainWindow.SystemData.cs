@@ -16,7 +16,7 @@ using Avalonia.Threading;
 using Avalonia.VisualTree;
 using IOPath = System.IO.Path;
 
-namespace Mixtar.Product.Workbench;
+namespace Mixtar.UX.Workbench;
 
 public sealed partial class MainWindow
 {
@@ -266,6 +266,9 @@ public sealed partial class MainWindow
         }
     }
 
+    private DateTime _previousHostCpuTimestamp;
+    private TimeSpan _previousHostProcessCpu;
+
     private void UpdateMetrics()
     {
         var (idle, total) = ReadCpuSample();
@@ -276,6 +279,31 @@ public sealed partial class MainWindow
             var deltaTotal = total - _previousCpuTotal;
             var deltaIdle = idle - _previousCpuIdle;
             cpuFraction = Math.Clamp(1.0 - (double)deltaIdle / deltaTotal, 0, 1);
+            hasCpu = true;
+        }
+
+        // The Windows preview has no Mixtar procfs. Graph Workbench's own CPU
+        // cost there; a booted Mixtar continues to use the system-wide sample.
+        if (!hasCpu && !HasProcfs)
+        {
+            var now = DateTime.UtcNow;
+            using var process = System.Diagnostics.Process.GetCurrentProcess();
+            var processCpu = process.TotalProcessorTime;
+            if (_previousHostCpuTimestamp != default)
+            {
+                var elapsed = (now - _previousHostCpuTimestamp).TotalSeconds;
+                var consumed = (processCpu - _previousHostProcessCpu).TotalSeconds;
+                if (elapsed > 0)
+                {
+                    cpuFraction = Math.Clamp(
+                        consumed / (elapsed * Math.Max(1, Environment.ProcessorCount)),
+                        0,
+                        1);
+                }
+            }
+
+            _previousHostCpuTimestamp = now;
+            _previousHostProcessCpu = processCpu;
             hasCpu = true;
         }
 

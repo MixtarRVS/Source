@@ -16,7 +16,7 @@ using Avalonia.Threading;
 using Avalonia.VisualTree;
 using IOPath = System.IO.Path;
 
-namespace Mixtar.Product.Workbench;
+namespace Mixtar.UX.Workbench;
 
 public sealed partial class MainWindow
 {
@@ -514,7 +514,7 @@ public sealed partial class MainWindow
         return IOPath.Combine(directory, "layout.config");
     }
 
-    private void SaveLayout()
+    private void SaveLayoutLegacy()
     {
         try
         {
@@ -537,7 +537,7 @@ public sealed partial class MainWindow
         }
     }
 
-    private void LoadLayout()
+    private void LoadLayoutLegacy()
     {
         try
         {

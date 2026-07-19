@@ -1,6 +1,6 @@
 using Avalonia;
 
-namespace Mixtar.Product.Workbench;
+namespace Mixtar.UX.Workbench;
 
 internal static class Program
 {

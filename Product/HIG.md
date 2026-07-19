@@ -1,5 +1,15 @@
 # Mixtar HIG v0.1 — reguły interfejsu Workbencha
 
+## Kanoniczny kontrakt motywu
+
+- Użytkownik wybiera `Night` albo `Day`. Nie są to dowolne kolory akcentu.
+- `Night` odpowiada `body-dark`, a `Day` odpowiada `body-light` z
+  `dark_plex_aero_vs_faux_aero.html`.
+- Obecny MWM używa ramy Faux Aero bez blur. Przyciski tytułowe zachowują
+  kanoniczny niebieski hover i czerwony hover zamknięcia z referencji.
+- `Blue`, `Green`, `Amber`, `Magenta`, `Aero hover` i `Flat hover` nie są
+  publicznymi trybami wyglądu Mixtara.
+
 Zasada nadrzędna: UI podąża za tymi regułami, nie za gustem autora zmiany.
 Każdy nowy element ma wskazać token/metrykę z tej listy albo zaproponować
 zmianę TUTAJ (commit w tym pliku), nigdy wartość ad-hoc w kodzie.
@@ -44,8 +54,8 @@ zmianę TUTAJ (commit w tym pliku), nigdy wartość ad-hoc w kodzie.
 
 ## Kolor (tokeny — wartości w Theme.axaml Resources)
 - Panel, PanelSoft, Stroke, StrokeStrong, Accent, Text, Soft, Muted, Mono.
-- Motyw użytkownika (Theme API v1): `/System/Configuration/Product/Theme.config`
-  (dev: `%LocalAppData%\MixtarWorkbench\Theme.config`; szablon z komentarzami
+- Motyw użytkownika (Theme API v1): `/Users/<user>/.Interface/Theme.config`
+  (dev: `%LocalAppData%\MixtarWorkbench\Interface\Theme.config`; szablon z komentarzami
   zapisuje się sam przy pierwszym starcie). Klucze v1: accent, panel, stroke,
   text, caption.hover, caption.close. Wartości: `#RRGGBB`/`#AARRGGBB` albo
   `gradient(c1, c2[, c3[, c4]][, horizontal])` — domyślnie z góry na dół;
@@ -81,7 +91,7 @@ zmianę TUTAJ (commit w tym pliku), nigdy wartość ad-hoc w kodzie.
 - [x] Alt+Tab cykliczne przełączanie okien
 - [x] pokaż pulpit / minimalizuj wszystko (przycisk przy tacce, toggle)
 - [ ] karty w oknach (add/switch/close)
-- [x] zapis pozycji okien między sesjami (Layout.config w /System/State/Workbench)
+- [x] zapis pozycji okien między sesjami (`/Users/<user>/.Interface/Workbench/Layout.config`, atomowy TOML)
 
 ### Pasek zadań / dock / Start
 - [x] pasek zadań z przyciskami okien
@@ -114,13 +124,18 @@ zmianę TUTAJ (commit w tym pliku), nigdy wartość ad-hoc w kodzie.
 - [x] dropdown lokacji przy pasku adresu
 - [x] sortowanie kolumn
 - [ ] resize / reorder / drag kolumn
-- [ ] zaznaczanie wielokrotne + gumka (rubber-band)
+- [x] zaznaczanie wielokrotne (Ctrl+klik) + gumka (rubber-band, Ctrl = dodaje;
+      zaznaczenie NIGDY nie przeżywa zmiany katalogu — inaczej Delete sięga
+      do poprzedniego folderu)
 - [x] podgląd plików tekstowych
-- [ ] podgląd obrazów
-- [x] menu kontekstowe pliku (Open/View, Copy path, Delete); tła — do zrobienia
+- [x] podgląd obrazów (png/jpg/gif/bmp/ico/webp, 1:1 z przewijaniem)
+- [x] menu kontekstowe pliku (Open/View, Copy path, Rename, Delete) + menu
+      TŁA (New Folder/Refresh); prawy klik na zaznaczonym wierszu zachowuje
+      multi-zaznaczenie (Explorer)
 - [ ] kopiuj / wklej
-- [x] usuń (dwustopniowe)
-- [ ] zmiana nazwy (inline)
+- [x] usuń (dwustopniowe, multi: "Confirm N?", per-plik z rekonsyliacją)
+- [x] zmiana nazwy (inline: F2/menu, Enter/Escape/utrata fokusu, zaznacza
+      nazwę bez rozszerzenia; rename katalogu retargetuje karty)
 - [ ] właściwości pliku
 - [x] nowy folder
 - [ ] nowy plik z szablonów

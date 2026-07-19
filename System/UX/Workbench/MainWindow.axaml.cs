@@ -16,7 +16,7 @@ using Avalonia.Threading;
 using Avalonia.VisualTree;
 using IOPath = System.IO.Path;
 
-namespace Mixtar.Product.Workbench;
+namespace Mixtar.UX.Workbench;
 
 public sealed partial class MainWindow : Window
 {
