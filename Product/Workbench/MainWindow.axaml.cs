@@ -81,6 +81,7 @@ public sealed partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
+        LoadThemeOverrides();
         SizeToPrimaryScreen();
         foreach (var window in DesktopWindows())
         {
