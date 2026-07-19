@@ -83,12 +83,12 @@
             <Border Classes="titlebar" Tag="FilesWindow" Height="42" Padding="8,0,0,0"
                     PointerPressed="BeginDesktopWindowDrag" PointerMoved="ContinueDesktopWindowDrag" PointerReleased="EndDesktopWindowDrag">
               <Grid ColumnDefinitions="*,Auto">
-                <StackPanel Orientation="Horizontal" Spacing="4" VerticalAlignment="Bottom">
-                  <StackPanel x:Name="FileTabsPanel" Orientation="Horizontal" Spacing="4" VerticalAlignment="Bottom" />
-                  <Button Classes="tab-add" Content="+" Click="OnAddFileTab" VerticalAlignment="Bottom"
+                <StackPanel Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
+                  <StackPanel x:Name="FileTabsPanel" Orientation="Horizontal" Spacing="4" VerticalAlignment="Center" />
+                  <Button Classes="tab-add" Content="+" Click="OnAddFileTab" VerticalAlignment="Center"
                           Margin="4,0,0,0" ToolTip.Tip="New tab" />
                 </StackPanel>
-                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="0" VerticalAlignment="Top">
+                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="0" VerticalAlignment="Center">
                   <Button Classes="window-dot min" Tag="FilesWindow" Content="–" Click="OnDesktopMinimize" />
                   <Button Classes="window-dot max" Tag="FilesWindow" Content="□" Click="OnDesktopMaximize" />
                   <Button Classes="window-dot close" Tag="FilesWindow" Content="✕" Click="OnDesktopClose" />

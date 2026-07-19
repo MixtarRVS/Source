@@ -184,8 +184,13 @@ zgodnie z tym wzorcem.
 - [x] przyciski – □ ✕ w stylu Plex (46px, gradienty hover, czerwone zamknięcie)
 - [x] szklana krawędź (inset highlight) + miękki cień okien
 - [x] tytuły sans 12, teksty list 11-12, kontrast stref (sidebar ciemniejszy)
-- [ ] port paska tytułu z KARTAMI (wygląd+logika) do Workbencha — największy
-      brakujący element względem referencji
+- [x] port paska tytułu z KARTAMI (wygląd+logika) do Workbencha; semantyka
+      kart wg Eksploratora Windows (stała szerokość 150, inline ✕, środkowy
+      przycisk otwiera/zamyka, per-karta historia, dysk = "Nazwa (X:)")
+- [x] KOREKTA WZORCA (decyzja użytkownika 19.07): karty NIE są dosunięte do
+      dołu belki — cała belka kart trzyma JEDNĄ oś pionową: karty-pigułki
+      32px (CornerRadius 6), przycisk +, przyciski – □ ✕ wszystko
+      VerticalAlignment=Center w wierszu 42px
 - [ ] ikony w kartach/sidebarze
 
 ### Bugi zgłoszone 18.07
