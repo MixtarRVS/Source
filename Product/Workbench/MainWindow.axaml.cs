@@ -31,8 +31,17 @@ public sealed partial class MainWindow : Window
 
     private readonly DispatcherTimer _clockTimer;
     private readonly DispatcherTimer _metricsTimer;
+    private sealed class FileTab
+    {
+        public string Path = "/";
+        public List<string> History = new();
+        public int HistoryIndex = -1;
+    }
+
     private readonly Dictionary<Border, DesktopBounds> _restoreBounds = new();
-    private readonly List<string> _history = new();
+    private readonly List<FileTab> _fileTabs = new();
+    private int _activeFileTab;
+    private List<string> _history = new();
     private readonly List<string> _commandHistory = new();
     private readonly List<double> _cpuHistory = new();
     private readonly Dictionary<string, NetworkNode> _nodes = new()
@@ -111,6 +120,8 @@ public sealed partial class MainWindow : Window
         BuildTree();
         AppendSysinfo();
         Navigate(StartPath(), recordHistory: true);
+        _fileTabs.Add(new FileTab { Path = _currentPath, History = _history, HistoryIndex = _historyIndex });
+        RenderFileTabs();
         ActivateWindow(TerminalWindow);
         ApplyScale();
 
@@ -1458,7 +1469,6 @@ public sealed partial class MainWindow : Window
         }
 
         _currentPath = path;
-        FilesTitle.Text = $"FILES - {path.ToUpperInvariant()}";
         PathHint.Text = path;
         BuildBreadcrumb(path);
         AddressBox.Text = path;
@@ -1468,6 +1478,127 @@ public sealed partial class MainWindow : Window
         _selectedPath = null;
         UpdateVolumeInfo(path);
         RenderFiles();
+        if (_fileTabs.Count > 0)
+        {
+            _fileTabs[_activeFileTab].Path = path;
+            RenderFileTabs();
+        }
+    }
+
+    // ------------------------------------------------------------------
+    // Titlebar tabs (Mixtar-Studio pattern): each tab owns its own path
+    // and navigation history.
+    // ------------------------------------------------------------------
+
+    private static string TabLabel(string path)
+    {
+        var trimmed = path.TrimEnd('/', '\\');
+        if (trimmed.Length == 0)
+        {
+            return "⌂ Root";
+        }
+
+        if (trimmed.Length == 2 && trimmed[1] == ':')
+        {
+            return $"▰ {trimmed}";
+        }
+
+        var name = IOPath.GetFileName(trimmed);
+        return name.Length > 0 ? $"▣ {name}" : trimmed;
+    }
+
+    private void SaveActiveTabState()
+    {
+        if (_fileTabs.Count == 0)
+        {
+            return;
+        }
+
+        var tab = _fileTabs[_activeFileTab];
+        tab.Path = _currentPath;
+        tab.History = _history;
+        tab.HistoryIndex = _historyIndex;
+    }
+
+    private void SwitchFileTab(int index)
+    {
+        if (index < 0 || index >= _fileTabs.Count)
+        {
+            return;
+        }
+
+        SaveActiveTabState();
+        _activeFileTab = index;
+        var tab = _fileTabs[index];
+        _history = tab.History;
+        _historyIndex = tab.HistoryIndex;
+        Navigate(tab.Path, recordHistory: false);
+        RenderFileTabs();
+    }
+
+    private void OnAddFileTab(object? sender, RoutedEventArgs e)
+    {
+        SaveActiveTabState();
+        var tab = new FileTab
+        {
+            Path = _currentPath,
+            History = new List<string> { _currentPath },
+            HistoryIndex = 0
+        };
+        _fileTabs.Add(tab);
+        SwitchFileTab(_fileTabs.Count - 1);
+    }
+
+    private void CloseFileTab(int index)
+    {
+        if (_fileTabs.Count <= 1 || index < 0 || index >= _fileTabs.Count)
+        {
+            return;
+        }
+
+        _fileTabs.RemoveAt(index);
+        if (_activeFileTab >= _fileTabs.Count)
+        {
+            _activeFileTab = _fileTabs.Count - 1;
+        }
+        else if (index < _activeFileTab)
+        {
+            _activeFileTab--;
+        }
+
+        var tab = _fileTabs[_activeFileTab];
+        _history = tab.History;
+        _historyIndex = tab.HistoryIndex;
+        Navigate(tab.Path, recordHistory: false);
+        RenderFileTabs();
+    }
+
+    private void RenderFileTabs()
+    {
+        FileTabsPanel.Children.Clear();
+        for (var index = 0; index < _fileTabs.Count; index++)
+        {
+            var tab = _fileTabs[index];
+            var button = new Button { Content = TabLabel(tab.Path) };
+            button.Classes.Add("file-tab");
+            if (index == _activeFileTab)
+            {
+                button.Classes.Add("active");
+            }
+
+            var captured = index;
+            button.Click += (_, _) => SwitchFileTab(captured);
+            if (_fileTabs.Count > 1)
+            {
+                var closeFlyout = new MenuFlyout();
+                var closeItem = new MenuItem { Header = "Close tab" };
+                closeItem.Click += (_, _) => CloseFileTab(captured);
+                closeFlyout.Items.Add(closeItem);
+                button.ContextFlyout = closeFlyout;
+            }
+
+            FileTabsPanel.Children.Add(button);
+        }
     }
 
     private void BuildBreadcrumb(string path)

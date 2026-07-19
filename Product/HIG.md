@@ -8,6 +8,10 @@ zmianę TUTAJ (commit w tym pliku), nigdy wartość ad-hoc w kodzie.
 - Bazowa jednostka: **4 px**. Wszystkie marginesy/paddingi to wielokrotności 4.
 - Odstęp między kontrolkami w rzędzie: 8. Między sekcjami: 12 lub 16.
 - Zawartość okna od krawędzi: 12.
+- **Offsety optyczne kompensuje się RAZ, w kontenerze, nigdy per-element.**
+  Przykład: 1px górnej ramki paska zadań zmniejsza obszar treści — wyrównuje
+  się to jednym marginesem kontenera, a nie paddingami pojedynczych
+  przycisków (lekcja z 19.07: per-element rozstraja sąsiadów).
 
 ## Typografia (przy skali 100%)
 - Body: **13 px** (Noto Sans). Body-mono: 12 px (Noto Sans Mono).
