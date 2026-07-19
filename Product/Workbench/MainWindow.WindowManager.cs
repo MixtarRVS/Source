@@ -102,6 +102,15 @@ public sealed partial class MainWindow
         if (position.X >= window.Bounds.Width - band) flags |= 2;
         if (position.Y <= band) flags |= 4;
         if (position.Y >= window.Bounds.Height - band) flags |= 8;
+
+        // Fitts: the caption buttons own the top-right corner - no resize
+        // band where a slam towards the close button must land on the button.
+        if ((flags & 6) != 0 && position.Y <= 42 &&
+            position.X >= window.Bounds.Width - 150)
+        {
+            flags = 0;
+        }
+
         return flags;
     }
 
