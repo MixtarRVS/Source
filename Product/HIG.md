@@ -182,6 +182,9 @@ zamknij w stylu z tego pliku (cienkie glify, czyste prostokąty, czerwony
 hover na zamknięciu). Obecne przyciski wyglądają niepoważnie — do wymiany
 zgodnie z tym wzorcem.
 - [x] przyciski – □ ✕ w stylu Plex (46px, gradienty hover, czerwone zamknięcie)
+- [x] glify captionów wektorowo (Path, wspólny viewBox 10x10, stroke 1.5 ze
+      wzorca; kreska min kończy się na dolnej krawędzi □ i ✕ — baseline Aero);
+      ✕ na kartach też Path — font gościa bez znaczenia
 - [x] szklana krawędź (inset highlight) + miękki cień okien
 - [x] tytuły sans 12, teksty list 11-12, kontrast stref (sidebar ciemniejszy)
 - [x] port paska tytułu z KARTAMI (wygląd+logika) do Workbencha; semantyka

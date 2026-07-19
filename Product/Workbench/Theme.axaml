@@ -82,6 +82,43 @@
         </LinearGradientBrush>
       </Setter>
     </Style>
+    <!-- Caption glyphs as vectors, 1:1 from the Studio spec: one shared
+         10x10 viewBox, stroke 1.5, no fill. The minimize dash (y 8-9)
+         ends exactly on the bottom edge of the box and the cross - the
+         Aero baseline. Vectors also sidestep the guest font missing ✕. -->
+    <Style Selector="Button.window-dot.min">
+      <Setter Property="Template">
+        <ControlTemplate>
+          <Border Background="{TemplateBinding Background}" CornerRadius="{TemplateBinding CornerRadius}">
+            <Path Width="10" Height="10" Stretch="None" Data="M 1,8 L 9,8 L 9,9 L 1,9 Z"
+                  Stroke="{TemplateBinding Foreground}" StrokeThickness="1.5"
+                  HorizontalAlignment="Center" VerticalAlignment="Center" />
+          </Border>
+        </ControlTemplate>
+      </Setter>
+    </Style>
+    <Style Selector="Button.window-dot.max">
+      <Setter Property="Template">
+        <ControlTemplate>
+          <Border Background="{TemplateBinding Background}" CornerRadius="{TemplateBinding CornerRadius}">
+            <Path Width="10" Height="10" Stretch="None" Data="M 1,1 L 9,1 L 9,9 L 1,9 Z"
+                  Stroke="{TemplateBinding Foreground}" StrokeThickness="1.5"
+                  HorizontalAlignment="Center" VerticalAlignment="Center" />
+          </Border>
+        </ControlTemplate>
+      </Setter>
+    </Style>
+    <Style Selector="Button.window-dot.close">
+      <Setter Property="Template">
+        <ControlTemplate>
+          <Border Background="{TemplateBinding Background}" CornerRadius="{TemplateBinding CornerRadius}">
+            <Path Width="10" Height="10" Stretch="None" Data="M 1,1 L 9,9 M 9,1 L 1,9"
+                  Stroke="{TemplateBinding Foreground}" StrokeThickness="1.5"
+                  HorizontalAlignment="Center" VerticalAlignment="Center" />
+          </Border>
+        </ControlTemplate>
+      </Setter>
+    </Style>
     <Style Selector="Button.tool">
       <Setter Property="Height" Value="28" />
       <Setter Property="Padding" Value="12,0" />
@@ -182,6 +219,15 @@
       <Setter Property="FontSize" Value="10" />
       <Setter Property="HorizontalContentAlignment" Value="Center" />
       <Setter Property="VerticalContentAlignment" Value="Center" />
+      <Setter Property="Template">
+        <ControlTemplate>
+          <Border Background="{TemplateBinding Background}" CornerRadius="{TemplateBinding CornerRadius}">
+            <Path Width="8" Height="8" Stretch="None" Data="M 1,1 L 7,7 M 7,1 L 1,7"
+                  Stroke="{TemplateBinding Foreground}" StrokeThickness="1.2"
+                  HorizontalAlignment="Center" VerticalAlignment="Center" />
+          </Border>
+        </ControlTemplate>
+      </Setter>
     </Style>
     <Style Selector="Button.tab-close:pointerover">
       <Setter Property="Background" Value="#33FFFFFF" />
