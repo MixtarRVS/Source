@@ -77,11 +77,11 @@ public sealed partial class MainWindow
         }
     }
 
-    private static TextBlock TreeHeader(string text) => new()
+    private TextBlock TreeHeader(string text) => new()
     {
         Text = text,
         Margin = new Thickness(8, 8, 8, 4),
-        Foreground = new SolidColorBrush(Color.Parse("#7EAFE8")),
+        Foreground = Token("HeadingBrush"),
         FontFamily = new FontFamily("Noto Sans Mono"),
         FontSize = 11,
         FontWeight = FontWeight.Bold
@@ -370,7 +370,7 @@ public sealed partial class MainWindow
             BreadcrumbPanel.Children.Add(new TextBlock
             {
                 Text = "›",
-                Foreground = new SolidColorBrush(Color.Parse("#5E86BC")),
+                Foreground = Token("MutedBrush"),
                 FontSize = 10,
                 Margin = new Thickness(4, 0),
                 VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center
@@ -520,11 +520,11 @@ public sealed partial class MainWindow
                 }
             };
 
-            grid.Children.Add(Cell($"{IconFor(entry)}  {entry.Name}", 0, "#D8E7FF"));
-            grid.Children.Add(Cell(entry.Type, 1, "#9EC1EF"));
-            grid.Children.Add(Cell(entry.Size, 2, "#9EC1EF"));
-            grid.Children.Add(Cell(entry.Modified, 3, "#9EC1EF"));
-            grid.Children.Add(Cell(entry.Entries, 4, "#9EC1EF"));
+            grid.Children.Add(Cell($"{IconFor(entry)}  {entry.Name}", 0, Token("ListTextBrush")));
+            grid.Children.Add(Cell(entry.Type, 1, Token("SoftBrush")));
+            grid.Children.Add(Cell(entry.Size, 2, Token("SoftBrush")));
+            grid.Children.Add(Cell(entry.Modified, 3, Token("SoftBrush")));
+            grid.Children.Add(Cell(entry.Entries, 4, Token("SoftBrush")));
             row.Child = grid;
 
             var captured = entry;
@@ -716,13 +716,13 @@ public sealed partial class MainWindow
         }
     }
 
-    private static TextBlock Cell(string text, int column, string color)
+    private static TextBlock Cell(string text, int column, IBrush color)
     {
         var block = new TextBlock
         {
             Text = text,
             FontSize = 11,
-            Foreground = new SolidColorBrush(Color.Parse(color)),
+            Foreground = color,
             VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center,
             TextTrimming = TextTrimming.CharacterEllipsis
         };
@@ -1065,7 +1065,7 @@ public sealed partial class MainWindow
             AddressSuggestions.Children.Add(new TextBlock
             {
                 Text = section.Item1,
-                Foreground = new SolidColorBrush(Color.Parse("#7EAFE8")),
+                Foreground = Token("HeadingBrush"),
                 FontFamily = new FontFamily("Noto Sans Mono"),
                 FontSize = 10,
                 FontWeight = FontWeight.Bold,

@@ -21,13 +21,43 @@ public sealed partial class MainWindow
     // every StaticResource reference picks them up.
     private static readonly Dictionary<string, string> ThemeKeys = new(StringComparer.OrdinalIgnoreCase)
     {
+        ["desktop"] = "DesktopBrush",
         ["panel"] = "PanelBrush",
-        ["stroke"] = "StrokeBrush",
-        ["accent"] = "AccentBrush",
+        ["menu"] = "MenuBrush",
+        ["overlay"] = "OverlayBrush",
+        ["card"] = "CardBrush",
+        ["sidebar"] = "SidebarBrush",
+        ["taskbar"] = "TaskbarBrush",
+        ["terminal"] = "TerminalBackBrush",
+        ["console"] = "ConsoleBackBrush",
         ["text"] = "TextBrush",
+        ["title"] = "TitleBrush",
+        ["mono"] = "MonoBrush",
+        ["heading"] = "HeadingBrush",
+        ["info"] = "InfoBrush",
+        ["soft"] = "SoftBrush",
+        ["list"] = "ListTextBrush",
+        ["muted"] = "MutedBrush",
+        ["success"] = "SuccessBrush",
+        ["warning"] = "WarningBrush",
+        ["danger"] = "DangerBrush",
+        ["accent"] = "AccentBrush",
+        ["selection.hover"] = "RowHoverBrush",
+        ["selection.active"] = "RowSelectedBrush",
+        ["stroke"] = "StrokeBrush",
+        ["stroke.strong"] = "StrokeStrongBrush",
+        ["hairline"] = "HairlineBrush",
+        ["divider"] = "DividerBrush",
+        ["start"] = "StartBrush",
+        ["start.border"] = "StartBorderBrush",
         ["caption.hover"] = "CaptionHoverBrush",
         ["caption.close"] = "CaptionCloseHoverBrush"
     };
+
+    // Code-behind never parses chrome colors itself - it asks for a token,
+    // so Theme.config overrides reach dynamically built controls too.
+    internal IBrush Token(string key) =>
+        this.TryFindResource(key, out var value) && value is IBrush brush ? brush : Brushes.White;
 
     private static string ThemePath() => Directory.Exists("/System/Configuration")
         ? "/System/Configuration/Product/Theme.config"
@@ -186,12 +216,30 @@ public sealed partial class MainWindow
                 "# bottom, 4 = aero gloss break at the 50% line. A single color\n" +
                 "# on a gradient key gives a flat hover instead.\n" +
                 "#\n" +
-                "# accent        = #18B9FF\n" +
-                "# panel         = #D914161A\n" +
-                "# stroke        = #26FFFFFF\n" +
-                "# text          = #E8EEF7\n" +
-                "# caption.hover = gradient(#5BA4E5, #4388CC, #2969AD, #1C528F)\n" +
-                "# caption.close = gradient(#E85F51, #D34031, #B52B1E, #8E1C12)\n");
+                "# accent           = #18B9FF\n" +
+                "# desktop          = #0B1220\n" +
+                "# panel            = #D914161A\n" +
+                "# card             = #E01B1E24\n" +
+                "# sidebar          = #3D0F1114\n" +
+                "# taskbar          = #F0121418\n" +
+                "# terminal         = #F20E1013\n" +
+                "# text             = #E8EEF7\n" +
+                "# title            = #CFD8E6\n" +
+                "# heading          = #8FC1FF\n" +
+                "# info             = #91B7E8\n" +
+                "# soft             = #9EC1EF\n" +
+                "# list             = #D8E7FF\n" +
+                "# muted            = #668AB9\n" +
+                "# success          = #27EE91\n" +
+                "# warning          = #FFC65C\n" +
+                "# danger           = #FF5C7B\n" +
+                "# selection.hover  = #273580DB\n" +
+                "# selection.active = #473580DB\n" +
+                "# stroke           = #26FFFFFF\n" +
+                "# hairline         = #1AFFFFFF\n" +
+                "# start            = #0B65D8\n" +
+                "# caption.hover    = gradient(#5BA4E5, #4388CC, #2969AD, #1C528F)\n" +
+                "# caption.close    = gradient(#E85F51, #D34031, #B52B1E, #8E1C12)\n");
         }
         catch
         {

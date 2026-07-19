@@ -312,8 +312,8 @@ public sealed partial class MainWindow
 
         var graphicsReady = StateReady("Graphics/Status.config");
         var volumesReady = StateReady("Volumes/Status.config");
-        GraphicsDot.Foreground = new SolidColorBrush(Color.Parse(graphicsReady ? "#9ED8C6" : "#668AB9"));
-        VolumesDot.Foreground = new SolidColorBrush(Color.Parse(volumesReady ? "#9ED8C6" : "#668AB9"));
+        GraphicsDot.Foreground = Token(graphicsReady ? "SuccessDimBrush" : "MutedBrush");
+        VolumesDot.Foreground = Token(volumesReady ? "SuccessDimBrush" : "MutedBrush");
         TrayGraphicsDot.Foreground = GraphicsDot.Foreground;
         TrayVolumesDot.Foreground = VolumesDot.Foreground;
         StateLines.Text = HasProcfs
@@ -349,7 +349,7 @@ public sealed partial class MainWindow
         CpuGraph.Children.Add(new Polyline
         {
             Points = points,
-            Stroke = new SolidColorBrush(Color.Parse("#18B9FF")),
+            Stroke = Token("AccentBrush"),
             StrokeThickness = 1.4
         });
     }
@@ -373,14 +373,14 @@ public sealed partial class MainWindow
                         Text = name.Length > 22 ? name[..22] : name,
                         FontFamily = new FontFamily("Noto Sans Mono"),
                         FontSize = 11,
-                        Foreground = new SolidColorBrush(Color.Parse("#C6DCFA"))
+                        Foreground = Token("MonoBrush")
                     },
                     WithColumn(new TextBlock
                     {
                         Text = rss > 0 ? FormatSize(rss) : "",
                         FontFamily = new FontFamily("Noto Sans Mono"),
                         FontSize = 11,
-                        Foreground = new SolidColorBrush(Color.Parse("#7FAEE6"))
+                        Foreground = Token("InfoBrush")
                     }, 1)
                 }
             });

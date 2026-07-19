@@ -4,15 +4,76 @@
   <!-- Mixtar HIG tokens and control styles - the single source of
        visual truth (Product/HIG.md is the written contract). -->
   <Styles.Resources>
+    <!-- EVERY chrome color lives here (jeden plik ze zmiennymi). Markup and
+         code-behind reference these tokens only; Theme.config overrides
+         them by mutating the shared instances. Shadows, wallpaper art and
+         terminal-output colors are content, not chrome - they stay local. -->
+    <!-- Surfaces -->
+    <SolidColorBrush x:Key="DesktopBrush" Color="#0B1220" />
     <SolidColorBrush x:Key="PanelBrush" Color="#D914161A" />
     <SolidColorBrush x:Key="PanelSoftBrush" Color="#E6191B20" />
+    <SolidColorBrush x:Key="MenuBrush" Color="#F214161A" />
+    <SolidColorBrush x:Key="OverlayBrush" Color="#F514161A" />
+    <SolidColorBrush x:Key="CardBrush" Color="#E01B1E24" />
+    <SolidColorBrush x:Key="HeaderBackBrush" Color="#E61A1D22" />
+    <SolidColorBrush x:Key="SidebarBrush" Color="#3D0F1114" />
+    <SolidColorBrush x:Key="StatusBackBrush" Color="#520A0C0F" />
+    <SolidColorBrush x:Key="TerminalBackBrush" Color="#F20E1013" />
+    <SolidColorBrush x:Key="ConsoleBackBrush" Color="#F5111316" />
+    <SolidColorBrush x:Key="TaskbarBrush" Color="#F0121418" />
+    <SolidColorBrush x:Key="InputBackBrush" Color="#80000000" />
+    <SolidColorBrush x:Key="InputSoftBrush" Color="#D31E2126" />
+    <SolidColorBrush x:Key="ToolBackBrush" Color="#B2262A31" />
+    <SolidColorBrush x:Key="NetMapBrush" Color="#F0020711" />
+    <SolidColorBrush x:Key="HudBrush" Color="#F5061125" />
+    <!-- Text -->
+    <SolidColorBrush x:Key="TextBrush" Color="#E8EEF7" />
+    <SolidColorBrush x:Key="TitleBrush" Color="#CFD8E6" />
+    <SolidColorBrush x:Key="MonoBrush" Color="#C4DCFF" />
+    <SolidColorBrush x:Key="HeadingBrush" Color="#8FC1FF" />
+    <SolidColorBrush x:Key="InfoBrush" Color="#91B7E8" />
+    <SolidColorBrush x:Key="SoftBrush" Color="#9EC1EF" />
+    <SolidColorBrush x:Key="ListTextBrush" Color="#D8E7FF" />
+    <SolidColorBrush x:Key="TabTextBrush" Color="#A9B4C4" />
+    <SolidColorBrush x:Key="MutedBrush" Color="#668AB9" />
+    <!-- Status -->
+    <SolidColorBrush x:Key="SuccessBrush" Color="#27EE91" />
+    <SolidColorBrush x:Key="SuccessDimBrush" Color="#9ED8C6" />
+    <SolidColorBrush x:Key="WarningBrush" Color="#FFC65C" />
+    <SolidColorBrush x:Key="WarningSoftBrush" Color="#FFE3AC" />
+    <SolidColorBrush x:Key="WarningBackBrush" Color="#40FFC65C" />
+    <SolidColorBrush x:Key="DangerBrush" Color="#FF5C7B" />
+    <SolidColorBrush x:Key="DangerSoftBrush" Color="#B0FF5C7B" />
+    <!-- Accent and selection -->
+    <SolidColorBrush x:Key="AccentBrush" Color="#18B9FF" />
+    <SolidColorBrush x:Key="SnapFillBrush" Color="#2618B9FF" />
+    <SolidColorBrush x:Key="SnapBorderBrush" Color="#8018B9FF" />
+    <SolidColorBrush x:Key="RowHoverBrush" Color="#273580DB" />
+    <SolidColorBrush x:Key="RowSelectedBrush" Color="#473580DB" />
+    <SolidColorBrush x:Key="TextSelectionBrush" Color="#703580DB" />
+    <SolidColorBrush x:Key="TaskActiveBrush" Color="#363568DB" />
+    <SolidColorBrush x:Key="TaskActiveBorderBrush" Color="#704C97FF" />
+    <SolidColorBrush x:Key="ItemHoverBrush" Color="#293A7EE6" />
+    <SolidColorBrush x:Key="TabHoverBrush" Color="#0DFFFFFF" />
+    <SolidColorBrush x:Key="TabActiveBrush" Color="#26FFFFFF" />
+    <SolidColorBrush x:Key="HoverWashBrush" Color="#33FFFFFF" />
+    <SolidColorBrush x:Key="StartBrush" Color="#0B65D8" />
+    <SolidColorBrush x:Key="StartBorderBrush" Color="#5EA8FF" />
+    <SolidColorBrush x:Key="GridLineBrush" Color="#202569D2" />
+    <!-- Lines -->
     <SolidColorBrush x:Key="StrokeBrush" Color="#26FFFFFF" />
     <SolidColorBrush x:Key="StrokeStrongBrush" Color="#4DFFFFFF" />
-    <SolidColorBrush x:Key="AccentBrush" Color="#18B9FF" />
-    <SolidColorBrush x:Key="TextBrush" Color="#E8EEF7" />
-    <SolidColorBrush x:Key="SoftBrush" Color="#A7B8CF" />
-    <SolidColorBrush x:Key="MutedBrush" Color="#6E7F98" />
-    <SolidColorBrush x:Key="MonoBrush" Color="#B9CBE4" />
+    <SolidColorBrush x:Key="HairlineBrush" Color="#1AFFFFFF" />
+    <SolidColorBrush x:Key="DividerBrush" Color="#20FFFFFF" />
+    <SolidColorBrush x:Key="RowLineBrush" Color="#0EFFFFFF" />
+    <SolidColorBrush x:Key="TrackBrush" Color="#17FFFFFF" />
+    <SolidColorBrush x:Key="GripBrush" Color="#4CFFFFFF" />
+    <SolidColorBrush x:Key="PaneBorderBrush" Color="#344B97FF" />
+    <SolidColorBrush x:Key="FrameBorderBrush" Color="#4C4796FF" />
+    <SolidColorBrush x:Key="InputBorderBrush" Color="#425FA2FF" />
+    <SolidColorBrush x:Key="ToolBorderBrush" Color="#47FFFFFF" />
+    <SolidColorBrush x:Key="NetLineBrush" Color="#416FA8E8" />
+    <SolidColorBrush x:Key="NetLineFaintBrush" Color="#244B79B6" />
     <!-- Caption hover gradients as named resources so Theme.config can
          retint them (Theme API v1); the code mutates these instances. -->
     <LinearGradientBrush x:Key="CaptionHoverBrush" StartPoint="0%,0%" EndPoint="0%,100%">
@@ -44,12 +105,12 @@
     <Style Selector="Border.titlebar">
       <Setter Property="Height" Value="34" />
       <Setter Property="Background" Value="Transparent" />
-      <Setter Property="BorderBrush" Value="#1AFFFFFF" />
+      <Setter Property="BorderBrush" Value="{StaticResource HairlineBrush}" />
       <Setter Property="BorderThickness" Value="0,0,0,1" />
       <Setter Property="Padding" Value="12,0,0,0" />
     </Style>
     <Style Selector="TextBlock.window-title">
-      <Setter Property="Foreground" Value="#CFD8E6" />
+      <Setter Property="Foreground" Value="{StaticResource TitleBrush}" />
       <Setter Property="FontFamily" Value="Noto Sans" />
       <Setter Property="FontSize" Value="12" />
       <Setter Property="FontWeight" Value="Bold" />
@@ -69,7 +130,7 @@
       <Setter Property="CornerRadius" Value="0" />
       <Setter Property="BorderThickness" Value="0" />
       <Setter Property="Background" Value="Transparent" />
-      <Setter Property="Foreground" Value="#DFDFDF" />
+      <Setter Property="Foreground" Value="{StaticResource TitleBrush}" />
       <Setter Property="FontSize" Value="11" />
       <Setter Property="FontFamily" Value="Noto Sans" />
       <Setter Property="HorizontalContentAlignment" Value="Center" />
@@ -140,8 +201,8 @@
     <Style Selector="Button.tool">
       <Setter Property="Height" Value="28" />
       <Setter Property="Padding" Value="12,0" />
-      <Setter Property="Background" Value="#B2262A31" />
-      <Setter Property="BorderBrush" Value="#47FFFFFF" />
+      <Setter Property="Background" Value="{StaticResource ToolBackBrush}" />
+      <Setter Property="BorderBrush" Value="{StaticResource ToolBorderBrush}" />
       <Setter Property="BorderThickness" Value="1" />
       <Setter Property="CornerRadius" Value="5" />
       <Setter Property="Foreground" Value="{StaticResource TextBrush}" />
@@ -149,7 +210,7 @@
       <Setter Property="VerticalContentAlignment" Value="Center" />
     </Style>
     <Style Selector="Button.tool:pointerover"><Setter Property="BorderBrush" Value="{StaticResource AccentBrush}" /></Style>
-    <Style Selector="Button.tool.danger"><Setter Property="BorderBrush" Value="#B0FF5C7B" /></Style>
+    <Style Selector="Button.tool.danger"><Setter Property="BorderBrush" Value="{StaticResource DangerSoftBrush}" /></Style>
     <Style Selector="Button.tree">
       <Setter Property="Height" Value="28" />
       <Setter Property="HorizontalContentAlignment" Value="Left" />
@@ -157,17 +218,17 @@
       <Setter Property="Background" Value="Transparent" />
       <Setter Property="BorderThickness" Value="0" />
       <Setter Property="CornerRadius" Value="4" />
-      <Setter Property="Foreground" Value="#C2DBFF" />
+      <Setter Property="Foreground" Value="{StaticResource ListTextBrush}" />
       <Setter Property="FontSize" Value="11" />
       <Setter Property="VerticalContentAlignment" Value="Center" />
     </Style>
-    <Style Selector="Button.tree:pointerover"><Setter Property="Background" Value="#293A7EE6" /></Style>
+    <Style Selector="Button.tree:pointerover"><Setter Property="Background" Value="{StaticResource ItemHoverBrush}" /></Style>
     <Style Selector="Button.column-header">
       <Setter Property="Background" Value="Transparent" />
       <Setter Property="BorderThickness" Value="0" />
       <Setter Property="Padding" Value="0" />
       <Setter Property="HorizontalContentAlignment" Value="Left" />
-      <Setter Property="Foreground" Value="#8BBCFF" />
+      <Setter Property="Foreground" Value="{StaticResource HeadingBrush}" />
       <Setter Property="FontFamily" Value="Noto Sans Mono" />
       <Setter Property="FontSize" Value="10" />
       <Setter Property="VerticalContentAlignment" Value="Center" />
@@ -179,13 +240,13 @@
       <Setter Property="MinHeight" Value="24" />
       <Setter Property="Padding" Value="8,0" />
       <Setter Property="CornerRadius" Value="4" />
-      <Setter Property="Foreground" Value="#C2DBFF" />
+      <Setter Property="Foreground" Value="{StaticResource ListTextBrush}" />
       <Setter Property="FontFamily" Value="Noto Sans Mono" />
       <Setter Property="FontSize" Value="10" />
       <Setter Property="VerticalContentAlignment" Value="Center" />
     </Style>
     <Style Selector="Button.crumb:pointerover">
-      <Setter Property="Background" Value="#33417EE6" />
+      <Setter Property="Background" Value="{StaticResource ItemHoverBrush}" />
       <Setter Property="Foreground" Value="White" />
     </Style>
     <!-- Titlebar tabs: uniform-width 32px pills sharing one vertical axis
@@ -196,16 +257,16 @@
       <Setter Property="CornerRadius" Value="6" />
       <Setter Property="BorderThickness" Value="0" />
       <Setter Property="Background" Value="Transparent" />
-      <Setter Property="Foreground" Value="#A9B4C4" />
+      <Setter Property="Foreground" Value="{StaticResource TabTextBrush}" />
       <Setter Property="FontSize" Value="12" />
       <Setter Property="VerticalContentAlignment" Value="Center" />
     </Style>
     <Style Selector="Button.file-tab:pointerover">
-      <Setter Property="Background" Value="#0DFFFFFF" />
+      <Setter Property="Background" Value="{StaticResource TabHoverBrush}" />
       <Setter Property="Foreground" Value="White" />
     </Style>
     <Style Selector="Button.file-tab.active">
-      <Setter Property="Background" Value="#26FFFFFF" />
+      <Setter Property="Background" Value="{StaticResource TabActiveBrush}" />
       <Setter Property="Foreground" Value="White" />
     </Style>
     <Style Selector="Button.tab-add">
@@ -215,13 +276,13 @@
       <Setter Property="CornerRadius" Value="6" />
       <Setter Property="BorderThickness" Value="0" />
       <Setter Property="Background" Value="Transparent" />
-      <Setter Property="Foreground" Value="#A9B4C4" />
+      <Setter Property="Foreground" Value="{StaticResource TabTextBrush}" />
       <Setter Property="FontSize" Value="13" />
       <Setter Property="HorizontalContentAlignment" Value="Center" />
       <Setter Property="VerticalContentAlignment" Value="Center" />
     </Style>
     <Style Selector="Button.tab-add:pointerover">
-      <Setter Property="Background" Value="#0DFFFFFF" />
+      <Setter Property="Background" Value="{StaticResource TabHoverBrush}" />
       <Setter Property="Foreground" Value="White" />
     </Style>
     <Style Selector="Button.tab-close">
@@ -233,7 +294,7 @@
       <Setter Property="CornerRadius" Value="4" />
       <Setter Property="BorderThickness" Value="0" />
       <Setter Property="Background" Value="Transparent" />
-      <Setter Property="Foreground" Value="#8894A6" />
+      <Setter Property="Foreground" Value="{StaticResource MutedBrush}" />
       <Setter Property="FontSize" Value="10" />
       <Setter Property="HorizontalContentAlignment" Value="Center" />
       <Setter Property="VerticalContentAlignment" Value="Center" />
@@ -248,7 +309,7 @@
       </Setter>
     </Style>
     <Style Selector="Button.tab-close:pointerover">
-      <Setter Property="Background" Value="#33FFFFFF" />
+      <Setter Property="Background" Value="{StaticResource HoverWashBrush}" />
       <Setter Property="Foreground" Value="White" />
     </Style>
     <Style Selector="Button.task">
@@ -261,20 +322,20 @@
       <Setter Property="BorderBrush" Value="Transparent" />
       <Setter Property="BorderThickness" Value="1" />
       <Setter Property="CornerRadius" Value="6" />
-      <Setter Property="Foreground" Value="#A9C4EC" />
+      <Setter Property="Foreground" Value="{StaticResource SoftBrush}" />
       <Setter Property="FontSize" Value="11" />
     </Style>
     <Style Selector="Button.task.active">
-      <Setter Property="Background" Value="#363568DB" />
-      <Setter Property="BorderBrush" Value="#704C97FF" />
+      <Setter Property="Background" Value="{StaticResource TaskActiveBrush}" />
+      <Setter Property="BorderBrush" Value="{StaticResource TaskActiveBorderBrush}" />
       <Setter Property="Foreground" Value="White" />
     </Style>
     <Style Selector="Button.task.minimized"><Setter Property="Opacity" Value="0.55" /></Style>
     <Style Selector="Button.start">
       <Setter Property="Height" Value="32" />
       <Setter Property="Padding" Value="16,0" />
-      <Setter Property="Background" Value="#0B65D8" />
-      <Setter Property="BorderBrush" Value="#5EA8FF" />
+      <Setter Property="Background" Value="{StaticResource StartBrush}" />
+      <Setter Property="BorderBrush" Value="{StaticResource StartBorderBrush}" />
       <Setter Property="BorderThickness" Value="1" />
       <Setter Property="CornerRadius" Value="7" />
       <Setter Property="Foreground" Value="White" />
@@ -300,7 +361,7 @@
       <Setter Property="MinHeight" Value="24" />
       <Setter Property="Padding" Value="0" />
       <Setter Property="BorderThickness" Value="0" />
-      <Setter Property="Background" Value="#6B94C9" />
+      <Setter Property="Background" Value="{StaticResource MutedBrush}" />
       <Setter Property="Template">
         <ControlTemplate>
           <Border Background="Transparent">
@@ -311,36 +372,36 @@
         </ControlTemplate>
       </Setter>
     </Style>
-    <Style Selector="Button.map-node.local"><Setter Property="Background" Value="#FFC65C" /></Style>
+    <Style Selector="Button.map-node.local"><Setter Property="Background" Value="{StaticResource WarningBrush}" /></Style>
     <Style Selector="Button.map-node.selected"><Setter Property="Background" Value="White" /></Style>
     <Style Selector="Border.card">
-      <Setter Property="Background" Value="#E01B1E24" />
-      <Setter Property="BorderBrush" Value="#12FFFFFF" />
+      <Setter Property="Background" Value="{StaticResource CardBrush}" />
+      <Setter Property="BorderBrush" Value="{StaticResource HairlineBrush}" />
       <Setter Property="BorderThickness" Value="1" />
       <Setter Property="CornerRadius" Value="7" />
     </Style>
     <Style Selector="Border.file-row">
       <Setter Property="MinHeight" Value="32" />
       <Setter Property="Padding" Value="12,0" />
-      <Setter Property="BorderBrush" Value="#0EFFFFFF" />
+      <Setter Property="BorderBrush" Value="{StaticResource RowLineBrush}" />
       <Setter Property="BorderThickness" Value="0,0,0,1" />
       <Setter Property="Background" Value="Transparent" />
     </Style>
-    <Style Selector="Border.file-row:pointerover"><Setter Property="Background" Value="#273580DB" /></Style>
+    <Style Selector="Border.file-row:pointerover"><Setter Property="Background" Value="{StaticResource RowHoverBrush}" /></Style>
     <Style Selector="Border.file-row.selected">
-      <Setter Property="Background" Value="#473580DB" />
+      <Setter Property="Background" Value="{StaticResource RowSelectedBrush}" />
       <Setter Property="BorderBrush" Value="{StaticResource AccentBrush}" />
       <Setter Property="BorderThickness" Value="3,0,0,1" />
     </Style>
     <Style Selector="TextBox">
       <Setter Property="MinHeight" Value="28" />
-      <Setter Property="Background" Value="#80000000" />
-      <Setter Property="BorderBrush" Value="#425FA2FF" />
+      <Setter Property="Background" Value="{StaticResource InputBackBrush}" />
+      <Setter Property="BorderBrush" Value="{StaticResource InputBorderBrush}" />
       <Setter Property="BorderThickness" Value="1" />
       <Setter Property="CornerRadius" Value="5" />
       <Setter Property="Foreground" Value="{StaticResource TextBrush}" />
       <Setter Property="CaretBrush" Value="White" />
-      <Setter Property="SelectionBrush" Value="#703580DB" />
+      <Setter Property="SelectionBrush" Value="{StaticResource TextSelectionBrush}" />
       <Setter Property="FontSize" Value="11" />
       <Setter Property="VerticalContentAlignment" Value="Center" />
     </Style>

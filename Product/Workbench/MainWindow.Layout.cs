@@ -121,7 +121,7 @@ public sealed partial class MainWindow
     private void RedrawBackgroundGrid(Size size)
     {
         GridLines.Children.Clear();
-        var stroke = new SolidColorBrush(Color.Parse("#202569D2"));
+        var stroke = Token("GridLineBrush");
         for (var x = 0d; x <= size.Width; x += 36)
         {
             GridLines.Children.Add(new Line

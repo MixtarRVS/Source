@@ -214,9 +214,12 @@ zgodnie z tym wzorcem.
       nigdy zmaksymalizowane
 - [x] personalizacja v1 w Settings (APPEARANCE: hover aero/flat, 4 akcenty)
       — zapis do Theme.config + natychmiastowa aplikacja przez mutację pędzli
-- [ ] tryb jasny — NAJPIERW tokenizacja kolorów zaszytych na sztywno w
-      markup (dziesiątki #RRGGBB w MainWindow.axaml i code-behind);
-      zrobiony wcześniej byłby atrapą
+- [x] tokenizacja kolorów ZROBIONA (19.07): każdy kolor chrome'u jest tokenem
+      w Theme.axaml Resources (~60 nazwanych pędzli, zdublowane odcienie
+      skonsolidowane), markup i code-behind (helper Token()) używają wyłącznie
+      tokenów; Theme.config zna ~30 kluczy (accent, heading, muted, selection.*,
+      surfaces...). Poza tokenami tylko: cienie, tapeta, kolory treści terminala
+- [ ] tryb jasny — teraz odblokowany: jasna paleta jako preset Theme API
 
 ### Bugi zgłoszone 18.07
 - [x] gest W GÓRĘ zamyka pełnoekranową konsolę (próg 15%, animowane)
