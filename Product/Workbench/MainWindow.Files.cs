@@ -318,7 +318,7 @@ public sealed partial class MainWindow
     {
         BreadcrumbPanel.Children.Clear();
         var isDrivePath = path.Length >= 2 && path[1] == ':';
-        var rootLabel = "⌂ MixtarRVS";
+        var rootLabel = isDrivePath ? $"▰ {path[..2]}" : "⌂ MixtarRVS";
         var rootTarget = isDrivePath ? path[..2] + IOPath.DirectorySeparatorChar : "/";
         BreadcrumbPanel.Children.Add(CrumbButton(rootLabel, rootTarget));
 
