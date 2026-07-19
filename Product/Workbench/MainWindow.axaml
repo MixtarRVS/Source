@@ -279,7 +279,7 @@
         </Border>
 
         <!-- Settings -->
-        <Border x:Name="SettingsWindow" Classes="desktop-window" Width="320" Height="215" IsVisible="False"
+        <Border x:Name="SettingsWindow" Classes="desktop-window" Width="360" Height="380" IsVisible="False"
                 Canvas.Left="420" Canvas.Top="180" ZIndex="22" PointerPressed="FocusDesktopWindow">
           <Grid RowDefinitions="34,*">
             <Border Classes="titlebar" Tag="SettingsWindow"
@@ -300,6 +300,19 @@
               </StackPanel>
               <TextBlock x:Name="ScaleInfo" Text="" Foreground="#91B7E8" FontFamily="Noto Sans Mono" FontSize="10" />
               <TextBlock Text="Scale applies to the whole desktop. Auto follows the screen resolution."
+                         Foreground="#668AB9" FontSize="10" TextWrapping="Wrap" />
+              <TextBlock Text="APPEARANCE" Foreground="#8FC1FF" FontFamily="Noto Sans Mono" FontSize="10" FontWeight="Bold" />
+              <StackPanel Orientation="Horizontal" Spacing="8">
+                <Button Classes="tool" Tag="hover:aero" Content="Aero hover" Click="OnAction" />
+                <Button Classes="tool" Tag="hover:flat" Content="Flat hover" Click="OnAction" />
+              </StackPanel>
+              <StackPanel Orientation="Horizontal" Spacing="8">
+                <Button Classes="tool" Tag="accent:#18B9FF" Content="Blue" Click="OnAction" />
+                <Button Classes="tool" Tag="accent:#3ED598" Content="Green" Click="OnAction" />
+                <Button Classes="tool" Tag="accent:#FFC65C" Content="Amber" Click="OnAction" />
+                <Button Classes="tool" Tag="accent:#E86FD8" Content="Magenta" Click="OnAction" />
+              </StackPanel>
+              <TextBlock Text="Hover style and accent write to Theme.config and apply instantly."
                          Foreground="#668AB9" FontSize="10" TextWrapping="Wrap" />
             </StackPanel>
           </Grid>

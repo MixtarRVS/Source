@@ -419,12 +419,20 @@ public sealed partial class MainWindow
         }
         else
         {
-            _restoreBounds[window] = new DesktopBounds(
-                Canvas.GetLeft(window), Canvas.GetTop(window), window.Width, window.Height);
+            var width = bounds.Width;
+            var height = Math.Max(200, bounds.Height - 40 - 48);
+            // Maximizing a window that already fills the desktop would trap
+            // its restore target at full screen (restore would change
+            // nothing). Windows keeps separate "normal" bounds for the same
+            // reason - synthesize sane ones instead.
+            var fillsDesktop = window.Width >= width - 16 && window.Height >= height - 16;
+            _restoreBounds[window] = fillsDesktop
+                ? new DesktopBounds(width * 0.15, 40 + height * 0.1, width * 0.7, height * 0.7)
+                : new DesktopBounds(Canvas.GetLeft(window), Canvas.GetTop(window), window.Width, window.Height);
             Canvas.SetLeft(window, 0);
             Canvas.SetTop(window, 40);
-            window.Width = bounds.Width;
-            window.Height = Math.Max(200, bounds.Height - 40 - 48);
+            window.Width = width;
+            window.Height = height;
         }
 
         UpdateMaximizeGlyph(window);
@@ -510,8 +518,18 @@ public sealed partial class MainWindow
     {
         try
         {
-            var lines = DesktopWindows().Select(window => string.Create(CultureInfo.InvariantCulture,
-                $"{window.Name}={Canvas.GetLeft(window):0},{Canvas.GetTop(window):0},{window.Width:0},{window.Height:0},{(window.IsVisible ? 1 : 0)}"));
+            var lines = DesktopWindows().Select(window =>
+            {
+                // Persist NORMAL bounds: a window closed while maximized or
+                // snapped must not reload with full-screen size as its only
+                // known geometry.
+                var bounds = _restoreBounds.TryGetValue(window, out var saved)
+                    ? saved
+                    : new DesktopBounds(Canvas.GetLeft(window), Canvas.GetTop(window),
+                        window.Width, window.Height);
+                return string.Create(CultureInfo.InvariantCulture,
+                    $"{window.Name}={bounds.Left:0},{bounds.Top:0},{bounds.Width:0},{bounds.Height:0},{(window.IsVisible ? 1 : 0)}");
+            });
             File.WriteAllLines(LayoutPath(), lines);
         }
         catch

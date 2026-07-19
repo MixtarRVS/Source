@@ -45,6 +45,26 @@ public sealed partial class MainWindow
             return;
         }
 
+        if (action.StartsWith("accent:", StringComparison.Ordinal))
+        {
+            SetThemeOption("accent", action[7..]);
+            return;
+        }
+
+        if (action == "hover:aero")
+        {
+            SetThemeOption("caption.hover", "gradient(#5BA4E5, #4388CC, #2969AD, #1C528F)");
+            SetThemeOption("caption.close", "gradient(#E85F51, #D34031, #B52B1E, #8E1C12)");
+            return;
+        }
+
+        if (action == "hover:flat")
+        {
+            SetThemeOption("caption.hover", "#33FFFFFF");
+            SetThemeOption("caption.close", "#C42B1C");
+            return;
+        }
+
         switch (action)
         {
             case "terminal":

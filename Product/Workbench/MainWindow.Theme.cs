@@ -135,6 +135,42 @@ public sealed partial class MainWindow
         }
     }
 
+    // Settings writes personalization through the same file the user can
+    // edit by hand - one source of truth, applied live via brush mutation.
+    private void SetThemeOption(string key, string value)
+    {
+        if (ThemeKeys.TryGetValue(key, out var resource))
+        {
+            try
+            {
+                ApplyThemeValue(resource, value);
+            }
+            catch
+            {
+            }
+        }
+
+        try
+        {
+            var path = ThemePath();
+            var lines = File.Exists(path) ? File.ReadAllLines(path).ToList() : new List<string>();
+            lines.RemoveAll(line =>
+            {
+                var trimmed = line.TrimStart();
+                return !trimmed.StartsWith('#') &&
+                    trimmed.Split('=', 2)[0].Trim().Equals(key, StringComparison.OrdinalIgnoreCase);
+            });
+            lines.Add($"{key} = {value}");
+            Directory.CreateDirectory(IOPath.GetDirectoryName(path)!);
+            File.WriteAllLines(path, lines);
+        }
+        catch
+        {
+            // Personalization still applies for this session even when the
+            // configuration tree is read-only.
+        }
+    }
+
     // First run drops a fully commented template so the keys are
     // discoverable without documentation hunting.
     private static void WriteThemeTemplate(string path)

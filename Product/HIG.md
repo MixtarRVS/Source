@@ -206,6 +206,18 @@ zgodnie z tym wzorcem.
       VerticalAlignment=Center w wierszu 42px
 - [ ] ikony w kartach/sidebarze
 
+### Bugi zgłoszone 19.07
+- [x] maksymalizacja okna, które już wypełniało pulpit, więziła cel
+      przywracania w pełnym ekranie (restore nic nie zmieniał) — przy
+      maksymalizacji z pełnego rozmiaru syntetyzujemy normalne bounds
+      (70% pulpitu, wyśrodkowane); layout zapisuje bounds NORMALNE,
+      nigdy zmaksymalizowane
+- [x] personalizacja v1 w Settings (APPEARANCE: hover aero/flat, 4 akcenty)
+      — zapis do Theme.config + natychmiastowa aplikacja przez mutację pędzli
+- [ ] tryb jasny — NAJPIERW tokenizacja kolorów zaszytych na sztywno w
+      markup (dziesiątki #RRGGBB w MainWindow.axaml i code-behind);
+      zrobiony wcześniej byłby atrapą
+
 ### Bugi zgłoszone 18.07
 - [x] gest W GÓRĘ zamyka pełnoekranową konsolę (próg 15%, animowane)
 - [x] menu Start ma resize (prawa/górna krawędź, rośnie w górę)
