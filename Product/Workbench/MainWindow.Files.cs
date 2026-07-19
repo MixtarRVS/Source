@@ -149,9 +149,13 @@ public sealed partial class MainWindow
         BuildBreadcrumb(path);
         AddressBox.Text = path;
         TerminalPrompt.Text = $"root@{HostName()}:{path}#";
+        // Selection never survives a directory change - stale paths in the
+        // set would make Delete reach into a previously visited folder.
+        _selectedPaths.Clear();
         SelectionStatus.Text = "No selection";
         _selectedFileRow = null;
         _selectedPath = null;
+        ResetDeleteButton();
         UpdateVolumeInfo(path);
         RenderFiles();
         if (_fileTabs.Count > 0)
@@ -528,6 +532,12 @@ public sealed partial class MainWindow
             row.Child = grid;
 
             var captured = entry;
+            row.Tag = entry.FullPath;
+            if (_selectedPaths.Contains(entry.FullPath))
+            {
+                row.Classes.Add("selected");
+            }
+
             row.ContextFlyout = BuildFileContextMenu(captured);
             row.PointerPressed += (_, args) =>
             {
@@ -536,6 +546,30 @@ public sealed partial class MainWindow
                 {
                     OpenBackgroundTab(captured.FullPath);
                     args.Handled = true;
+                    return;
+                }
+
+                // Explorer semantics: right-press on an already-selected row
+                // keeps the multi-selection for the context menu; on an
+                // unselected row it retargets the selection first.
+                if (args.GetCurrentPoint(row).Properties.IsRightButtonPressed)
+                {
+                    if (!_selectedPaths.Contains(captured.FullPath))
+                    {
+                        ClearSelection();
+                        _selectedPaths.Add(captured.FullPath);
+                        row.Classes.Add("selected");
+                        _selectedFileRow = row;
+                        _selectedPath = captured.FullPath;
+                        UpdateSelectionStatus();
+                        ResetDeleteButton();
+                    }
+
+                    return;
+                }
+
+                if (!args.GetCurrentPoint(row).Properties.IsLeftButtonPressed)
+                {
                     return;
                 }
 
@@ -554,11 +588,35 @@ public sealed partial class MainWindow
                     return;
                 }
 
-                _selectedFileRow?.Classes.Remove("selected");
-                row.Classes.Add("selected");
-                _selectedFileRow = row;
-                _selectedPath = captured.FullPath;
-                SelectionStatus.Text = $"{captured.Name} selected";
+                if (args.KeyModifiers.HasFlag(KeyModifiers.Control))
+                {
+                    // Explorer semantics: Ctrl+click toggles membership.
+                    if (_selectedPaths.Remove(captured.FullPath))
+                    {
+                        row.Classes.Remove("selected");
+                        if (_selectedPath == captured.FullPath)
+                        {
+                            _selectedPath = _selectedPaths.FirstOrDefault();
+                        }
+                    }
+                    else
+                    {
+                        _selectedPaths.Add(captured.FullPath);
+                        row.Classes.Add("selected");
+                        _selectedFileRow = row;
+                        _selectedPath = captured.FullPath;
+                    }
+                }
+                else
+                {
+                    ClearSelection();
+                    _selectedPaths.Add(captured.FullPath);
+                    row.Classes.Add("selected");
+                    _selectedFileRow = row;
+                    _selectedPath = captured.FullPath;
+                }
+
+                UpdateSelectionStatus();
                 ResetDeleteButton();
                 args.Handled = true;
             };
@@ -568,6 +626,134 @@ public sealed partial class MainWindow
 
         ItemCount.Text = $"{entries.Length} item{(entries.Length == 1 ? string.Empty : "s")}";
     }
+
+    private void ClearSelection()
+    {
+        foreach (var row in FileRows.Children.OfType<Border>())
+        {
+            row.Classes.Remove("selected");
+        }
+
+        _selectedPaths.Clear();
+        _selectedFileRow = null;
+    }
+
+    private void UpdateSelectionStatus()
+    {
+        SelectionStatus.Text = _selectedPaths.Count switch
+        {
+            0 => "No selection",
+            1 => $"{IOPath.GetFileName(_selectedPaths.First())} selected",
+            var count => $"{count} selected"
+        };
+    }
+
+    // ------------------------------------------------------------------
+    // Rubber-band selection: drag on the empty list area. Row presses mark
+    // the event handled, so the band only ever starts from empty space.
+    // ------------------------------------------------------------------
+
+    private void OnFileAreaPressed(object? sender, PointerPressedEventArgs e)
+    {
+        if (!e.GetCurrentPoint(FileArea).Properties.IsLeftButtonPressed)
+        {
+            return;
+        }
+
+        _rubberOrigin = e.GetPosition(FileArea);
+        _rubberActive = true;
+        _rubberAdditive = e.KeyModifiers.HasFlag(KeyModifiers.Control);
+        if (!_rubberAdditive)
+        {
+            ClearSelection();
+            _selectedPath = null;
+            UpdateSelectionStatus();
+        }
+
+        ResetDeleteButton();
+        e.Pointer.Capture(FileArea);
+    }
+
+    private void OnFileAreaMoved(object? sender, PointerEventArgs e)
+    {
+        if (!_rubberActive)
+        {
+            return;
+        }
+
+        // Capture can vanish without a release reaching us (Alt+Tab away,
+        // popup grabbing the pointer) - never track a button-less move.
+        if (!e.GetCurrentPoint(FileArea).Properties.IsLeftButtonPressed)
+        {
+            CancelRubberBand();
+            return;
+        }
+
+        var position = e.GetPosition(FileArea);
+        var rect = new Rect(
+            Math.Min(position.X, _rubberOrigin.X), Math.Min(position.Y, _rubberOrigin.Y),
+            Math.Abs(position.X - _rubberOrigin.X), Math.Abs(position.Y - _rubberOrigin.Y));
+        rect = rect.Intersect(new Rect(FileArea.Bounds.Size));
+        if (!RubberBand.IsVisible && rect.Width < 4 && rect.Height < 4)
+        {
+            return;
+        }
+
+        RubberBand.IsVisible = true;
+        RubberBand.Margin = new Thickness(rect.X, rect.Y, 0, 0);
+        RubberBand.Width = rect.Width;
+        RubberBand.Height = rect.Height;
+
+        foreach (var row in FileRows.Children.OfType<Border>())
+        {
+            if (row.Tag is not string path ||
+                row.TranslatePoint(new Point(0, 0), FileArea) is not { } topLeft)
+            {
+                continue;
+            }
+
+            var hit = rect.Intersects(new Rect(topLeft, row.Bounds.Size));
+            if (hit && _selectedPaths.Add(path))
+            {
+                row.Classes.Add("selected");
+                _selectedPath = path;
+            }
+            else if (!hit && !_rubberAdditive && _selectedPaths.Remove(path))
+            {
+                row.Classes.Remove("selected");
+            }
+        }
+
+        if (_selectedPath is not null && !_selectedPaths.Contains(_selectedPath))
+        {
+            _selectedPath = _selectedPaths.FirstOrDefault();
+        }
+
+        UpdateSelectionStatus();
+    }
+
+    private void OnFileAreaReleased(object? sender, PointerReleasedEventArgs e)
+    {
+        if (!_rubberActive)
+        {
+            return;
+        }
+
+        CancelRubberBand();
+        e.Pointer.Capture(null);
+    }
+
+    private void CancelRubberBand()
+    {
+        _rubberActive = false;
+        RubberBand.IsVisible = false;
+        RubberBand.Width = 0;
+        RubberBand.Height = 0;
+    }
+
+    private void OnBackgroundNewFolder(object? sender, RoutedEventArgs e) => CreateNewFolder();
+
+    private void OnBackgroundRefresh(object? sender, RoutedEventArgs e) => RenderFiles();
 
     // HIG: file rows carry a context menu (open, copy path, delete).
     private MenuFlyout BuildFileContextMenu(Listing entry)
@@ -601,16 +787,145 @@ public sealed partial class MainWindow
             {
             }
         };
+        var rename = new MenuItem { Header = "Rename" };
+        rename.Click += (_, _) => BeginRename(entry);
         var delete = new MenuItem { Header = "Delete" };
         delete.Click += (_, _) =>
         {
+            // Explorer semantics: acting on an unselected row retargets the
+            // selection to that row first.
+            if (!_selectedPaths.Contains(entry.FullPath))
+            {
+                ClearSelection();
+                _selectedPaths.Add(entry.FullPath);
+            }
+
             _selectedPath = entry.FullPath;
             DeleteSelected();
         };
         flyout.Items.Add(open);
         flyout.Items.Add(copyPath);
+        flyout.Items.Add(rename);
         flyout.Items.Add(delete);
         return flyout;
+    }
+
+    // Inline rename (F2 / context menu): the name cell swaps for a TextBox;
+    // Enter commits, Escape cancels, focus loss commits - Explorer rules.
+    private bool _renameActive;
+
+    private void BeginRename(Listing entry)
+    {
+        if (_renameActive)
+        {
+            return;
+        }
+
+        var row = FileRows.Children.OfType<Border>()
+            .FirstOrDefault(item => item.Tag as string == entry.FullPath);
+        if (row?.Child is not Grid grid || grid.Children.Count == 0)
+        {
+            return;
+        }
+
+        _renameActive = true;
+
+        var box = new TextBox
+        {
+            Text = entry.Name,
+            FontSize = 11,
+            MinHeight = 24,
+            Padding = new Thickness(4, 0),
+            Margin = new Thickness(0, 2, 8, 2),
+            VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center
+        };
+        Grid.SetColumn(box, 0);
+        grid.Children[0].IsVisible = false;
+        grid.Children.Add(box);
+
+        var done = false;
+        void Finish(bool commit)
+        {
+            if (done)
+            {
+                return;
+            }
+
+            done = true;
+            _renameActive = false;
+            var fresh = box.Text?.Trim() ?? string.Empty;
+            if (commit && fresh.Length > 0 && fresh != entry.Name &&
+                fresh.IndexOfAny(IOPath.GetInvalidFileNameChars()) < 0)
+            {
+                try
+                {
+                    var target = IOPath.Combine(_currentPath, fresh);
+                    if (entry.IsDirectory)
+                    {
+                        Directory.Move(entry.FullPath, target);
+                        RetargetTabs(entry.FullPath, target);
+                    }
+                    else
+                    {
+                        File.Move(entry.FullPath, target);
+                    }
+
+                    _selectedPaths.Remove(entry.FullPath);
+                    _selectedPaths.Add(target);
+                    _selectedPath = target;
+                }
+                catch (Exception error)
+                {
+                    AppendTerminal($"[FS] rename failed: {error.Message}", "#FF5C7B");
+                    SelectionStatus.Text = $"Rename failed: {error.Message}";
+                    RenderFiles();
+                    return;
+                }
+            }
+
+            RenderFiles();
+            UpdateSelectionStatus();
+        }
+
+        box.KeyDown += (_, args) =>
+        {
+            if (args.Key == Key.Enter)
+            {
+                Finish(true);
+                args.Handled = true;
+            }
+            else if (args.Key == Key.Escape)
+            {
+                Finish(false);
+                args.Handled = true;
+            }
+        };
+        box.LostFocus += (_, _) => Finish(true);
+        box.Focus();
+
+        // Explorer preselects the name without its extension.
+        var dot = entry.IsDirectory ? -1 : entry.Name.LastIndexOf('.');
+        box.SelectionStart = 0;
+        box.SelectionEnd = dot > 0 ? dot : entry.Name.Length;
+    }
+
+    // Renaming a directory must not orphan tabs that live inside it.
+    private void RetargetTabs(string oldPath, string newPath)
+    {
+        foreach (var tab in _fileTabs)
+        {
+            if (tab.Path == oldPath)
+            {
+                tab.Path = newPath;
+            }
+            else if (tab.Path.StartsWith(oldPath + '/', StringComparison.Ordinal) ||
+                     tab.Path.StartsWith(oldPath + '\\', StringComparison.Ordinal))
+            {
+                tab.Path = newPath + tab.Path[oldPath.Length..];
+            }
+        }
+
+        RenderFileTabs();
     }
 
     private void CreateNewFolder()
@@ -643,7 +958,12 @@ public sealed partial class MainWindow
 
     private void DeleteSelected()
     {
-        if (_selectedPath is null)
+        if (_selectedPaths.Count == 0 && _selectedPath is not null)
+        {
+            _selectedPaths.Add(_selectedPath);
+        }
+
+        if (_selectedPaths.Count == 0)
         {
             AppendTerminal("[FS] delete: nothing selected", "#FFC65C");
             return;
@@ -652,36 +972,76 @@ public sealed partial class MainWindow
         if ((DateTime.UtcNow - _deleteArmedAt).TotalSeconds > 4)
         {
             _deleteArmedAt = DateTime.UtcNow;
-            DeleteButton.Content = "Confirm?";
+            DeleteButton.Content = _selectedPaths.Count > 1
+                ? $"Confirm {_selectedPaths.Count}?"
+                : "Confirm?";
             return;
         }
 
-        try
+        // Per-item: one locked file must not stop the rest, and the list
+        // must always re-render to reflect what actually happened.
+        var failures = 0;
+        foreach (var path in _selectedPaths.ToArray())
         {
-            if (Directory.Exists(_selectedPath))
+            try
             {
-                Directory.Delete(_selectedPath, recursive: false);
-            }
-            else
-            {
-                File.Delete(_selectedPath);
-            }
+                if (Directory.Exists(path))
+                {
+                    Directory.Delete(path, recursive: false);
+                }
+                else
+                {
+                    File.Delete(path);
+                }
 
-            _selectedPath = null;
-            RenderFiles();
+                _selectedPaths.Remove(path);
+            }
+            catch (Exception error)
+            {
+                failures++;
+                AppendTerminal($"[FS] delete failed: {error.Message}", "#FF5C7B");
+            }
         }
-        catch (Exception error)
+
+        _selectedPath = _selectedPaths.FirstOrDefault();
+        RenderFiles();
+        UpdateSelectionStatus();
+        if (failures > 0)
         {
-            AppendTerminal($"[FS] delete failed: {error.Message}", "#FF5C7B");
+            SelectionStatus.Text = $"Delete failed for {failures} item{(failures == 1 ? string.Empty : "s")}";
         }
-        finally
-        {
-            ResetDeleteButton();
-        }
+
+        ResetDeleteButton();
     }
+
+    private static readonly string[] ImageExtensions =
+        { ".png", ".jpg", ".jpeg", ".gif", ".bmp", ".ico", ".webp" };
 
     private void OpenViewer(string path)
     {
+        if (ImageExtensions.Contains(IOPath.GetExtension(path).ToLowerInvariant()))
+        {
+            try
+            {
+                var bitmap = new Avalonia.Media.Imaging.Bitmap(path);
+                var previous = _viewerBitmap;
+                _viewerBitmap = bitmap;
+                ViewerImage.Source = bitmap;
+                ViewerImage.IsVisible = true;
+                ViewerContent.IsVisible = false;
+                ViewerTitle.Text =
+                    $"VIEWER - {IOPath.GetFileName(path).ToUpperInvariant()} ({bitmap.PixelSize.Width}x{bitmap.PixelSize.Height})";
+                ViewerScroll.Offset = default;
+                ShowWindow(ViewerWindow);
+                previous?.Dispose();
+                return;
+            }
+            catch
+            {
+                // Corrupt or unsupported image - fall back to the text path.
+            }
+        }
+
         const int limit = 200 * 1024;
         try
         {
@@ -707,7 +1067,10 @@ public sealed partial class MainWindow
             }
 
             ViewerTitle.Text = $"VIEWER - {info.Name.ToUpperInvariant()}";
+            ViewerImage.IsVisible = false;
+            ViewerContent.IsVisible = true;
             ViewerContent.Text = content;
+            ViewerScroll.Offset = default;
             ShowWindow(ViewerWindow);
         }
         catch (Exception error)

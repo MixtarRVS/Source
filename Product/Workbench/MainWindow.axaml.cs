@@ -61,6 +61,11 @@ public sealed partial class MainWindow : Window
     private Point _dragWindowOrigin;
     private Border? _selectedFileRow;
     private string? _selectedPath;
+    private readonly HashSet<string> _selectedPaths = new(StringComparer.Ordinal);
+    private Point _rubberOrigin;
+    private bool _rubberActive;
+    private bool _rubberAdditive;
+    private Avalonia.Media.Imaging.Bitmap? _viewerBitmap;
     private int _topZ = 30;
     private string _currentPath = "/";
     private long _previousCpuIdle;
@@ -93,6 +98,8 @@ public sealed partial class MainWindow : Window
             window.PointerMoved += OnWindowResizeMoved;
             window.PointerReleased += OnWindowResizeReleased;
         }
+
+        FileArea.PointerCaptureLost += (_, _) => CancelRubberBand();
 
         StartMenu.PointerPressed += OnStartMenuResizePressed;
         StartMenu.PointerMoved += OnStartMenuResizeMoved;
@@ -242,6 +249,19 @@ public sealed partial class MainWindow : Window
             CycleWindows();
             e.Handled = true;
             return;
+        }
+
+        if (e.Key == Key.F2 && _activeWindow == FilesWindow && _selectedPath is not null &&
+            !_renameActive)
+        {
+            var entry = ListDirectory(_currentPath)
+                .FirstOrDefault(item => item.FullPath == _selectedPath);
+            if (entry is not null)
+            {
+                BeginRename(entry);
+                e.Handled = true;
+                return;
+            }
         }
 
         if (e.KeyModifiers.HasFlag(KeyModifiers.Control) && e.Key == Key.K)

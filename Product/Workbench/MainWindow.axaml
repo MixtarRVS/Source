@@ -143,9 +143,22 @@
                     <TextBlock Grid.Column="4" Text="Entries" Foreground="{StaticResource HeadingBrush}" FontFamily="Noto Sans Mono" FontSize="10" VerticalAlignment="Center" />
                   </Grid>
                 </Border>
-                <ScrollViewer Grid.Row="1">
-                  <StackPanel x:Name="FileRows" />
-                </ScrollViewer>
+                <Grid x:Name="FileArea" Grid.Row="1" Background="Transparent" ClipToBounds="True"
+                      PointerPressed="OnFileAreaPressed" PointerMoved="OnFileAreaMoved"
+                      PointerReleased="OnFileAreaReleased">
+                  <Grid.ContextFlyout>
+                    <MenuFlyout>
+                      <MenuItem Header="New Folder" Click="OnBackgroundNewFolder" />
+                      <MenuItem Header="Refresh" Click="OnBackgroundRefresh" />
+                    </MenuFlyout>
+                  </Grid.ContextFlyout>
+                  <ScrollViewer Background="Transparent">
+                    <StackPanel x:Name="FileRows" />
+                  </ScrollViewer>
+                  <Border x:Name="RubberBand" IsVisible="False" IsHitTestVisible="False"
+                          Background="{StaticResource SnapFillBrush}" BorderBrush="{StaticResource SnapBorderBrush}"
+                          BorderThickness="1" HorizontalAlignment="Left" VerticalAlignment="Top" />
+                </Grid>
               </Grid>
             </Grid>
             <Border Grid.Row="4" Background="{StaticResource StatusBackBrush}" Padding="8,0">
@@ -271,9 +284,12 @@
                 </StackPanel>
               </Grid>
             </Border>
-            <ScrollViewer Grid.Row="1" Margin="12,10" HorizontalScrollBarVisibility="Auto">
-              <TextBlock x:Name="ViewerContent" FontFamily="Noto Sans Mono" FontSize="10"
-                         Foreground="{StaticResource MonoBrush}" TextWrapping="NoWrap" />
+            <ScrollViewer x:Name="ViewerScroll" Grid.Row="1" Margin="12,12" HorizontalScrollBarVisibility="Auto">
+              <StackPanel>
+                <Image x:Name="ViewerImage" IsVisible="False" Stretch="None" HorizontalAlignment="Left" />
+                <TextBlock x:Name="ViewerContent" FontFamily="Noto Sans Mono" FontSize="10"
+                           Foreground="{StaticResource MonoBrush}" TextWrapping="NoWrap" />
+              </StackPanel>
             </ScrollViewer>
           </Grid>
         </Border>
